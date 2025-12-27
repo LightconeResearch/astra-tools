@@ -1,0 +1,133 @@
+$schema: "https://asp-spec.org/v1/schema.json"
+version: "1.0"
+
+analysis:
+  name: "Iris Classification Study"
+  description: |
+    A demonstration analysis that builds a classifier for the classic
+    Iris dataset, exploring different preprocessing and model choices.
+  authors:
+    - "ASP Examples"
+  tags:
+    - classification
+    - sklearn
+    - example
+
+  problem: |
+    Build a robust classifier for the Iris dataset that accurately
+    predicts species from flower measurements, suitable for use in
+    a botanical identification application.
+
+  inputs:
+    - id: iris_data
+      type: data
+      source: "sklearn.datasets.load_iris"
+      description: "Fisher's classic 150-sample, 3-class dataset"
+
+    - id: preprocessing_study
+      type: analysis
+      ref: "analyses/scaling_comparison_2024"
+      description: "Our previous study on scaling methods"
+
+  outputs:
+    - id: accuracy
+      type: metric
+      dtype: float
+      range: [0, 1]
+      primary: true
+      description: "Classification accuracy on held-out test set"
+
+    - id: f1_score
+      type: metric
+      dtype: float
+      range: [0, 1]
+      description: "Macro-averaged F1 score"
+
+    - id: confusion_matrix
+      type: figure
+      formats: [png, svg]
+      description: "Confusion matrix heatmap"
+
+    - id: model_comparison
+      type: table
+      formats: [csv]
+      description: "Accuracy by model and preprocessing combination"
+
+    - id: trained_model
+      type: model
+      formats: [joblib]
+      description: "Best performing classifier"
+
+    - id: conclusion
+      type: report
+      description: "Summary of classifier performance and suitability for the application"
+
+decisions:
+  scaling:
+    label: "Feature Scaling"
+    type: method
+    importance: 2
+    rationale: "Scaling affects distance-based algorithms like SVM"
+    default: standard
+    options:
+      none:
+        label: "No Scaling"
+        description: "Use raw feature values"
+      standard:
+        label: "StandardScaler"
+        description: "Z-score normalization (mean=0, std=1)"
+      minmax:
+        label: "MinMaxScaler"
+        description: "Scale to [0, 1] range"
+        evidence:
+          - ref: inputs.preprocessing_study
+            finding: "Showed 3% improvement for tree models"
+        incompatible_with:
+          - model.svm
+
+  model:
+    label: "Classification Model"
+    type: method
+    importance: 1
+    rationale: "Core algorithmic choice affecting accuracy and interpretability"
+    default: random_forest
+    options:
+      svm:
+        label: "Support Vector Machine"
+        description: "Maximum margin classifier"
+        requires:
+          - scaling.standard
+      random_forest:
+        label: "Random Forest"
+        description: "Ensemble of decision trees"
+      logistic:
+        label: "Logistic Regression"
+        description: "Linear classifier with probabilistic output"
+
+  test_size:
+    label: "Test Set Proportion"
+    type: parameter
+    importance: 3
+    rationale: "Trade-off between training data and evaluation reliability"
+    default: small
+    options:
+      small:
+        label: "20%"
+        value: 0.2
+      medium:
+        label: "30%"
+        value: 0.3
+
+  random_seed:
+    label: "Random Seed"
+    type: parameter
+    importance: 4
+    rationale: "For reproducibility and stability testing"
+    default: seed_42
+    options:
+      seed_42:
+        label: "42"
+        value: 42
+      seed_123:
+        label: "123"
+        value: 123

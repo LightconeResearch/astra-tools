@@ -1,0 +1,724 @@
+{
+  "$defs": {
+    "AnalysisContent": {
+      "additionalProperties": false,
+      "description": "The content of an analysis specification.",
+      "properties": {
+        "name": {
+          "description": "Human-readable name for the analysis",
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Detailed description of the analysis",
+          "title": "Description"
+        },
+        "authors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of authors",
+          "title": "Authors"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tags for categorization",
+          "title": "Tags"
+        },
+        "problem": {
+          "description": "Problem statement describing what the analysis aims to achieve",
+          "title": "Problem",
+          "type": "string"
+        },
+        "inputs": {
+          "description": "List of inputs for the analysis",
+          "items": {
+            "$ref": "#/$defs/Input"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "outputs": {
+          "description": "List of expected outputs",
+          "items": {
+            "$ref": "#/$defs/Output"
+          },
+          "title": "Outputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "problem",
+        "inputs",
+        "outputs"
+      ],
+      "title": "AnalysisContent",
+      "type": "object"
+    },
+    "Checksum": {
+      "additionalProperties": false,
+      "description": "Checksum for data integrity verification.",
+      "properties": {
+        "algorithm": {
+          "description": "Hash algorithm",
+          "enum": [
+            "sha256",
+            "sha512",
+            "md5"
+          ],
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "value": {
+          "description": "Hash value",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "value"
+      ],
+      "title": "Checksum",
+      "type": "object"
+    },
+    "Decision": {
+      "additionalProperties": false,
+      "description": "A decision point in the analysis.",
+      "properties": {
+        "label": {
+          "description": "Human-readable name for the decision",
+          "title": "Label",
+          "type": "string"
+        },
+        "type": {
+          "description": "Category of decision",
+          "enum": [
+            "data",
+            "method",
+            "parameter"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "importance": {
+          "default": 3,
+          "description": "Importance level (1=critical, 5=implementation detail)",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Importance",
+          "type": "integer"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why this decision exists",
+          "title": "Rationale"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default option ID for baseline universes",
+          "title": "Default"
+        },
+        "options": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Option"
+          },
+          "description": "Map of option IDs to option specifications",
+          "title": "Options",
+          "type": "object"
+        }
+      },
+      "required": [
+        "label",
+        "type",
+        "options"
+      ],
+      "title": "Decision",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Evidence supporting a decision option.",
+      "properties": {
+        "ref": {
+          "description": "Reference to an input (e.g., 'inputs.study_name')",
+          "title": "Ref",
+          "type": "string"
+        },
+        "finding": {
+          "description": "What the evidence shows",
+          "title": "Finding",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "finding"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Input": {
+      "additionalProperties": false,
+      "description": "An input to the analysis.",
+      "properties": {
+        "id": {
+          "description": "Unique identifier for the input",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "description": "Type of input",
+          "enum": [
+            "data",
+            "analysis",
+            "literature"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source specification for the input",
+          "title": "Source"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference to another analysis (for type: analysis)",
+          "title": "Ref"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Version of the referenced analysis",
+          "title": "Version"
+        },
+        "use_outputs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Specific outputs to use from referenced analysis",
+          "title": "Use Outputs"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Description of the input",
+          "title": "Description"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "Input",
+      "type": "object"
+    },
+    "Option": {
+      "additionalProperties": false,
+      "description": "An option for a decision.",
+      "properties": {
+        "label": {
+          "description": "Human-readable name for the option",
+          "title": "Label",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Detailed description of the option",
+          "title": "Description"
+        },
+        "value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Configuration value for this option",
+          "title": "Value"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Evidence"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Evidence supporting this option",
+          "title": "Evidence"
+        },
+        "incompatible_with": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of decision.option pairs that cannot be selected together",
+          "title": "Incompatible With"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of decision.option pairs that must also be selected",
+          "title": "Requires"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "Option",
+      "type": "object"
+    },
+    "Output": {
+      "additionalProperties": false,
+      "description": "An expected output from the analysis.",
+      "properties": {
+        "id": {
+          "description": "Unique identifier for the output",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "description": "Type of output",
+          "enum": [
+            "metric",
+            "figure",
+            "table",
+            "data",
+            "model",
+            "report"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "dtype": {
+          "anyOf": [
+            {
+              "enum": [
+                "float",
+                "int",
+                "bool",
+                "string"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Data type for metrics",
+          "title": "Dtype"
+        },
+        "range": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Valid range for numeric metrics [min, max]",
+          "title": "Range"
+        },
+        "formats": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Supported file formats for artifacts",
+          "title": "Formats"
+        },
+        "primary": {
+          "default": false,
+          "description": "Whether this is the primary output for comparison",
+          "title": "Primary",
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Description of the output",
+          "title": "Description"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "Output",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "Source specification for inputs.",
+      "properties": {
+        "type": {
+          "description": "Type of source",
+          "enum": [
+            "url",
+            "s3",
+            "sklearn",
+            "asp",
+            "file"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "URL for url type sources",
+          "title": "Url"
+        },
+        "bucket": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "S3 bucket name",
+          "title": "Bucket"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "S3 object key",
+          "title": "Key"
+        },
+        "version_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "S3 version ID",
+          "title": "Version Id"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "AWS region",
+          "title": "Region"
+        },
+        "dataset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "sklearn dataset name",
+          "title": "Dataset"
+        },
+        "analysis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ASP analysis reference",
+          "title": "Analysis"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Version of referenced analysis",
+          "title": "Version"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Output ID from referenced analysis",
+          "title": "Output"
+        },
+        "execution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Specific execution ID",
+          "title": "Execution"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Local file path",
+          "title": "Path"
+        },
+        "checksum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Checksum"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Checksum for verification"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Source",
+      "type": "object"
+    }
+  },
+  "$id": "https://asp-spec.org/v1/analysis.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "description": "Complete ASP analysis specification.",
+  "properties": {
+    "$schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "JSON Schema reference",
+      "title": "$Schema"
+    },
+    "version": {
+      "description": "ASP specification version",
+      "pattern": "^\\d+\\.\\d+$",
+      "title": "Version",
+      "type": "string"
+    },
+    "analysis": {
+      "$ref": "#/$defs/AnalysisContent",
+      "description": "The analysis specification"
+    },
+    "decisions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Decision"
+      },
+      "description": "Map of decision IDs to decision specifications",
+      "title": "Decisions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "analysis"
+  ],
+  "title": "ASP Analysis Specification",
+  "type": "object"
+}

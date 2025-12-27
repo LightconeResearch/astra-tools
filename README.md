@@ -11,11 +11,11 @@ ASP separates **what** you want to learn from **how** to compute it. You describ
 - **Outputs** - Metrics, figures, tables, models
 - **Decisions** - The choices that define your analysis
 
-An AI agent reads the spec and generates the implementation (CWL workflows, scripts, etc.).
+An AI agent reads the spec and generates the implementation (workflows, scripts, etc.).
 
 ```
 ┌─────────────────┐      ┌─────────────┐      ┌──────────────┐      ┌─────────┐
-│ ASP Analysis    │ ───▶ │ LLM Agent   │ ───▶ │ CWL Workflow │ ───▶ │ Results │
+│ ASP Analysis    │ ───▶ │ LLM Agent   │ ───▶ │   Workflow   │ ───▶ │ Results │
 │ (what we want)  │      │ (generates) │      │ + Parameters │      │         │
 └─────────────────┘      └─────────────┘      └──────────────┘      └─────────┘
 ```
@@ -29,6 +29,21 @@ An AI agent reads the spec and generates the implementation (CWL workflows, scri
 **Evidence-based decisions**: Link decisions to supporting evidence from previous analyses or literature.
 
 **Composability**: Use outputs from one analysis as inputs to another.
+
+## Installation
+
+```bash
+git clone https://github.com/your-org/ASP.git
+cd ASP
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+For development (includes pytest, ruff, mypy):
+```bash
+pip install -e ".[dev]"
+```
 
 ## Quick Example
 
@@ -88,38 +103,39 @@ decisions:
         label: "Logistic Regression"
 ```
 
-## Directory Structure
-
-```
-my-analysis/
-├── asp.yaml                # Analysis specification
-├── universes/
-│   └── baseline.yaml       # Universe definitions
-├── steps/                  # Reusable CWL steps
-├── workflows/
-│   └── main.cwl            # Generated workflow
-├── scripts/                # Python implementations
-└── results/                # Execution outputs
-```
+See [examples/iris/](examples/iris/) for a complete working example.
 
 ## CLI Commands
 
 ```bash
-asp validate asp.yaml                  # Validate specification
+asp validate asp.yaml                  # Validate analysis specification
 asp validate universes/baseline.yaml   # Validate universe against spec
 asp info                               # Show analysis summary
-asp info --decisions                   # Show decision space
+asp info --decisions                   # Show decision details
 asp universe generate --name baseline  # Generate universe from defaults
-asp viz --format mermaid               # Visualize decision space
+asp universe check universes/foo.yaml  # Check universe constraints
+asp viz                                # Visualize decision space (ASCII)
+asp viz --format mermaid               # Visualize as Mermaid diagram
+asp schema export                      # Export JSON schemas to schemas/
+asp schema show analysis               # Print analysis schema to stdout
+```
+
+## Project Structure
+
+```
+my-analysis/
+├── asp.yaml                # Analysis specification
+└── universes/
+    └── baseline.yaml       # Universe definitions
 ```
 
 ## Project Scope
 
 This project currently focuses on the **specification format** itself:
 
-- Schema definition for analysis specs (`asp.yaml`)
-- Schema definition for universes (`universes/*.yaml`)
-- Validation tooling
+- Pydantic models as the source of truth for the specification
+- JSON Schemas auto-generated from models (`asp schema export`)
+- Validation tooling (schema + semantic)
 - Visualization of decision spaces
 
 Workflow generation and execution by AI agents is a future goal that builds on this foundation.
@@ -138,4 +154,4 @@ See [DESIGN.md](DESIGN.md) for the complete specification.
 
 ## License
 
-MIT
+Apache 2.0

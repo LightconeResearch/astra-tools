@@ -1,0 +1,54 @@
+{
+  "$id": "https://asp-spec.org/v1/universe.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "description": "A universe specification - a complete set of decisions.",
+  "properties": {
+    "$schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "JSON Schema reference",
+      "title": "$Schema"
+    },
+    "id": {
+      "description": "Unique identifier for the universe",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "title": "Id",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What this universe represents",
+      "title": "Description"
+    },
+    "decisions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Map of decision_id to selected option_id",
+      "title": "Decisions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "decisions"
+  ],
+  "title": "ASP Universe Specification",
+  "type": "object"
+}
