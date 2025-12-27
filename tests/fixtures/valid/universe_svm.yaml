@@ -1,0 +1,8 @@
+id: svm-config
+description: "SVM configuration with required preprocessing"
+
+decisions:
+  preprocessing: standard
+  model: svm
+  test_split: split_20
+  seed: seed_42

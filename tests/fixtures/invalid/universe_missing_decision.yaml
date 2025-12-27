@@ -1,0 +1,7 @@
+# Universe missing a required decision
+id: incomplete
+description: "Missing decisions"
+
+decisions:
+  preprocessing: standard
+  # Missing: model, test_split, seed
