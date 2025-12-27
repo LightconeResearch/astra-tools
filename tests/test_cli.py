@@ -212,7 +212,8 @@ class TestVersionOption:
     def test_version(self, runner: CliRunner):
         result = runner.invoke(main, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        # Version format: "main, version X.Y.Z" or "main, version X.Y.devN+gHASH.dDATE"
+        assert "version" in result.output
 
 
 class TestHelpOption:

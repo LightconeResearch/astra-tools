@@ -1,6 +1,6 @@
 [project]
 name = "asp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Agentic Science Protocol - A declarative specification format for scientific analyses"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -40,8 +40,14 @@ dev = [
 asp = "asp.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/asp/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/asp"]
