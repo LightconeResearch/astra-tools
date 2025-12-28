@@ -237,3 +237,188 @@ class TestHelpOption:
     def test_schema_help(self, runner: CliRunner):
         result = runner.invoke(main, ["schema", "--help"])
         assert result.exit_code == 0
+
+
+class TestInitCommand:
+    """Tests for the init command."""
+
+    def test_init_creates_project_structure(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "my-analysis"
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "-n", "My Analysis", "-p", "Test problem", "--no-git"],
+        )
+        assert result.exit_code == 0
+        assert "Created ASP analysis project" in result.output
+
+        # Check directory structure
+        assert (project_dir / "asp.yaml").exists()
+        assert (project_dir / "README.md").exists()
+        assert (project_dir / ".gitignore").exists()
+        assert (project_dir / "universes").is_dir()
+        assert (project_dir / "universes" / "baseline.yaml").exists()
+        assert (project_dir / "workflows" / "params").is_dir()
+        assert (project_dir / "steps" / "io").is_dir()
+        assert (project_dir / "steps" / "preprocessing").is_dir()
+        assert (project_dir / "steps" / "models").is_dir()
+        assert (project_dir / "steps" / "evaluation").is_dir()
+        assert (project_dir / "scripts").is_dir()
+        assert (project_dir / "results").is_dir()
+        assert (project_dir / ".asp").is_dir()
+        assert (project_dir / ".asp" / "branches.yaml").exists()
+
+    def test_init_with_prompts(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "prompted-analysis"
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "--no-git"],
+            input="Test Analysis\nTest problem statement\n",
+        )
+        assert result.exit_code == 0
+        assert (project_dir / "asp.yaml").exists()
+
+        # Verify the file content
+        content = (project_dir / "asp.yaml").read_text()
+        assert "Test Analysis" in content
+        assert "Test problem statement" in content
+        assert "version:" in content
+
+    def test_init_with_options(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "options-analysis"
+        result = runner.invoke(
+            main,
+            [
+                "init",
+                str(project_dir),
+                "-n",
+                "My Custom Analysis",
+                "-p",
+                "What is the effect of X on Y?",
+                "--no-git",
+            ],
+        )
+        assert result.exit_code == 0
+        assert (project_dir / "asp.yaml").exists()
+
+        content = (project_dir / "asp.yaml").read_text()
+        assert "My Custom Analysis" in content
+        assert "What is the effect of X on Y?" in content
+
+    def test_init_readme_content(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "readme-test"
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "-n", "README Test", "-p", "Test problem", "--no-git"],
+        )
+        assert result.exit_code == 0
+
+        readme = (project_dir / "README.md").read_text()
+        assert "# README Test" in readme
+        assert "Test problem" in readme
+        assert "asp validate" in readme
+        assert "asp info" in readme
+
+    def test_init_gitignore_content(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "gitignore-test"
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "-n", "Test", "-p", "Problem", "--no-git"],
+        )
+        assert result.exit_code == 0
+
+        gitignore = (project_dir / ".gitignore").read_text()
+        assert "results/" in gitignore
+        assert "__pycache__/" in gitignore
+        assert ".venv/" in gitignore
+
+    def test_init_existing_nonempty_dir_decline(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "existing"
+        project_dir.mkdir()
+        (project_dir / "some_file.txt").write_text("existing content")
+
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "-n", "Test", "-p", "Problem", "--no-git"],
+            input="n\n",  # Decline to continue
+        )
+        assert result.exit_code == 0
+        # asp.yaml should NOT have been created
+        assert not (project_dir / "asp.yaml").exists()
+
+    def test_init_existing_nonempty_dir_confirm(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "existing-confirm"
+        project_dir.mkdir()
+        (project_dir / "some_file.txt").write_text("existing content")
+
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "-n", "Test", "-p", "Problem", "--no-git"],
+            input="y\n",  # Confirm to continue
+        )
+        assert result.exit_code == 0
+        assert (project_dir / "asp.yaml").exists()
+        # Original file should still exist
+        assert (project_dir / "some_file.txt").exists()
+
+    def test_init_current_directory(self, runner: CliRunner, tmp_path: Path):
+        # Test init with default "." directory
+        import os
+
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            result = runner.invoke(
+                main,
+                ["init", "-n", "Current Dir Analysis", "-p", "Problem", "--no-git"],
+            )
+            assert result.exit_code == 0
+            assert (tmp_path / "asp.yaml").exists()
+        finally:
+            os.chdir(old_cwd)
+
+    def test_init_generated_files_are_valid(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "valid-test"
+        runner.invoke(
+            main,
+            ["init", str(project_dir), "-n", "Test", "-p", "Test problem", "--no-git"],
+        )
+
+        # Validate the generated asp.yaml
+        result = runner.invoke(main, ["validate", str(project_dir / "asp.yaml")])
+        assert result.exit_code == 0
+        assert "Validation successful" in result.output
+
+        # Validate the generated baseline.yaml
+        result = runner.invoke(
+            main,
+            [
+                "validate",
+                str(project_dir / "universes" / "baseline.yaml"),
+                "-a",
+                str(project_dir / "asp.yaml"),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Validation successful" in result.output
+
+    def test_init_with_git(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "git-test"
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "-n", "Git Test", "-p", "Problem"],
+        )
+        assert result.exit_code == 0
+
+        # Git directory should exist (if git is available)
+        if (project_dir / ".git").exists():
+            assert "Initialized git repository" in result.output
+
+    def test_init_no_git_flag(self, runner: CliRunner, tmp_path: Path):
+        project_dir = tmp_path / "no-git-test"
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "-n", "No Git", "-p", "Problem", "--no-git"],
+        )
+        assert result.exit_code == 0
+        # Git directory should NOT exist
+        assert not (project_dir / ".git").exists()

@@ -1,9 +1,9 @@
 # ASP - Agentic Science Protocol
 
 [![CI](https://github.com/EiffL/ASP/actions/workflows/ci.yml/badge.svg)](https://github.com/EiffL/ASP/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 A declarative specification format for scientific analyses that can be executed by AI agents.
 
@@ -18,11 +18,14 @@ ASP separates **what** you want to learn from **how** to compute it. You describ
 
 An AI agent reads the spec and generates the implementation (workflows, scripts, etc.).
 
-```
-┌─────────────────┐      ┌─────────────┐      ┌──────────────┐      ┌─────────┐
-│ ASP Analysis    │ ───▶ │ LLM Agent   │ ───▶ │   Workflow   │ ───▶ │ Results │
-│ (what we want)  │      │ (generates) │      │ + Parameters │      │         │
-└─────────────────┘      └─────────────┘      └──────────────┘      └─────────┘
+```mermaid
+flowchart LR
+    A["`**ASP Analysis**
+    _what we want_`"] --> B["`**LLM Agent**
+    _generates_`"]
+    B --> C["`**Workflow**
+    _+ Parameters_`"]
+    C --> D["`**Results**`"]
 ```
 
 ## Key Concepts
@@ -38,7 +41,7 @@ An AI agent reads the spec and generates the implementation (workflows, scripts,
 ## Installation
 
 ```bash
-git clone https://github.com/your-org/ASP.git
+git clone https://github.com/EiffL/ASP.git
 cd ASP
 python -m venv .venv
 source .venv/bin/activate
@@ -48,6 +51,29 @@ pip install -e .
 For development (includes pytest, ruff, mypy):
 ```bash
 pip install -e ".[dev]"
+```
+
+## Getting Started
+
+Create a new analysis project:
+
+```bash
+asp init my-analysis
+cd my-analysis
+```
+
+This creates a complete project structure with:
+- `asp.yaml` - Analysis specification (edit this to define your analysis)
+- `universes/baseline.yaml` - Default universe
+- `README.md` - Project documentation
+- Standard directories for workflows, steps, scripts, and results
+- Git repository with initial commit
+
+Edit `asp.yaml` to define your inputs, outputs, and decisions, then validate:
+
+```bash
+asp validate asp.yaml
+asp info
 ```
 
 ## Quick Example
@@ -113,25 +139,51 @@ See [examples/iris/](examples/iris/) for a complete working example.
 ## CLI Commands
 
 ```bash
+# Project setup
+asp init my-analysis                   # Create new analysis project
+asp init my-analysis --no-git          # Create without git initialization
+
+# Validation
 asp validate asp.yaml                  # Validate analysis specification
 asp validate universes/baseline.yaml   # Validate universe against spec
+
+# Exploration
 asp info                               # Show analysis summary
 asp info --decisions                   # Show decision details
-asp universe generate --name baseline  # Generate universe from defaults
-asp universe check universes/foo.yaml  # Check universe constraints
 asp viz                                # Visualize decision space (ASCII)
 asp viz --format mermaid               # Visualize as Mermaid diagram
+
+# Universe management
+asp universe generate --name baseline  # Generate universe from defaults
+asp universe check universes/foo.yaml  # Check universe constraints
+
+# Schema utilities
 asp schema export                      # Export JSON schemas to schemas/
 asp schema show analysis               # Print analysis schema to stdout
 ```
 
 ## Project Structure
 
+An ASP project created with `asp init` has this structure:
+
 ```
 my-analysis/
-├── asp.yaml                # Analysis specification
-└── universes/
-    └── baseline.yaml       # Universe definitions
+├── asp.yaml              # Analysis specification
+├── README.md             # Project documentation
+├── .gitignore            # Git ignore rules
+├── universes/            # Universe definitions (decision selections)
+│   └── baseline.yaml     # Default universe
+├── workflows/            # Generated workflows (CWL, Snakemake, etc.)
+│   └── params/           # Workflow parameters per universe
+├── steps/                # Reusable workflow steps
+│   ├── io/               # Data loading steps
+│   ├── preprocessing/    # Data preprocessing steps
+│   ├── models/           # Model training steps
+│   └── evaluation/       # Evaluation steps
+├── scripts/              # Python/R implementation scripts
+├── results/              # Execution outputs (gitignored)
+└── .asp/                 # ASP metadata
+    └── branches.yaml     # Branch tracking
 ```
 
 ## Project Scope

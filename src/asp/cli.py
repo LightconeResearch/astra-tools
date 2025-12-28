@@ -41,6 +41,265 @@ def main() -> None:
 
 
 @main.command()
+@click.argument("directory", type=click.Path(path_type=Path), default=".")
+@click.option("--name", "-n", help="Analysis name (will prompt if not provided)")
+@click.option("--problem", "-p", help="Problem statement (will prompt if not provided)")
+@click.option("--no-git", is_flag=True, help="Don't initialize git repository")
+def init(directory: Path, name: str | None, problem: str | None, no_git: bool) -> None:
+    """Create a new ASP analysis project.
+
+    Creates a complete project structure with asp.yaml, README, and standard
+    directories for universes, workflows, scripts, and results.
+
+    DIRECTORY is the project folder to create (default: current directory).
+    """
+    import subprocess
+
+    # Prompt for required fields if not provided
+    if name is None:
+        default_name = directory.name if directory != Path(".") else "My Analysis"
+        name = click.prompt("Analysis name", default=default_name)
+
+    if problem is None:
+        problem = click.prompt(
+            "Problem statement",
+            default="What research question are you trying to answer?",
+        )
+
+    # Create project directory
+    if directory != Path("."):
+        if directory.exists() and any(directory.iterdir()):
+            if not click.confirm(
+                f"[yellow]{directory}[/yellow] already exists and is not empty. Continue?"
+            ):
+                raise SystemExit(0)
+        directory.mkdir(parents=True, exist_ok=True)
+
+    # Create subdirectories
+    subdirs = [
+        "universes",
+        "workflows/params",
+        "steps/io",
+        "steps/preprocessing",
+        "steps/models",
+        "steps/evaluation",
+        "scripts",
+        "results",
+        ".asp",
+    ]
+    for subdir in subdirs:
+        (directory / subdir).mkdir(parents=True, exist_ok=True)
+
+    # Create asp.yaml
+    asp_yaml = f'''# ASP Analysis Specification
+# Documentation: https://github.com/EiffL/ASP
+
+version: "1.0"
+
+analysis:
+  name: "{name}"
+  problem: |
+    {problem}
+
+  inputs:
+    - id: primary_data
+      type: data
+      description: "TODO: Describe your primary data source"
+
+  outputs:
+    - id: main_result
+      type: metric
+      dtype: float
+      primary: true
+      description: "TODO: Describe your primary output metric"
+
+    - id: conclusion
+      type: report
+      description: "Summary addressing the problem statement"
+
+decisions:
+  example_method:
+    label: "Example Method Choice"
+    type: method
+    importance: 3
+    rationale: "TODO: Explain why this decision matters"
+    default: option_a
+    options:
+      option_a:
+        label: "Option A"
+        description: "TODO: Describe option A"
+      option_b:
+        label: "Option B"
+        description: "TODO: Describe option B"
+'''
+    (directory / "asp.yaml").write_text(asp_yaml)
+
+    # Create baseline universe
+    baseline_universe = """# Baseline Universe
+# Default configuration using standard practices
+
+id: baseline
+description: "Default configuration using standard practices"
+
+decisions:
+  example_method: option_a
+"""
+    (directory / "universes" / "baseline.yaml").write_text(baseline_universe)
+
+    # Create README
+    readme = f"""# {name}
+
+## Problem Statement
+
+{problem}
+
+## Project Structure
+
+```
+{directory.name}/
+├── asp.yaml              # Analysis specification
+├── universes/            # Universe definitions (decision selections)
+│   └── baseline.yaml     # Default universe
+├── workflows/            # Generated workflows (CWL, Snakemake, etc.)
+│   └── params/           # Workflow parameters per universe
+├── steps/                # Reusable workflow steps
+│   ├── io/               # Data loading steps
+│   ├── preprocessing/    # Data preprocessing steps
+│   ├── models/           # Model training steps
+│   └── evaluation/       # Evaluation steps
+├── scripts/              # Python/R implementation scripts
+├── results/              # Execution outputs (gitignored)
+└── .asp/                 # ASP metadata
+```
+
+## Quick Start
+
+```bash
+# Validate the analysis specification
+asp validate asp.yaml
+
+# Show analysis info
+asp info
+
+# Validate the baseline universe
+asp universe check universes/baseline.yaml
+
+# Visualize decision space
+asp viz
+```
+
+## Universes
+
+- **baseline**: {problem[:50]}...
+
+## Decisions
+
+| Decision | Type | Default | Description |
+|----------|------|---------|-------------|
+| example_method | method | option_a | TODO: Add description |
+
+---
+Generated with [ASP](https://github.com/EiffL/ASP)
+"""
+    (directory / "README.md").write_text(readme)
+
+    # Create .gitignore
+    gitignore = """# ASP Analysis - Git Ignore
+
+# Execution results (large files, regenerated)
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+"""
+    (directory / ".gitignore").write_text(gitignore)
+
+    # Create .asp/branches.yaml
+    branches_yaml = """# Branch metadata for ASP analysis
+# See: https://github.com/EiffL/ASP
+
+branches: {}
+"""
+    (directory / ".asp" / "branches.yaml").write_text(branches_yaml)
+
+    # Initialize git repository
+    git_initialized = False
+    if not no_git and not (directory / ".git").exists():
+        try:
+            subprocess.run(
+                ["git", "init"],
+                cwd=directory,
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "add", "."],
+                cwd=directory,
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "Initial ASP analysis structure"],
+                cwd=directory,
+                capture_output=True,
+                check=True,
+            )
+            git_initialized = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass  # Git not available or failed, continue without it
+
+    # Print summary
+    console.print(f"\n[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
+    console.print("\n[bold]Project structure:[/bold]")
+    console.print(f"  {directory}/")
+    console.print("  ├── asp.yaml              [dim]# Analysis specification[/dim]")
+    console.print("  ├── README.md             [dim]# Project documentation[/dim]")
+    console.print("  ├── universes/            [dim]# Decision selections[/dim]")
+    console.print("  │   └── baseline.yaml")
+    console.print("  ├── workflows/            [dim]# Generated workflows[/dim]")
+    console.print("  ├── steps/                [dim]# Reusable workflow steps[/dim]")
+    console.print("  ├── scripts/              [dim]# Implementation scripts[/dim]")
+    console.print("  ├── results/              [dim]# Outputs (gitignored)[/dim]")
+    console.print("  └── .asp/                 [dim]# Metadata[/dim]")
+
+    if git_initialized:
+        console.print("\n[green]✓[/green] Initialized git repository with initial commit")
+
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. [cyan]cd {directory}[/cyan]")
+    console.print("  2. Edit [cyan]asp.yaml[/cyan] to define your inputs, outputs, and decisions")
+    console.print("  3. Run [cyan]asp validate asp.yaml[/cyan] to check your spec")
+    console.print("  4. Run [cyan]asp info[/cyan] to see a summary")
+
+
+@main.command()
 @click.argument("file", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--analysis",
