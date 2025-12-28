@@ -1,4 +1,5 @@
 # ASP - Agentic Science Protocol
+[![CI](https://github.com/EiffL/ASP/actions/workflows/ci.yml/badge.svg)](https://github.com/EiffL/ASP/actions/workflows/ci.yml) 
 
 A declarative specification format for scientific analyses that can be executed by AI agents.
 
