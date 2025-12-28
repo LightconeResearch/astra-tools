@@ -75,8 +75,8 @@ def validate(file: Path, analysis: Path | None) -> None:
 
     if schema_errors:
         console.print("\n[red]Schema validation errors:[/red]")
-        for error in schema_errors:
-            console.print(f"  • {error}")
+        for schema_err in schema_errors:
+            console.print(f"  • {schema_err}")
         raise SystemExit(1)
 
     console.print("[green]✓[/green] Schema validation passed")
@@ -90,8 +90,8 @@ def validate(file: Path, analysis: Path | None) -> None:
 
     if semantic_errors:
         console.print("\n[red]Semantic validation errors:[/red]")
-        for error in semantic_errors:
-            console.print(f"  • {error}")
+        for semantic_err in semantic_errors:
+            console.print(f"  • {semantic_err}")
         raise SystemExit(1)
 
     console.print("[green]✓[/green] Semantic validation passed")
@@ -134,9 +134,11 @@ def info(
     console.print(analysis.analysis.problem.strip())
 
     # Summary stats
-    console.print(f"\n[dim]Inputs: {len(analysis.analysis.inputs)} | "
-                  f"Outputs: {len(analysis.analysis.outputs)} | "
-                  f"Decisions: {len(analysis.decisions)}[/dim]")
+    console.print(
+        f"\n[dim]Inputs: {len(analysis.analysis.inputs)} | "
+        f"Outputs: {len(analysis.analysis.outputs)} | "
+        f"Decisions: {len(analysis.decisions)}[/dim]"
+    )
 
     # Show all by default if no flags
     show_all = not (decisions or inputs or outputs)
@@ -179,7 +181,9 @@ def info(
 
             options_branch = tree.add("[dim]Options:[/dim]")
             for option_id, option in decision.options.items():
-                default_marker = " [yellow](default)[/yellow]" if option_id == decision.default else ""
+                default_marker = (
+                    " [yellow](default)[/yellow]" if option_id == decision.default else ""
+                )
                 option_text = f"{option_id}: {option.label}{default_marker}"
                 if option.description:
                     option_text += f" - [dim]{option.description}[/dim]"
@@ -226,9 +230,7 @@ def generate_universe(
     spec = Analysis.from_yaml(analysis)
 
     # Check all decisions have defaults
-    missing_defaults = [
-        d_id for d_id, d in spec.decisions.items() if d.default is None
-    ]
+    missing_defaults = [d_id for d_id, d in spec.decisions.items() if d.default is None]
     if missing_defaults:
         console.print("[red]Error:[/red] Some decisions don't have defaults:")
         for d_id in missing_defaults:
@@ -312,9 +314,7 @@ def _viz_ascii(analysis: Analysis) -> None:
 
     for decision_id, decision in analysis.decisions.items():
         importance_stars = "★" * decision.importance + "☆" * (5 - decision.importance)
-        branch = tree.add(
-            f"[cyan]{decision_id}[/cyan] ({decision.type}) [{importance_stars}]"
-        )
+        branch = tree.add(f"[cyan]{decision_id}[/cyan] ({decision.type}) [{importance_stars}]")
 
         for option_id, option in decision.options.items():
             default = " [default]" if option_id == decision.default else ""
@@ -380,7 +380,6 @@ def schema() -> None:
 )
 def schema_export(output: Path) -> None:
     """Export JSON schemas to files."""
-    import json
 
     export_schemas(output)
 

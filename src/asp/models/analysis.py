@@ -14,9 +14,7 @@ class Checksum(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    algorithm: Literal["sha256", "sha512", "md5"] = Field(
-        description="Hash algorithm"
-    )
+    algorithm: Literal["sha256", "sha512", "md5"] = Field(description="Hash algorithm")
     value: str = Field(description="Hash value")
 
 
@@ -25,9 +23,7 @@ class Source(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["url", "s3", "sklearn", "asp", "file"] = Field(
-        description="Type of source"
-    )
+    type: Literal["url", "s3", "sklearn", "asp", "file"] = Field(description="Type of source")
     url: str | None = Field(default=None, description="URL for url type sources")
     bucket: str | None = Field(default=None, description="S3 bucket name")
     key: str | None = Field(default=None, description="S3 object key")
@@ -51,18 +47,14 @@ class Input(BaseModel):
         pattern=r"^[a-z][a-z0-9_]*$",
         description="Unique identifier for the input",
     )
-    type: Literal["data", "analysis", "literature"] = Field(
-        description="Type of input"
-    )
+    type: Literal["data", "analysis", "literature"] = Field(description="Type of input")
     source: str | Source | None = Field(
         default=None, description="Source specification for the input"
     )
     ref: str | None = Field(
         default=None, description="Reference to another analysis (for type: analysis)"
     )
-    version: str | None = Field(
-        default=None, description="Version of the referenced analysis"
-    )
+    version: str | None = Field(default=None, description="Version of the referenced analysis")
     use_outputs: list[str] | None = Field(
         default=None, description="Specific outputs to use from referenced analysis"
     )
@@ -111,12 +103,8 @@ class Option(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     label: str = Field(description="Human-readable name for the option")
-    description: str | None = Field(
-        default=None, description="Detailed description of the option"
-    )
-    value: Any | None = Field(
-        default=None, description="Configuration value for this option"
-    )
+    description: str | None = Field(default=None, description="Detailed description of the option")
+    value: Any | None = Field(default=None, description="Configuration value for this option")
     evidence: list[Evidence] | None = Field(
         default=None, description="Evidence supporting this option"
     )
@@ -136,9 +124,7 @@ class Decision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     label: str = Field(description="Human-readable name for the decision")
-    type: Literal["data", "method", "parameter"] = Field(
-        description="Category of decision"
-    )
+    type: Literal["data", "method", "parameter"] = Field(description="Category of decision")
     importance: int = Field(
         ge=1,
         le=5,
@@ -149,12 +135,10 @@ class Decision(BaseModel):
     default: str | None = Field(
         default=None, description="Default option ID for baseline universes"
     )
-    options: dict[str, Option] = Field(
-        description="Map of option IDs to option specifications"
-    )
+    options: dict[str, Option] = Field(description="Map of option IDs to option specifications")
 
     @model_validator(mode="after")
-    def validate_default_exists(self) -> "Decision":
+    def validate_default_exists(self) -> Decision:
         """Ensure default option exists in options."""
         if self.default is not None and self.default not in self.options:
             raise ValueError(f"Default option '{self.default}' not found in options")
@@ -191,12 +175,8 @@ class Analysis(BaseModel):
         },
     )
 
-    schema_: str | None = Field(
-        default=None, alias="$schema", description="JSON Schema reference"
-    )
-    version: str = Field(
-        pattern=r"^\d+\.\d+$", description="ASP specification version"
-    )
+    schema_: str | None = Field(default=None, alias="$schema", description="JSON Schema reference")
+    version: str = Field(pattern=r"^\d+\.\d+$", description="ASP specification version")
     analysis: AnalysisContent = Field(description="The analysis specification")
     decisions: dict[str, Decision] = Field(
         default_factory=dict,
@@ -204,7 +184,7 @@ class Analysis(BaseModel):
     )
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "Analysis":
+    def from_yaml(cls, path: str | Path) -> Analysis:
         """Load an analysis from a YAML file."""
         with open(path) as f:
             data = yaml.safe_load(f)

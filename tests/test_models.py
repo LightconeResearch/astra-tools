@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from asp.models.analysis import (
     Analysis,
-    AnalysisContent,
     Checksum,
     Decision,
     Evidence,

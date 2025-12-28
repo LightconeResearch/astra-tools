@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from asp.models.analysis import Analysis
 
 
 class Universe(BaseModel):
@@ -20,22 +24,16 @@ class Universe(BaseModel):
         },
     )
 
-    schema_: str | None = Field(
-        default=None, alias="$schema", description="JSON Schema reference"
-    )
+    schema_: str | None = Field(default=None, alias="$schema", description="JSON Schema reference")
     id: str = Field(
         pattern=r"^[a-z][a-z0-9_-]*$",
         description="Unique identifier for the universe",
     )
-    description: str | None = Field(
-        default=None, description="What this universe represents"
-    )
-    decisions: dict[str, str] = Field(
-        description="Map of decision_id to selected option_id"
-    )
+    description: str | None = Field(default=None, description="What this universe represents")
+    decisions: dict[str, str] = Field(description="Map of decision_id to selected option_id")
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "Universe":
+    def from_yaml(cls, path: str | Path) -> Universe:
         """Load a universe from a YAML file."""
         with open(path) as f:
             data = yaml.safe_load(f)
@@ -50,10 +48,10 @@ class Universe(BaseModel):
     @classmethod
     def from_defaults(
         cls,
-        analysis: "Analysis",  # type: ignore[name-defined]
+        analysis: Analysis,
         universe_id: str = "baseline",
         description: str | None = None,
-    ) -> "Universe":
+    ) -> Universe:
         """Create a universe from the default options in an analysis."""
         from asp.models.analysis import Analysis
 

@@ -22,7 +22,8 @@ class ValidationError(Exception):
 def load_yaml(path: str | Path) -> dict[str, Any]:
     """Load a YAML file."""
     with open(path) as f:
-        return yaml.safe_load(f)
+        data: dict[str, Any] = yaml.safe_load(f)
+        return data
 
 
 def validate_against_schema(

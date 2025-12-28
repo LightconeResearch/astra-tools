@@ -34,6 +34,7 @@ dev = [
     "ruff",
     "mypy",
     "types-PyYAML",
+    "types-jsonschema",
 ]
 
 [project.scripts]
@@ -45,9 +46,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/asp/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/asp"]

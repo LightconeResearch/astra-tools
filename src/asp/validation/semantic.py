@@ -44,7 +44,9 @@ def validate_analysis(analysis: Analysis) -> list[SemanticError]:
     for inp in analysis.analysis.inputs:
         if inp.id in input_ids:
             errors.append(
-                SemanticError("DUPLICATE_INPUT", f"Duplicate input ID: {inp.id}", f"inputs.{inp.id}")
+                SemanticError(
+                    "DUPLICATE_INPUT", f"Duplicate input ID: {inp.id}", f"inputs.{inp.id}"
+                )
             )
         input_ids.add(inp.id)
 
@@ -105,9 +107,7 @@ def validate_analysis(analysis: Analysis) -> list[SemanticError]:
     return errors
 
 
-def _validate_constraint_ref(
-    ref: str, analysis: Analysis, option_path: str
-) -> list[SemanticError]:
+def _validate_constraint_ref(ref: str, analysis: Analysis, option_path: str) -> list[SemanticError]:
     """Validate a constraint reference (decision.option format)."""
     errors: list[SemanticError] = []
 
@@ -200,9 +200,7 @@ def validate_universe(universe: Universe, analysis: Analysis) -> list[SemanticEr
     return errors
 
 
-def _validate_universe_constraints(
-    universe: Universe, analysis: Analysis
-) -> list[SemanticError]:
+def _validate_universe_constraints(universe: Universe, analysis: Analysis) -> list[SemanticError]:
     """Validate that the universe respects all constraints."""
     errors: list[SemanticError] = []
 

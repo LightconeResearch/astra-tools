@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
 
 

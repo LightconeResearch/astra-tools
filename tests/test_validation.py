@@ -2,10 +2,7 @@
 
 from pathlib import Path
 
-import pytest
-
 from asp.models.analysis import Analysis
-from asp.models.universe import Universe
 from asp.validation.schema import (
     is_valid_analysis,
     is_valid_universe,
@@ -16,7 +13,6 @@ from asp.validation.semantic import (
     SemanticError,
     validate_analysis,
     validate_analysis_file,
-    validate_universe,
     validate_universe_file,
 )
 

@@ -178,9 +178,7 @@ class TestVizCommand:
         assert "preprocessing" in result.output
 
     def test_viz_mermaid(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(
-            main, ["viz", "-f", str(full_analysis_path), "--format", "mermaid"]
-        )
+        result = runner.invoke(main, ["viz", "-f", str(full_analysis_path), "--format", "mermaid"])
         assert result.exit_code == 0
         assert "graph TD" in result.output
 
