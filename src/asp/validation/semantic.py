@@ -82,17 +82,29 @@ def validate_analysis(analysis: Analysis) -> list[SemanticError]:
             # Check evidence refs
             if option.evidence:
                 for i, evidence in enumerate(option.evidence):
-                    ref = evidence.ref
-                    if ref.startswith("inputs."):
-                        input_id = ref[7:]  # Remove "inputs." prefix
-                        if input_id not in input_ids:
+                    # Check insight reference
+                    if evidence.insight:
+                        if evidence.insight not in analysis.insights:
                             errors.append(
                                 SemanticError(
-                                    "INVALID_EVIDENCE_REF",
-                                    f"Evidence ref '{ref}' points to non-existent input",
+                                    "INVALID_INSIGHT_REF",
+                                    f"Evidence insight '{evidence.insight}' not found in insights",
                                     f"{option_path}.evidence[{i}]",
                                 )
                             )
+                    # Check legacy input reference
+                    elif evidence.ref:
+                        ref = evidence.ref
+                        if ref.startswith("inputs."):
+                            input_id = ref[7:]  # Remove "inputs." prefix
+                            if input_id not in input_ids:
+                                errors.append(
+                                    SemanticError(
+                                        "INVALID_EVIDENCE_REF",
+                                        f"Evidence ref '{ref}' points to non-existent input",
+                                        f"{option_path}.evidence[{i}]",
+                                    )
+                                )
 
             # Check incompatible_with refs
             if option.incompatible_with:

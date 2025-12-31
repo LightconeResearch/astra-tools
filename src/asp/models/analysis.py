@@ -8,6 +8,8 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from asp.models.insight import Insight
+
 
 class Checksum(BaseModel):
     """Checksum for data integrity verification."""
@@ -89,12 +91,29 @@ class Output(BaseModel):
 
 
 class Evidence(BaseModel):
-    """Evidence supporting a decision option."""
+    """Evidence supporting a decision option.
+
+    Can reference either:
+    - An insight by ID (preferred): `insight: insight_id`
+    - A legacy input reference: `ref: inputs.study_name` with `finding`
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    ref: str = Field(description="Reference to an input (e.g., 'inputs.study_name')")
-    finding: str = Field(description="What the evidence shows")
+    # New: reference an insight by ID
+    insight: str | None = Field(
+        default=None,
+        description="Reference to an insight by ID (e.g., 'compute_scaling')",
+    )
+    # Legacy: reference an input directly
+    ref: str | None = Field(
+        default=None,
+        description="Reference to an input (e.g., 'inputs.study_name') - deprecated, use insight",
+    )
+    finding: str | None = Field(
+        default=None,
+        description="What the evidence shows - required when using ref",
+    )
 
 
 class Option(BaseModel):
@@ -182,6 +201,10 @@ class Analysis(BaseModel):
         default_factory=dict,
         description="Map of decision IDs to decision specifications",
     )
+    insights: dict[str, Insight] = Field(
+        default_factory=dict,
+        description="Map of insight IDs to insight specifications",
+    )
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> Analysis:
@@ -213,6 +236,10 @@ class Analysis(BaseModel):
     def get_decision(self, decision_id: str) -> Decision | None:
         """Get a decision by ID."""
         return self.decisions.get(decision_id)
+
+    def get_insight(self, insight_id: str) -> Insight | None:
+        """Get an insight by ID."""
+        return self.insights.get(insight_id)
 
     def get_default_universe(self) -> dict[str, str]:
         """Get the default universe based on decision defaults."""

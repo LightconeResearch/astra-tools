@@ -645,18 +645,23 @@ def schema_export(output: Path) -> None:
     console.print(f"[green]✓[/green] Exported schemas to [cyan]{output}/[/cyan]")
     console.print(f"  • {output}/analysis.schema.json")
     console.print(f"  • {output}/universe.schema.json")
+    console.print(f"  • {output}/insights.schema.json")
 
 
 @schema.command("show")
-@click.argument("schema_type", type=click.Choice(["analysis", "universe"]))
+@click.argument("schema_type", type=click.Choice(["analysis", "universe", "insights"]))
 def schema_show(schema_type: str) -> None:
     """Print a JSON schema to stdout."""
     import json
 
+    from asp.schemas import get_insights_schema
+
     if schema_type == "analysis":
         schema_data = get_analysis_schema()
-    else:
+    elif schema_type == "universe":
         schema_data = get_universe_schema()
+    else:
+        schema_data = get_insights_schema()
 
     console.print(json.dumps(schema_data, indent=2))
 

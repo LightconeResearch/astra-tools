@@ -267,6 +267,29 @@ class TestAnalysis:
         reloaded = Analysis.from_yaml(output_path)
         assert reloaded.analysis.name == analysis.analysis.name
 
+    def test_analysis_with_insights(self, minimal_analysis_data: dict):
+        """Test that Analysis can contain insights."""
+        data = minimal_analysis_data.copy()
+        data["insights"] = {
+            "scaling_insight": {
+                "claim": "Model scales well with data",
+                "source": {"doi": "10.1234/test-paper"},
+                "evidence": [{"figure": "Figure 1"}],
+            }
+        }
+        analysis = Analysis.model_validate(data)
+        assert len(analysis.insights) == 1
+        assert "scaling_insight" in analysis.insights
+
+        insight = analysis.get_insight("scaling_insight")
+        assert insight is not None
+        assert insight.claim == "Model scales well with data"
+
+    def test_analysis_get_insight_missing(self, minimal_analysis_data: dict):
+        """Test get_insight returns None for missing insight."""
+        analysis = Analysis.model_validate(minimal_analysis_data)
+        assert analysis.get_insight("nonexistent") is None
+
 
 class TestUniverse:
     """Tests for Universe model."""
