@@ -259,21 +259,25 @@ branches: {}
                 capture_output=True,
                 check=True,
             )
-            subprocess.run(
-                ["git", "add", "."],
-                cwd=directory,
-                capture_output=True,
-                check=True,
-            )
-            subprocess.run(
-                ["git", "commit", "-m", "Initial ASP analysis structure"],
-                cwd=directory,
-                capture_output=True,
-                check=True,
-            )
             git_initialized = True
+            # Try to create initial commit (may fail if git user not configured)
+            try:
+                subprocess.run(
+                    ["git", "add", "."],
+                    cwd=directory,
+                    capture_output=True,
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "commit", "-m", "Initial ASP analysis structure"],
+                    cwd=directory,
+                    capture_output=True,
+                    check=True,
+                )
+            except subprocess.CalledProcessError:
+                pass  # Commit failed (e.g., no git user configured), but repo is initialized
         except (subprocess.CalledProcessError, FileNotFoundError):
-            pass  # Git not available or failed, continue without it
+            pass  # Git not available or init failed, continue without it
 
     # Print summary
     console.print(f"\n[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
@@ -290,7 +294,7 @@ branches: {}
     console.print("  └── .asp/                 [dim]# Metadata[/dim]")
 
     if git_initialized:
-        console.print("\n[green]✓[/green] Initialized git repository with initial commit")
+        console.print("\n[green]✓[/green] Initialized git repository")
 
     console.print("\n[bold]Next steps:[/bold]")
     console.print(f"  1. [cyan]cd {directory}[/cyan]")
