@@ -1,7 +1,5 @@
 """Tests for workflow mapping logic."""
 
-from pathlib import Path
-
 import pytest
 
 from asp.models.analysis import Analysis

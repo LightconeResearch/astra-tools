@@ -259,10 +259,19 @@ my-analysis/
 ├── universes/            # Decision selections
 │   ├── baseline.yaml     # Default configuration
 │   └── experiment1.yaml  # Alternative configuration
+├── workflows/            # CWL workflow definitions
+│   ├── main.cwl          # Main workflow
+│   └── params/           # Generated parameter files
+├── steps/                # ALL workflow implementation goes here
+│   ├── io/               # Data loading steps (.cwl + scripts)
+│   ├── preprocessing/    # Preprocessing steps
+│   ├── models/           # Model training steps
+│   └── evaluation/       # Evaluation steps
 ├── insights/             # Optional: separate insight files
-│   └── scaling.yaml      # Insights on a specific topic
 └── results/              # Execution outputs (gitignored)
 ```
+
+**Important**: All implementation code (Python, R, shell scripts) must be placed in the `steps/` folder alongside their CWL definitions. Do not create a separate `scripts/` folder.
 
 ## Building CWL Workflows from ASP Analyses
 
@@ -328,19 +337,15 @@ For each ASP output, create a corresponding CWL output:
 
 #### Step 4: Implement Workflow Steps
 
-Structure your CWL workflow to implement the analysis logic:
+Create the main workflow in `workflows/main.cwl`:
 
 ```yaml
 cwlVersion: v1.2
 class: Workflow
 
 inputs:
-  # Data inputs (from ASP inputs)
   input_data:
     type: File
-    doc: "Primary dataset"
-
-  # Decision parameters (from ASP decisions)
   preprocessing_method:
     type: string
   model_type:
@@ -349,7 +354,6 @@ inputs:
     type: float
 
 outputs:
-  # Results (from ASP outputs)
   accuracy:
     type: float
     outputSource: evaluate/accuracy
@@ -359,25 +363,73 @@ outputs:
 
 steps:
   preprocess:
-    run: steps/preprocess.cwl
+    run: steps/preprocessing/preprocess.cwl
     in:
       data: input_data
       method: preprocessing_method
     out: [processed_data]
 
   train:
-    run: steps/train.cwl
+    run: steps/models/train.cwl
     in:
       data: preprocess/processed_data
       model_type: model_type
     out: [model]
 
   evaluate:
-    run: steps/evaluate.cwl
+    run: steps/evaluation/evaluate.cwl
     in:
       model: train/model
       test_size: test_size
     out: [accuracy]
+```
+
+#### Step 5: Create Step Implementations
+
+Each step in `steps/` contains both the CWL definition and its implementation script:
+
+```
+steps/
+├── preprocessing/
+│   ├── preprocess.cwl      # CWL CommandLineTool definition
+│   └── preprocess.py       # Python implementation
+├── models/
+│   ├── train.cwl
+│   └── train.py
+└── evaluation/
+    ├── evaluate.cwl
+    └── evaluate.py
+```
+
+Example step (`steps/preprocessing/preprocess.cwl`):
+```yaml
+cwlVersion: v1.2
+class: CommandLineTool
+baseCommand: [python, preprocess.py]
+
+requirements:
+  InitialWorkDirRequirement:
+    listing:
+      - entryname: preprocess.py
+        entry: $(inputs.script)
+
+inputs:
+  script:
+    type: File
+    default:
+      class: File
+      location: preprocess.py
+  data:
+    type: File
+    inputBinding: { prefix: --data }
+  method:
+    type: string
+    inputBinding: { prefix: --method }
+
+outputs:
+  processed_data:
+    type: File
+    outputBinding: { glob: "processed_*.csv" }
 ```
 
 ### Complete Example: ASP to CWL

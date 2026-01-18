@@ -262,10 +262,10 @@ class TestInitCommand:
         assert (project_dir / "steps" / "preprocessing").is_dir()
         assert (project_dir / "steps" / "models").is_dir()
         assert (project_dir / "steps" / "evaluation").is_dir()
-        assert (project_dir / "scripts").is_dir()
         assert (project_dir / "results").is_dir()
         assert (project_dir / ".asp").is_dir()
         assert (project_dir / ".asp" / "branches.yaml").exists()
+        assert (project_dir / ".claude" / "skills" / "asp-analysis" / "SKILL.md").exists()
 
     def test_init_with_prompts(self, runner: CliRunner, tmp_path: Path):
         project_dir = tmp_path / "prompted-analysis"

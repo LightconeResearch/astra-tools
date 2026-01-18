@@ -55,7 +55,7 @@ def init(directory: Path, name: str | None, problem: str | None, no_git: bool) -
     """Create a new ASP analysis project.
 
     Creates a complete project structure with asp.yaml, README, and standard
-    directories for universes, workflows, scripts, and results.
+    directories for universes, workflows, steps, and results.
 
     DIRECTORY is the project folder to create (default: current directory).
     """
@@ -89,7 +89,6 @@ def init(directory: Path, name: str | None, problem: str | None, no_git: bool) -
         "steps/preprocessing",
         "steps/models",
         "steps/evaluation",
-        "scripts",
         "results",
         ".asp",
         ".claude/skills/asp-analysis",
@@ -169,12 +168,11 @@ decisions:
 │   └── baseline.yaml     # Default universe
 ├── workflows/            # Generated workflows (CWL, Snakemake, etc.)
 │   └── params/           # Workflow parameters per universe
-├── steps/                # Reusable workflow steps
+├── steps/                # CWL workflow steps (all implementation here)
 │   ├── io/               # Data loading steps
 │   ├── preprocessing/    # Data preprocessing steps
 │   ├── models/           # Model training steps
 │   └── evaluation/       # Evaluation steps
-├── scripts/              # Python/R implementation scripts
 ├── results/              # Execution outputs (gitignored)
 └── .asp/                 # ASP metadata
 ```
@@ -301,9 +299,8 @@ branches: {}
     console.print("  ├── README.md             [dim]# Project documentation[/dim]")
     console.print("  ├── universes/            [dim]# Decision selections[/dim]")
     console.print("  │   └── baseline.yaml")
-    console.print("  ├── workflows/            [dim]# Generated workflows[/dim]")
-    console.print("  ├── steps/                [dim]# Reusable workflow steps[/dim]")
-    console.print("  ├── scripts/              [dim]# Implementation scripts[/dim]")
+    console.print("  ├── workflows/            [dim]# CWL workflows[/dim]")
+    console.print("  ├── steps/                [dim]# CWL workflow steps[/dim]")
     console.print("  ├── results/              [dim]# Outputs (gitignored)[/dim]")
     console.print("  ├── .asp/                 [dim]# Metadata[/dim]")
     console.print("  └── .claude/              [dim]# Claude Code skill[/dim]")
