@@ -92,6 +92,7 @@ def init(directory: Path, name: str | None, problem: str | None, no_git: bool) -
         "scripts",
         "results",
         ".asp",
+        ".claude/skills/asp-analysis",
     ]
     for subdir in subdirs:
         (directory / subdir).mkdir(parents=True, exist_ok=True)
@@ -255,6 +256,13 @@ branches: {}
 """
     (directory / ".asp" / "branches.yaml").write_text(branches_yaml)
 
+    # Copy Claude skill from package templates
+    import importlib.resources
+
+    skill_template = importlib.resources.files("asp.templates").joinpath("SKILL.md")
+    skill_content = skill_template.read_text()
+    (directory / ".claude" / "skills" / "asp-analysis" / "SKILL.md").write_text(skill_content)
+
     # Initialize git repository
     git_initialized = False
     if not no_git and not (directory / ".git").exists():
@@ -297,7 +305,8 @@ branches: {}
     console.print("  ├── steps/                [dim]# Reusable workflow steps[/dim]")
     console.print("  ├── scripts/              [dim]# Implementation scripts[/dim]")
     console.print("  ├── results/              [dim]# Outputs (gitignored)[/dim]")
-    console.print("  └── .asp/                 [dim]# Metadata[/dim]")
+    console.print("  ├── .asp/                 [dim]# Metadata[/dim]")
+    console.print("  └── .claude/              [dim]# Claude Code skill[/dim]")
 
     if git_initialized:
         console.print("\n[green]✓[/green] Initialized git repository")
