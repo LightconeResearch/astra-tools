@@ -14,6 +14,12 @@ from asp.models.universe import Universe
 from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
 from asp.validation.schema import validate_analysis_schema, validate_universe_schema
 from asp.validation.semantic import validate_analysis_file, validate_universe_file
+from asp.workflow.generator import generate_params_file, generate_params_string
+from asp.workflow.parser import parse_cwl_inputs
+from asp.workflow.validator import (
+    get_decision_param_mapping,
+    validate_decision_coverage,
+)
 
 console = Console()
 
@@ -668,6 +674,132 @@ def schema_show(schema_type: str) -> None:
         schema_data = get_insights_schema()
 
     console.print(json.dumps(schema_data, indent=2))
+
+
+# =============================================================================
+# Workflow commands
+# =============================================================================
+
+
+def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> Path:
+    """Find or validate analysis file, exit with error if not found."""
+    if analysis is not None:
+        return analysis
+    found = find_analysis_file(start_path)
+    if found is None:
+        console.print("[red]Error:[/red] No asp.yaml found.")
+        raise SystemExit(1)
+    return found
+
+
+@main.command("params")
+@click.argument("universe_file", type=click.Path(exists=True, path_type=Path))
+@click.option("-o", "--output", type=click.Path(path_type=Path), help="Output file path")
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+@click.option("--dry-run", is_flag=True, help="Preview without writing file")
+def params(universe_file: Path, output: Path | None, analysis: Path | None, dry_run: bool) -> None:
+    """Generate CWL parameters from a universe."""
+    analysis = _require_analysis(analysis, universe_file.parent)
+    spec = Analysis.from_yaml(analysis)
+    universe = Universe.from_yaml(universe_file)
+
+    if dry_run:
+        console.print(f"\n[bold]CWL parameters for universe '{universe.id}':[/bold]\n")
+        console.print(generate_params_string(spec, universe))
+        return
+
+    if output is None:
+        output = analysis.parent / "workflows" / "params" / f"{universe.id}.yaml"
+
+    generate_params_file(spec, universe, output)
+    console.print(f"[green]![/green] Generated parameters at [cyan]{output}[/cyan]")
+
+    console.print("\n[bold]Parameters:[/bold]")
+    from asp.workflow.mapping import generate_cwl_params
+
+    for name, value in generate_cwl_params(spec, universe).items():
+        console.print(f"  {name}: {value}")
+
+
+@main.group()
+def workflow() -> None:
+    """Workflow integration commands."""
+    pass
+
+
+@workflow.command("validate")
+@click.option("--cwl", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+def workflow_validate(cwl: Path, analysis: Path | None) -> None:
+    """Validate CWL workflow mapping against ASP decisions."""
+    analysis = _require_analysis(analysis)
+    spec = Analysis.from_yaml(analysis)
+    console.print(f"Validating [cyan]{cwl}[/cyan] against [cyan]{analysis}[/cyan]...")
+
+    errors = validate_decision_coverage(spec, cwl)
+    if not errors:
+        console.print("[green]![/green] All decisions map to CWL parameters")
+        console.print("[green]![/green] All required CWL parameters are covered")
+        return
+
+    console.print("\n[red]Workflow validation errors:[/red]")
+    for error in errors:
+        level = "[yellow]WARN[/yellow]" if error.code == "UNMAPPED_DECISION" else "[red]ERROR[/red]"
+        console.print(f"  {level} {error}")
+    raise SystemExit(1)
+
+
+@workflow.command("show")
+@click.option("--cwl", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+def workflow_show(cwl: Path, analysis: Path | None) -> None:
+    """Show CWL workflow inputs and their ASP mappings."""
+    analysis = _require_analysis(analysis)
+    spec = Analysis.from_yaml(analysis)
+
+    try:
+        cwl_params = parse_cwl_inputs(cwl)
+    except FileNotFoundError:
+        console.print(f"[red]Error:[/red] CWL file not found: {cwl}")
+        raise SystemExit(1)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise SystemExit(1)
+
+    decision_mapping = get_decision_param_mapping(spec, cwl)
+    param_to_decision = {
+        param: decision_id
+        for decision_id, params in decision_mapping.items()
+        for param in params
+    }
+
+    console.print(f"\n[bold]CWL Inputs: {cwl.name}[/bold]\n")
+
+    table = Table(show_header=True)
+    table.add_column("CWL Parameter")
+    table.add_column("Type")
+    table.add_column("Required")
+    table.add_column("ASP Decision")
+    table.add_column("Status")
+
+    for p in cwl_params:
+        decision = param_to_decision.get(p.name, "")
+        if decision:
+            status = "[green]mapped[/green]"
+        elif not p.required:
+            status = "[dim]optional[/dim]"
+        else:
+            status = "[yellow]unmapped[/yellow]"
+        table.add_row(p.name, p.type, "Yes" if p.required else "No", decision, status)
+
+    console.print(table)
+
+    unmapped_required = [p for p in cwl_params if p.name not in param_to_decision and p.required]
+    console.print(f"\n[dim]Mapped: {len(param_to_decision)}/{len(cwl_params)} parameters[/dim]")
+    if unmapped_required:
+        console.print(
+            f"[yellow]Warning:[/yellow] {len(unmapped_required)} required parameters unmapped"
+        )
 
 
 if __name__ == "__main__":

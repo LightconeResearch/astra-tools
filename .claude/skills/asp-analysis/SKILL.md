@@ -21,6 +21,12 @@ asp universe generate -n baseline # Generate universe from defaults
 asp universe check universes/x.yaml  # Check universe constraints
 asp viz                           # Visualize decision space
 asp schema show analysis          # Show JSON schema
+
+# Workflow Integration
+asp params universes/baseline.yaml     # Generate CWL parameters
+asp params universes/x.yaml --dry-run  # Preview parameters
+asp workflow validate --cwl main.cwl   # Validate CWL mapping
+asp workflow show --cwl main.cwl       # Show parameter mapping table
 ```
 
 ## Core Concepts
@@ -258,6 +264,93 @@ my-analysis/
 └── results/              # Execution outputs (gitignored)
 ```
 
+## Workflow Integration
+
+ASP can generate CWL (Common Workflow Language) parameter files from universes, enabling automated workflow execution.
+
+### Generating Parameters from Universe
+
+Generate a CWL parameters file from a universe:
+
+```bash
+asp params universes/baseline.yaml -o workflows/params/baseline.yaml
+```
+
+Preview without writing:
+```bash
+asp params universes/baseline.yaml --dry-run
+```
+
+### Validating Workflow Mapping
+
+Validate that ASP decisions map correctly to CWL parameters:
+
+```bash
+asp workflow validate --cwl workflows/main.cwl
+```
+
+This checks:
+- Every ASP decision produces at least one CWL parameter
+- Every required CWL parameter has a corresponding ASP decision
+
+### Viewing the Mapping
+
+See which ASP decisions map to which CWL parameters:
+
+```bash
+asp workflow show --cwl workflows/main.cwl
+```
+
+### Decision Value Conventions
+
+ASP uses convention-based mapping from decision values to CWL parameters:
+
+| Decision Value Type | CWL Parameter Pattern | Example |
+|---------------------|----------------------|---------|
+| Simple value (int/float/str) | `{decision_id}` | `test_size: 0.2` |
+| Dict with keys | `{decision_id}_{key}` for each | `scaling: {method: "standard"}` -> `scaling_method: "standard"` |
+| No value field | `{decision_id}` with option_id as value | `model: random_forest` -> `model: "random_forest"` |
+
+### Example: Decision with Dict Value
+
+```yaml
+decisions:
+  scaling:
+    label: "Feature Scaling"
+    type: method
+    default: standard
+    options:
+      standard:
+        label: "StandardScaler"
+        value:
+          method: "standard"
+          with_mean: true
+      minmax:
+        label: "MinMaxScaler"
+        value:
+          method: "minmax"
+          with_mean: false
+```
+
+This generates CWL parameters:
+```yaml
+scaling_method: "standard"
+scaling_with_mean: true
+```
+
+### Handling Validation Errors
+
+If `asp workflow validate` reports errors:
+
+**UNMAPPED_DECISION**: Decision has no corresponding CWL parameter
+1. Add a `value` field to the decision option
+2. Ensure CWL workflow has a matching input parameter
+3. Check naming convention: `{decision_id}` or `{decision_id}_{value_key}`
+
+**UNUSED_PARAMETER**: Required CWL parameter has no corresponding decision
+1. Add a new decision to the analysis that will provide this parameter
+2. Or make the CWL parameter optional (add `?` to type)
+
 ## Tips
 
 1. **Start with the problem**: Write a clear problem statement before defining decisions
@@ -265,3 +358,4 @@ my-analysis/
 3. **Precise evidence**: Include page numbers, figure labels, exact quotes
 4. **Link insights to decisions**: Every decision option should ideally have supporting evidence
 5. **Use scope**: Clarify when an insight applies (dataset, model type, conditions)
+6. **Add value fields**: When integrating with CWL, add explicit `value` fields to options
