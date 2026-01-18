@@ -257,7 +257,7 @@ class TestInitCommand:
         assert (project_dir / ".gitignore").exists()
         assert (project_dir / "universes").is_dir()
         assert (project_dir / "universes" / "baseline.yaml").exists()
-        assert (project_dir / "workflows" / "params").is_dir()
+        assert (project_dir / "workflows").is_dir()
         assert (project_dir / "steps" / "io").is_dir()
         assert (project_dir / "steps" / "preprocessing").is_dir()
         assert (project_dir / "steps" / "models").is_dir()

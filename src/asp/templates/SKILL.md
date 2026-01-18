@@ -23,10 +23,11 @@ asp viz                           # Visualize decision space
 asp schema show analysis          # Show JSON schema
 
 # Workflow Integration
-asp params universes/baseline.yaml     # Generate CWL parameters
-asp params universes/x.yaml --dry-run  # Preview parameters
-asp workflow validate --cwl main.cwl   # Validate CWL mapping
-asp workflow show --cwl main.cwl       # Show parameter mapping table
+asp workflow run universes/baseline.yaml --cwl main.cwl  # Run workflow
+asp workflow run universes/x.yaml --cwl main.cwl -o out/ # Run with output dir
+asp workflow validate --cwl main.cwl         # Validate CWL mapping
+asp workflow show --cwl main.cwl             # Show parameter mapping table
+asp params universes/baseline.yaml           # Output CWL parameters to stdout
 ```
 
 ## Core Concepts
@@ -256,12 +257,11 @@ Then edit `universes/experiment1.yaml` to customize decisions.
 ```
 my-analysis/
 ├── asp.yaml              # Main analysis specification
-├── universes/            # Decision selections
+├── universes/            # Decision selections (source of truth for CWL params)
 │   ├── baseline.yaml     # Default configuration
 │   └── experiment1.yaml  # Alternative configuration
 ├── workflows/            # CWL workflow definitions
-│   ├── main.cwl          # Main workflow
-│   └── params/           # Generated parameter files
+│   └── main.cwl          # Main workflow
 ├── steps/                # ALL workflow implementation goes here
 │   ├── io/               # Data loading steps (.cwl + scripts)
 │   ├── preprocessing/    # Preprocessing steps
@@ -271,7 +271,9 @@ my-analysis/
 └── results/              # Execution outputs (gitignored)
 ```
 
-**Important**: All implementation code (Python, R, shell scripts) must be placed in the `steps/` folder alongside their CWL definitions. Do not create a separate `scripts/` folder.
+**Important**:
+- All implementation code (Python, R, shell scripts) must be placed in the `steps/` folder alongside their CWL definitions. Do not create a separate `scripts/` folder.
+- Universes are the source of truth for CWL parameters. Use `asp workflow run` to execute workflows directly from universes, or `asp params` to inspect the generated parameters.
 
 ## Building CWL Workflows from ASP Analyses
 
@@ -540,11 +542,11 @@ asp workflow validate --cwl workflows/main.cwl
 # 3. View the parameter mapping table
 asp workflow show --cwl workflows/main.cwl
 
-# 4. Generate parameters from a universe (preview)
-asp params universes/baseline.yaml --dry-run
+# 4. Run workflow with a universe
+asp workflow run universes/baseline.yaml --cwl workflows/main.cwl
 
-# 5. Generate the params file
-asp params universes/baseline.yaml -o workflows/params/baseline.yaml
+# 5. Run with output directory
+asp workflow run universes/baseline.yaml --cwl workflows/main.cwl -o results/baseline/
 ```
 
 The `asp workflow validate` command performs two checks:

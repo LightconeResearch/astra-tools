@@ -84,7 +84,7 @@ def init(directory: Path, name: str | None, problem: str | None, no_git: bool) -
     # Create subdirectories
     subdirs = [
         "universes",
-        "workflows/params",
+        "workflows",
         "steps/io",
         "steps/preprocessing",
         "steps/models",
@@ -164,10 +164,9 @@ decisions:
 ```
 {directory.name}/
 ├── asp.yaml              # Analysis specification
-├── universes/            # Universe definitions (decision selections)
+├── universes/            # Decision selections (source of truth for params)
 │   └── baseline.yaml     # Default universe
-├── workflows/            # Generated workflows (CWL, Snakemake, etc.)
-│   └── params/           # Workflow parameters per universe
+├── workflows/            # CWL workflow definitions
 ├── steps/                # CWL workflow steps (all implementation here)
 │   ├── io/               # Data loading steps
 │   ├── preprocessing/    # Data preprocessing steps
@@ -700,31 +699,24 @@ def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> 
 
 @main.command("params")
 @click.argument("universe_file", type=click.Path(exists=True, path_type=Path))
-@click.option("-o", "--output", type=click.Path(path_type=Path), help="Output file path")
+@click.option("-o", "--output", type=click.Path(path_type=Path), help="Write to file")
 @click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
-@click.option("--dry-run", is_flag=True, help="Preview without writing file")
-def params(universe_file: Path, output: Path | None, analysis: Path | None, dry_run: bool) -> None:
-    """Generate CWL parameters from a universe."""
+def params(universe_file: Path, output: Path | None, analysis: Path | None) -> None:
+    """Generate CWL parameters from a universe.
+
+    Outputs YAML to stdout by default. Use -o to write to a file.
+    """
     analysis = _require_analysis(analysis, universe_file.parent)
     spec = Analysis.from_yaml(analysis)
     universe = Universe.from_yaml(universe_file)
-
-    if dry_run:
-        console.print(f"\n[bold]CWL parameters for universe '{universe.id}':[/bold]\n")
-        console.print(generate_params_string(spec, universe))
-        return
+    yaml_output = generate_params_string(spec, universe)
 
     if output is None:
-        output = analysis.parent / "workflows" / "params" / f"{universe.id}.yaml"
-
-    generate_params_file(spec, universe, output)
-    console.print(f"[green]![/green] Generated parameters at [cyan]{output}[/cyan]")
-
-    console.print("\n[bold]Parameters:[/bold]")
-    from asp.workflow.mapping import generate_cwl_params
-
-    for name, value in generate_cwl_params(spec, universe).items():
-        console.print(f"  {name}: {value}")
+        # Output to stdout (raw YAML, no Rich formatting)
+        print(yaml_output, end="")
+    else:
+        generate_params_file(spec, universe, output)
+        console.print(f"[green]✓[/green] Generated parameters at [cyan]{output}[/cyan]")
 
 
 @main.group()
@@ -827,6 +819,75 @@ def workflow_show(cwl: Path, analysis: Path | None) -> None:
         console.print(
             f"[yellow]Warning:[/yellow] {len(unmapped_required)} required parameters unmapped"
         )
+
+
+@workflow.command("run")
+@click.argument("universe_file", type=click.Path(exists=True, path_type=Path))
+@click.option("--cwl", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+@click.option("-o", "--outdir", type=click.Path(path_type=Path), help="Output directory")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress cwltool progress output")
+def workflow_run(
+    universe_file: Path,
+    cwl: Path,
+    analysis: Path | None,
+    outdir: Path | None,
+    quiet: bool,
+) -> None:
+    """Run a CWL workflow with parameters from a universe.
+
+    Generates CWL parameters from the universe and executes the workflow
+    using cwltool.
+
+    Example:
+        asp workflow run universes/baseline.yaml --cwl workflows/main.cwl
+    """
+    import subprocess
+    import tempfile
+
+    analysis = _require_analysis(analysis, universe_file.parent)
+    spec = Analysis.from_yaml(analysis)
+    universe = Universe.from_yaml(universe_file)
+
+    # Generate parameters
+    params_yaml = generate_params_string(spec, universe)
+
+    console.print(f"[dim]Universe:[/dim] {universe_file.name}")
+    console.print(f"[dim]Workflow:[/dim] {cwl.name}")
+    console.print()
+
+    # Write params to temp file (cwltool needs a file path for complex inputs)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        f.write(params_yaml)
+        params_file = Path(f.name)
+
+    try:
+        # Build cwltool command
+        cmd = ["cwltool"]
+        if quiet:
+            cmd.append("--quiet")
+        if outdir:
+            outdir.mkdir(parents=True, exist_ok=True)
+            cmd.extend(["--outdir", str(outdir)])
+        cmd.extend([str(cwl), str(params_file)])
+
+        console.print(f"[dim]Running:[/dim] cwltool {cwl.name} <params>")
+        console.print()
+
+        # Run cwltool
+        result = subprocess.run(cmd)
+
+        if result.returncode != 0:
+            raise SystemExit(result.returncode)
+
+        console.print()
+        console.print("[green]✓[/green] Workflow completed successfully")
+        if outdir:
+            console.print(f"[dim]Outputs in:[/dim] {outdir}")
+
+    finally:
+        # Clean up temp file
+        params_file.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
