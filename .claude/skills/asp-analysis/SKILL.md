@@ -264,6 +264,234 @@ my-analysis/
 └── results/              # Execution outputs (gitignored)
 ```
 
+## Building CWL Workflows from ASP Analyses
+
+When an ASP analysis is specified, you need to build a corresponding CWL workflow that:
+1. Accepts parameters matching the ASP decisions
+2. Produces outputs matching the ASP output definitions
+3. Implements the computational steps implied by the analysis
+
+### Workflow Construction Process
+
+#### Step 1: Analyze the ASP Specification
+
+Read `asp.yaml` and identify:
+- **Inputs**: Data sources the workflow needs to accept
+- **Outputs**: Results the workflow must produce
+- **Decisions**: Parameters that control workflow behavior
+
+#### Step 2: Design CWL Input Parameters
+
+For each ASP decision, create corresponding CWL input parameters following naming conventions:
+
+| ASP Decision Pattern | CWL Input Design |
+|---------------------|------------------|
+| Decision with simple `value` (int/float/str) | Single input named `{decision_id}` |
+| Decision with dict `value` | Multiple inputs named `{decision_id}_{key}` |
+| Decision without `value` field | Single input named `{decision_id}` (receives option_id as string) |
+
+**Example:** Given this ASP decision:
+```yaml
+decisions:
+  preprocessing:
+    options:
+      standard:
+        label: "StandardScaler"
+        value:
+          method: "standard"
+          with_mean: true
+```
+
+Create these CWL inputs:
+```yaml
+inputs:
+  preprocessing_method:
+    type: string
+    doc: "Preprocessing method (standard, minmax, none)"
+  preprocessing_with_mean:
+    type: boolean?
+    doc: "Whether to center data before scaling"
+```
+
+#### Step 3: Map ASP Outputs to CWL Outputs
+
+For each ASP output, create a corresponding CWL output:
+
+| ASP Output Type | CWL Output Type |
+|----------------|-----------------|
+| `metric` (dtype: float) | `type: float` or `type: File` (JSON) |
+| `metric` (dtype: int) | `type: int` or `type: File` (JSON) |
+| `figure` | `type: File` with appropriate format |
+| `table` | `type: File` (CSV, JSON, etc.) |
+| `model` | `type: File` (joblib, pickle, etc.) |
+| `report` | `type: File` (markdown, PDF, etc.) |
+
+#### Step 4: Implement Workflow Steps
+
+Structure your CWL workflow to implement the analysis logic:
+
+```yaml
+cwlVersion: v1.2
+class: Workflow
+
+inputs:
+  # Data inputs (from ASP inputs)
+  input_data:
+    type: File
+    doc: "Primary dataset"
+
+  # Decision parameters (from ASP decisions)
+  preprocessing_method:
+    type: string
+  model_type:
+    type: string
+  test_size:
+    type: float
+
+outputs:
+  # Results (from ASP outputs)
+  accuracy:
+    type: float
+    outputSource: evaluate/accuracy
+  trained_model:
+    type: File
+    outputSource: train/model
+
+steps:
+  preprocess:
+    run: steps/preprocess.cwl
+    in:
+      data: input_data
+      method: preprocessing_method
+    out: [processed_data]
+
+  train:
+    run: steps/train.cwl
+    in:
+      data: preprocess/processed_data
+      model_type: model_type
+    out: [model]
+
+  evaluate:
+    run: steps/evaluate.cwl
+    in:
+      model: train/model
+      test_size: test_size
+    out: [accuracy]
+```
+
+### Complete Example: ASP to CWL
+
+Given this ASP analysis:
+```yaml
+# asp.yaml
+analysis:
+  name: "Classification Study"
+  inputs:
+    - id: dataset
+      type: data
+  outputs:
+    - id: accuracy
+      type: metric
+      dtype: float
+      primary: true
+    - id: model
+      type: model
+
+decisions:
+  scaling:
+    type: method
+    default: standard
+    options:
+      standard:
+        value: { method: "standard", with_mean: true }
+      minmax:
+        value: { method: "minmax", with_mean: false }
+      none:
+        value: { method: "none" }
+
+  classifier:
+    type: method
+    default: rf
+    options:
+      rf:
+        label: "Random Forest"
+      svm:
+        label: "SVM"
+        requires: [scaling.standard]
+
+  test_split:
+    type: parameter
+    default: split_20
+    options:
+      split_20:
+        value: 0.2
+      split_30:
+        value: 0.3
+```
+
+Build this CWL workflow:
+```yaml
+# workflows/main.cwl
+cwlVersion: v1.2
+class: CommandLineTool
+baseCommand: [python, run_analysis.py]
+
+inputs:
+  # Data input
+  dataset:
+    type: File
+    inputBinding: { prefix: --dataset }
+
+  # From 'scaling' decision (dict value)
+  scaling_method:
+    type: string
+    inputBinding: { prefix: --scaling-method }
+  scaling_with_mean:
+    type: boolean?
+    inputBinding: { prefix: --scaling-with-mean }
+
+  # From 'classifier' decision (no value field)
+  classifier:
+    type: string
+    inputBinding: { prefix: --classifier }
+
+  # From 'test_split' decision (simple value)
+  test_split:
+    type: float
+    inputBinding: { prefix: --test-split }
+
+outputs:
+  accuracy:
+    type: float
+    outputBinding:
+      glob: results/accuracy.txt
+      loadContents: true
+      outputEval: $(parseFloat(self[0].contents))
+  model:
+    type: File
+    outputBinding:
+      glob: results/model.joblib
+```
+
+### Validation Workflow
+
+After building your CWL workflow:
+
+```bash
+# 1. Validate the mapping
+asp workflow validate --cwl workflows/main.cwl
+
+# 2. View the parameter mapping table
+asp workflow show --cwl workflows/main.cwl
+
+# 3. Generate parameters from a universe
+asp params universes/baseline.yaml --dry-run
+
+# 4. If valid, generate the params file
+asp params universes/baseline.yaml -o workflows/params/baseline.yaml
+```
+
 ## Workflow Integration
 
 ASP can generate CWL (Common Workflow Language) parameter files from universes, enabling automated workflow execution.
