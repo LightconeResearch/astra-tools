@@ -1,7 +1,8 @@
 """Workflow validation against ASP specifications.
 
 Validates that ASP decisions properly map to CWL workflow parameters,
-detecting unmapped decisions and unused parameters.
+detecting unmapped decisions and unused parameters. Optionally validates
+CWL syntax using cwltool.
 """
 
 from __future__ import annotations
@@ -15,6 +16,47 @@ from asp.workflow.parser import parse_cwl_inputs
 
 if TYPE_CHECKING:
     from asp.models.analysis import Analysis, Decision
+
+
+def validate_cwl_syntax(cwl_path: Path) -> list[WorkflowValidationError]:
+    """Validate CWL file syntax using cwltool.
+
+    Args:
+        cwl_path: Path to CWL workflow file.
+
+    Returns:
+        List of validation errors. Empty list means valid CWL.
+    """
+    import re
+    import subprocess
+
+    if not cwl_path.exists():
+        return [WorkflowValidationError("CWL_FILE_NOT_FOUND", f"File not found: {cwl_path}")]
+
+    result = subprocess.run(
+        ["cwltool", "--validate", str(cwl_path)],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode == 0:
+        return []
+
+    # Strip ANSI escape codes and extract error (cwltool writes to stdout)
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+    output = ansi_escape.sub("", result.stdout + result.stderr)
+
+    # Find error lines (after ERROR marker)
+    lines = output.split("\n")
+    error_msg = "CWL validation failed"
+    for i, line in enumerate(lines):
+        if "ERROR" in line:
+            # Collect all lines from ERROR onwards
+            error_lines = [ln.strip() for ln in lines[i:] if ln.strip()]
+            error_msg = " ".join(error_lines).replace("ERROR ", "")
+            break
+
+    return [WorkflowValidationError(code="CWL_SYNTAX_ERROR", message=error_msg)]
 
 
 def _get_possible_params(decision_id: str, decision: Decision) -> set[str]:

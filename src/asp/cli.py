@@ -739,23 +739,44 @@ def workflow() -> None:
 @workflow.command("validate")
 @click.option("--cwl", type=click.Path(exists=True, path_type=Path), required=True)
 @click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
-def workflow_validate(cwl: Path, analysis: Path | None) -> None:
-    """Validate CWL workflow mapping against ASP decisions."""
-    analysis = _require_analysis(analysis)
-    spec = Analysis.from_yaml(analysis)
-    console.print(f"Validating [cyan]{cwl}[/cyan] against [cyan]{analysis}[/cyan]...")
+@click.option("--syntax-only", is_flag=True, help="Only validate CWL syntax, skip ASP mapping")
+def workflow_validate(cwl: Path, analysis: Path | None, syntax_only: bool) -> None:
+    """Validate CWL workflow against ASP decisions and CWL specification.
 
-    errors = validate_decision_coverage(spec, cwl)
-    if not errors:
-        console.print("[green]![/green] All decisions map to CWL parameters")
-        console.print("[green]![/green] All required CWL parameters are covered")
+    Validates both CWL syntax (using cwltool) and ASP decision mapping.
+    """
+    from asp.workflow.validator import validate_cwl_syntax
+
+    console.print(f"Validating [cyan]{cwl}[/cyan]...")
+
+    # CWL syntax validation
+    syntax_errors = validate_cwl_syntax(cwl)
+    if syntax_errors:
+        console.print("\n[red]CWL syntax errors:[/red]")
+        for error in syntax_errors:
+            console.print(f"  [red]ERROR[/red] {error}")
+        raise SystemExit(1)
+    console.print("[green]✓[/green] CWL syntax valid")
+
+    if syntax_only:
         return
 
-    console.print("\n[red]Workflow validation errors:[/red]")
-    for error in errors:
-        level = "[yellow]WARN[/yellow]" if error.code == "UNMAPPED_DECISION" else "[red]ERROR[/red]"
-        console.print(f"  {level} {error}")
-    raise SystemExit(1)
+    # ASP mapping validation
+    analysis = _require_analysis(analysis)
+    spec = Analysis.from_yaml(analysis)
+    console.print(f"Checking mapping against [cyan]{analysis}[/cyan]...")
+
+    errors = validate_decision_coverage(spec, cwl)
+    if errors:
+        console.print("\n[red]Mapping errors:[/red]")
+        for error in errors:
+            is_warning = error.code == "UNMAPPED_DECISION"
+            level = "[yellow]WARN[/yellow]" if is_warning else "[red]ERROR[/red]"
+            console.print(f"  {level} {error}")
+        raise SystemExit(1)
+
+    console.print("[green]✓[/green] All decisions map to CWL parameters")
+    console.print("[green]✓[/green] All required CWL parameters are covered")
 
 
 @workflow.command("show")

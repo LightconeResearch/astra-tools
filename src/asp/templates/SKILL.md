@@ -479,18 +479,25 @@ outputs:
 After building your CWL workflow:
 
 ```bash
-# 1. Validate the mapping
+# 1. Validate CWL syntax only (uses cwltool)
+asp workflow validate --cwl workflows/main.cwl --syntax-only
+
+# 2. Validate CWL syntax + ASP decision mapping
 asp workflow validate --cwl workflows/main.cwl
 
-# 2. View the parameter mapping table
+# 3. View the parameter mapping table
 asp workflow show --cwl workflows/main.cwl
 
-# 3. Generate parameters from a universe
+# 4. Generate parameters from a universe (preview)
 asp params universes/baseline.yaml --dry-run
 
-# 4. If valid, generate the params file
+# 5. Generate the params file
 asp params universes/baseline.yaml -o workflows/params/baseline.yaml
 ```
+
+The `asp workflow validate` command performs two checks:
+1. **CWL syntax validation** using cwltool (validates against CWL specification)
+2. **ASP mapping validation** (ensures decisions map to CWL parameters)
 
 ## Tips
 

@@ -11,7 +11,7 @@ from asp.workflow.mapping import (
     generate_cwl_params,
 )
 from asp.workflow.parser import parse_cwl_inputs
-from asp.workflow.validator import validate_decision_coverage
+from asp.workflow.validator import validate_cwl_syntax, validate_decision_coverage
 
 __all__ = [
     "apply_naming_convention",
@@ -19,5 +19,6 @@ __all__ = [
     "generate_cwl_params",
     "generate_params_file",
     "parse_cwl_inputs",
+    "validate_cwl_syntax",
     "validate_decision_coverage",
 ]
