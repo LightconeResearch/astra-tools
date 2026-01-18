@@ -53,11 +53,6 @@ class Universe(BaseModel):
         description: str | None = None,
     ) -> Universe:
         """Create a universe from the default options in an analysis."""
-        from asp.models.analysis import Analysis
-
-        if not isinstance(analysis, Analysis):
-            raise TypeError("analysis must be an Analysis instance")
-
         decisions = analysis.get_default_universe()
         return cls(
             id=universe_id,
