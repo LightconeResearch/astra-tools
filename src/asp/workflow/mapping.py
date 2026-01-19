@@ -4,13 +4,16 @@ Implements convention-based automatic mapping:
 - Simple value (int/float/str): {decision_id} -> value
 - Dict with keys: {decision_id}_{key} -> value[key] for each key
 - No value field: {decision_id} -> option_id as string
+
+Also handles ASP inputs -> CWL File inputs.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from asp.models.analysis import Analysis
+from asp.models.analysis import Analysis, Input, Source
 from asp.models.universe import Universe
 
 
@@ -79,7 +82,13 @@ def apply_naming_convention(decision_id: str, value: Any) -> dict[str, Any]:
     return result
 
 
-def generate_cwl_params(analysis: Analysis, universe: Universe) -> dict[str, Any]:
+def generate_cwl_params(
+    analysis: Analysis,
+    universe: Universe,
+    *,
+    include_inputs: bool = False,
+    base_path: Path | None = None,
+) -> dict[str, Any]:
     """Generate complete CWL parameter dict from a universe.
 
     Combines decision value extraction with naming convention application
@@ -88,6 +97,8 @@ def generate_cwl_params(analysis: Analysis, universe: Universe) -> dict[str, Any
     Args:
         analysis: The ASP analysis specification.
         universe: The universe with decision selections.
+        include_inputs: Whether to include ASP inputs as CWL File parameters.
+        base_path: Base path for resolving relative file paths in inputs.
 
     Returns:
         Dict of CWL parameter names to values, ready to write as YAML.
@@ -101,5 +112,80 @@ def generate_cwl_params(analysis: Analysis, universe: Universe) -> dict[str, Any
     for decision_id, value in decision_values.items():
         param_dict = apply_naming_convention(decision_id, value)
         params.update(param_dict)
+
+    # Optionally include inputs as CWL File references
+    if include_inputs:
+        input_params = resolve_inputs(analysis, base_path)
+        params.update(input_params)
+
+    return params
+
+
+def resolve_input_source(inp: Input, base_path: Path | None = None) -> dict[str, Any] | None:
+    """Resolve an ASP input source to a CWL File reference.
+
+    Args:
+        inp: The ASP input definition.
+        base_path: Base path for resolving relative file paths.
+
+    Returns:
+        CWL File object dict, or None if source cannot be resolved to a file.
+    """
+    if inp.source is None:
+        return None
+
+    # Handle string source (simple file path)
+    if isinstance(inp.source, str):
+        path = inp.source
+        if base_path and not Path(path).is_absolute():
+            path = str(base_path / path)
+        return {"class": "File", "path": path}
+
+    # Handle Source object
+    source: Source = inp.source
+
+    if source.type == "file":
+        if source.path is None:
+            return None
+        path = source.path
+        if base_path and not Path(path).is_absolute():
+            path = str(base_path / path)
+        return {"class": "File", "path": path}
+
+    if source.type == "url":
+        if source.url is None:
+            return None
+        return {"class": "File", "location": source.url}
+
+    # S3, sklearn, asp sources require runtime resolution - return None for now
+    return None
+
+
+def resolve_inputs(
+    analysis: Analysis,
+    base_path: Path | None = None,
+) -> dict[str, Any]:
+    """Resolve all ASP inputs to CWL File parameters.
+
+    Only resolves inputs with type 'data' that have resolvable sources
+    (local files or URLs). Other input types are skipped.
+
+    Args:
+        analysis: The ASP analysis specification.
+        base_path: Base path for resolving relative file paths.
+
+    Returns:
+        Dict mapping input IDs to CWL File objects.
+    """
+    params: dict[str, Any] = {}
+
+    for inp in analysis.analysis.inputs:
+        # Only resolve data inputs with sources
+        if inp.type != "data":
+            continue
+
+        resolved = resolve_input_source(inp, base_path)
+        if resolved is not None:
+            params[inp.id] = resolved
 
     return params

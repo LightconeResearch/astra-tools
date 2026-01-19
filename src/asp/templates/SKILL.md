@@ -46,6 +46,31 @@ Insights are discrete units of scientific knowledge with precise provenance:
 ### Universes
 A universe is a complete set of decisions - one option per decision point.
 
+### Inputs
+Inputs define the data sources for an analysis. Each input has:
+- **id**: Unique identifier (used as CWL parameter name)
+- **type**: `data`, `analysis`, or `literature`
+- **source**: Where to get the data (file path or URL)
+
+```yaml
+inputs:
+  - id: training_data
+    type: data
+    source: "data/train.csv"           # Local file path
+
+  - id: remote_data
+    type: data
+    source:
+      type: url
+      url: "https://example.com/data.csv"  # Remote URL
+```
+
+When running workflows, inputs are resolved to CWL File parameters:
+- **Local files** → `{class: File, path: "..."}`
+- **URLs** → `{class: File, location: "https://..."}`
+
+**Important**: CWL/cwltool natively handles remote file downloads. When you specify a URL, cwltool automatically downloads the file at runtime. Do NOT implement custom download code - just pass the URL in the `location` field and let cwltool handle it.
+
 ## Creating a New Analysis
 
 When the user wants to create a new ASP analysis:
@@ -278,7 +303,7 @@ my-analysis/
 ## Building CWL Workflows from ASP Analyses
 
 When an ASP analysis is specified, you need to build a corresponding CWL workflow that:
-1. Accepts parameters matching the ASP decisions
+1. Accepts parameters matching the ASP decisions AND inputs
 2. Produces outputs matching the ASP output definitions
 3. Implements the computational steps implied by the analysis
 
@@ -287,13 +312,28 @@ When an ASP analysis is specified, you need to build a corresponding CWL workflo
 #### Step 1: Analyze the ASP Specification
 
 Read `asp.yaml` and identify:
-- **Inputs**: Data sources the workflow needs to accept
+- **Inputs**: Data sources → CWL `File` inputs (auto-resolved from sources)
 - **Outputs**: Results the workflow must produce
 - **Decisions**: Parameters that control workflow behavior
 
 #### Step 2: Design CWL Input Parameters
 
-For each ASP decision, create corresponding CWL input parameters following naming conventions:
+**For ASP inputs** (type: data), create CWL File inputs using the input ID:
+```yaml
+# ASP input
+inputs:
+  - id: training_data
+    type: data
+    source: "data/train.csv"
+
+# CWL input (use same ID)
+inputs:
+  training_data:
+    type: File
+    doc: "Training dataset"
+```
+
+**For ASP decisions**, create CWL parameters following naming conventions:
 
 | ASP Decision Pattern | CWL Input Design |
 |---------------------|------------------|
@@ -552,6 +592,39 @@ asp workflow run universes/baseline.yaml --cwl workflows/main.cwl -o results/bas
 The `asp workflow validate` command performs two checks:
 1. **CWL syntax validation** using cwltool (validates against CWL specification)
 2. **ASP mapping validation** (ensures decisions map to CWL parameters)
+
+### How Inputs and Decisions Map to CWL
+
+When you run `asp workflow run` or `asp params`, ASP generates CWL parameters from:
+
+1. **Decisions** (from universe): Maps to CWL parameters based on naming conventions
+2. **Inputs** (from asp.yaml): Maps `type: data` inputs to CWL File parameters
+
+Example generated parameters:
+```yaml
+# From decisions (universe selections)
+preprocessing: standard
+model: rf
+test_split: 0.2
+
+# From inputs (asp.yaml sources)
+training_data:
+  class: File
+  path: data/train.csv
+```
+
+The CWL workflow must have matching input parameters:
+```yaml
+inputs:
+  preprocessing:
+    type: string
+  model:
+    type: string
+  test_split:
+    type: float
+  training_data:
+    type: File
+```
 
 ## Tips
 

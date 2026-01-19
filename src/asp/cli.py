@@ -701,21 +701,26 @@ def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> 
 @click.argument("universe_file", type=click.Path(exists=True, path_type=Path))
 @click.option("-o", "--output", type=click.Path(path_type=Path), help="Write to file")
 @click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
-def params(universe_file: Path, output: Path | None, analysis: Path | None) -> None:
+@click.option("--inputs/--no-inputs", default=True, help="Include ASP inputs as CWL File params")
+def params(
+    universe_file: Path, output: Path | None, analysis: Path | None, inputs: bool
+) -> None:
     """Generate CWL parameters from a universe.
 
     Outputs YAML to stdout by default. Use -o to write to a file.
+    Includes ASP input files by default (use --no-inputs to exclude).
     """
-    analysis = _require_analysis(analysis, universe_file.parent)
-    spec = Analysis.from_yaml(analysis)
+    analysis_path = _require_analysis(analysis, universe_file.parent)
+    spec = Analysis.from_yaml(analysis_path)
     universe = Universe.from_yaml(universe_file)
-    yaml_output = generate_params_string(spec, universe)
+    base_path = analysis_path.parent if inputs else None
+    yaml_output = generate_params_string(spec, universe, include_inputs=inputs, base_path=base_path)
 
     if output is None:
         # Output to stdout (raw YAML, no Rich formatting)
         print(yaml_output, end="")
     else:
-        generate_params_file(spec, universe, output)
+        generate_params_file(spec, universe, output, include_inputs=inputs, base_path=base_path)
         console.print(f"[green]✓[/green] Generated parameters at [cyan]{output}[/cyan]")
 
 
@@ -836,8 +841,8 @@ def workflow_run(
 ) -> None:
     """Run a CWL workflow with parameters from a universe.
 
-    Generates CWL parameters from the universe and executes the workflow
-    using cwltool.
+    Generates CWL parameters (including input files) from the universe
+    and executes the workflow using cwltool.
 
     Example:
         asp workflow run universes/baseline.yaml --cwl workflows/main.cwl
@@ -845,15 +850,26 @@ def workflow_run(
     import subprocess
     import tempfile
 
-    analysis = _require_analysis(analysis, universe_file.parent)
-    spec = Analysis.from_yaml(analysis)
+    from asp.workflow.mapping import resolve_inputs
+
+    analysis_path = _require_analysis(analysis, universe_file.parent)
+    spec = Analysis.from_yaml(analysis_path)
     universe = Universe.from_yaml(universe_file)
 
-    # Generate parameters
-    params_yaml = generate_params_string(spec, universe)
+    # Generate parameters including inputs
+    base_path = analysis_path.parent
+    params_yaml = generate_params_string(
+        spec, universe, include_inputs=True, base_path=base_path
+    )
+
+    # Count resolved inputs for display
+    resolved_inputs = resolve_inputs(spec, base_path)
+    data_inputs = [i for i in spec.analysis.inputs if i.type == "data"]
 
     console.print(f"[dim]Universe:[/dim] {universe_file.name}")
     console.print(f"[dim]Workflow:[/dim] {cwl.name}")
+    if data_inputs:
+        console.print(f"[dim]Inputs:[/dim] {len(resolved_inputs)}/{len(data_inputs)} resolved")
     console.print()
 
     # Write params to temp file (cwltool needs a file path for complex inputs)
