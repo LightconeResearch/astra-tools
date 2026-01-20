@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import click
@@ -12,10 +13,22 @@ from rich.tree import Tree
 from asp.models.analysis import Analysis
 from asp.models.universe import Universe
 from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
+from asp.templates import (
+    DESIGN_AGENT,
+    EXPERIMENT_AGENT,
+    SCHEMA_REFERENCE_CONTENT,
+    SKILL_CONTENT,
+)
 from asp.validation.schema import validate_analysis_schema, validate_universe_schema
 from asp.validation.semantic import validate_analysis_file, validate_universe_file
 
 console = Console()
+
+# Initial prompt for Claude Code when using --agent claude-code
+CLAUDE_INIT_PROMPT = (
+    "I just created a new ASP analysis project. "
+    "Please read the design agent at .claude/agents/design.md and help me design my analysis."
+)
 
 
 def find_analysis_file(start_path: Path | None = None) -> Path | None:
@@ -23,7 +36,8 @@ def find_analysis_file(start_path: Path | None = None) -> Path | None:
     if start_path is None:
         start_path = Path.cwd()
 
-    current = start_path
+    # Resolve to absolute path to ensure parent traversal works correctly
+    current = start_path.resolve()
     while current != current.parent:
         asp_file = current / "asp.yaml"
         if asp_file.exists():
@@ -42,30 +56,24 @@ def main() -> None:
 
 @main.command()
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
-@click.option("--name", "-n", help="Analysis name (will prompt if not provided)")
-@click.option("--problem", "-p", help="Problem statement (will prompt if not provided)")
+@click.option(
+    "--agent",
+    type=click.Choice(["claude-code"]),
+    help="Set up project for a specific AI agent (creates agent-specific config)",
+)
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
-def init(directory: Path, name: str | None, problem: str | None, no_git: bool) -> None:
+def init(directory: Path, agent: str | None, no_git: bool) -> None:
     """Create a new ASP analysis project.
 
-    Creates a complete project structure with asp.yaml, README, and standard
-    directories for universes, workflows, scripts, and results.
+    Creates the project scaffolding for an ASP analysis. Use --agent to
+    configure the project for a specific AI agent.
 
     DIRECTORY is the project folder to create (default: current directory).
+
+    Examples:
+        asp init my-analysis                      # Basic scaffolding
+        asp init my-analysis --agent claude-code  # With Claude Code skill
     """
-    import subprocess
-
-    # Prompt for required fields if not provided
-    if name is None:
-        default_name = directory.name if directory != Path(".") else "My Analysis"
-        name = click.prompt("Analysis name", default=default_name)
-
-    if problem is None:
-        problem = click.prompt(
-            "Problem statement",
-            default="What research question are you trying to answer?",
-        )
-
     # Create project directory
     if directory != Path("."):
         if directory.exists() and any(directory.iterdir()):
@@ -75,22 +83,63 @@ def init(directory: Path, name: str | None, problem: str | None, no_git: bool) -
                 raise SystemExit(0)
         directory.mkdir(parents=True, exist_ok=True)
 
-    # Create subdirectories
-    subdirs = [
-        "universes",
-        "workflows/params",
-        "steps/io",
-        "steps/preprocessing",
-        "steps/models",
-        "steps/evaluation",
-        "scripts",
-        "results",
-        ".asp",
-    ]
+    # Create simplified directory structure
+    subdirs = ["universes", "scripts", "results"]
     for subdir in subdirs:
         (directory / subdir).mkdir(parents=True, exist_ok=True)
 
-    # Create asp.yaml
+    # Create .gitignore
+    gitignore = """# ASP Analysis
+results/
+__pycache__/
+*.py[cod]
+.venv/
+.ipynb_checkpoints/
+.DS_Store
+"""
+    (directory / ".gitignore").write_text(gitignore)
+
+    # Create boilerplate asp.yaml
+    _create_boilerplate_asp_yaml(directory)
+
+    # Create agent-specific config if requested
+    if agent == "claude-code":
+        _create_skill(directory)
+
+    # Initialize git repository
+    _init_git_repo(directory, no_git)
+
+    # Print success message
+    console.print(f"\n[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
+    if agent == "claude-code":
+        console.print("[dim]  Includes: asp.yaml, universes/, scripts/, .claude/[/dim]")
+    else:
+        console.print("[dim]  Includes: asp.yaml, universes/, scripts/, results/[/dim]")
+
+    # Launch agent or show next steps
+    if agent == "claude-code":
+        console.print("\n[cyan]Launching Claude Code...[/cyan]\n")
+        try:
+            subprocess.run(
+                ["claude", CLAUDE_INIT_PROMPT],
+                cwd=directory,
+                check=False,
+            )
+        except FileNotFoundError:
+            console.print("[red]Error:[/red] Claude Code CLI not found.")
+            console.print("Install Claude Code or run [cyan]claude[/cyan] manually in the project.")
+            raise SystemExit(1)
+    else:
+        console.print("\n[bold]Next steps:[/bold]")
+        console.print(f"  1. [cyan]cd {directory}[/cyan]")
+        console.print("  2. Edit [cyan]asp.yaml[/cyan] to define inputs, outputs, and decisions")
+        console.print("  3. Run [cyan]asp validate asp.yaml[/cyan] to check your spec")
+
+
+def _create_boilerplate_asp_yaml(directory: Path) -> None:
+    """Create boilerplate asp.yaml with TODOs."""
+    name = directory.name if directory != Path(".") else "My Analysis"
+
     asp_yaml = f'''# ASP Analysis Specification
 # Documentation: https://github.com/EiffL/ASP
 
@@ -99,7 +148,7 @@ version: "1.0"
 analysis:
   name: "{name}"
   problem: |
-    {problem}
+    TODO: What research question are you trying to answer?
 
   inputs:
     - id: primary_data
@@ -146,161 +195,48 @@ decisions:
 """
     (directory / "universes" / "baseline.yaml").write_text(baseline_universe)
 
-    # Create README
-    readme = f"""# {name}
 
-## Problem Statement
+def _init_git_repo(directory: Path, no_git: bool) -> None:
+    """Initialize git repository if requested."""
+    if no_git or (directory / ".git").exists():
+        return
 
-{problem}
-
-## Project Structure
-
-```
-{directory.name}/
-├── asp.yaml              # Analysis specification
-├── universes/            # Universe definitions (decision selections)
-│   └── baseline.yaml     # Default universe
-├── workflows/            # Generated workflows (CWL, Snakemake, etc.)
-│   └── params/           # Workflow parameters per universe
-├── steps/                # Reusable workflow steps
-│   ├── io/               # Data loading steps
-│   ├── preprocessing/    # Data preprocessing steps
-│   ├── models/           # Model training steps
-│   └── evaluation/       # Evaluation steps
-├── scripts/              # Python/R implementation scripts
-├── results/              # Execution outputs (gitignored)
-└── .asp/                 # ASP metadata
-```
-
-## Quick Start
-
-```bash
-# Validate the analysis specification
-asp validate asp.yaml
-
-# Show analysis info
-asp info
-
-# Validate the baseline universe
-asp universe check universes/baseline.yaml
-
-# Visualize decision space
-asp viz
-```
-
-## Universes
-
-- **baseline**: {problem[:50]}...
-
-## Decisions
-
-| Decision | Type | Default | Description |
-|----------|------|---------|-------------|
-| example_method | method | option_a | TODO: Add description |
-
----
-Generated with [ASP](https://github.com/EiffL/ASP)
-"""
-    (directory / "README.md").write_text(readme)
-
-    # Create .gitignore
-    gitignore = """# ASP Analysis - Git Ignore
-
-# Execution results (large files, regenerated)
-results/
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-.Python
-*.so
-.eggs/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
-.venv/
-venv/
-ENV/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Jupyter
-.ipynb_checkpoints/
-"""
-    (directory / ".gitignore").write_text(gitignore)
-
-    # Create .asp/branches.yaml
-    branches_yaml = """# Branch metadata for ASP analysis
-# See: https://github.com/EiffL/ASP
-
-branches: {}
-"""
-    (directory / ".asp" / "branches.yaml").write_text(branches_yaml)
-
-    # Initialize git repository
-    git_initialized = False
-    if not no_git and not (directory / ".git").exists():
+    try:
+        subprocess.run(
+            ["git", "init"],
+            cwd=directory,
+            capture_output=True,
+            check=True,
+        )
+        console.print("[green]✓[/green] Initialized git repository")
+        # Try to create initial commit
         try:
+            subprocess.run(["git", "add", "."], cwd=directory, capture_output=True, check=True)
             subprocess.run(
-                ["git", "init"],
+                ["git", "commit", "-m", "Initial ASP analysis structure"],
                 cwd=directory,
                 capture_output=True,
                 check=True,
             )
-            git_initialized = True
-            # Try to create initial commit (may fail if git user not configured)
-            try:
-                subprocess.run(
-                    ["git", "add", "."],
-                    cwd=directory,
-                    capture_output=True,
-                    check=True,
-                )
-                subprocess.run(
-                    ["git", "commit", "-m", "Initial ASP analysis structure"],
-                    cwd=directory,
-                    capture_output=True,
-                    check=True,
-                )
-            except subprocess.CalledProcessError:
-                pass  # Commit failed (e.g., no git user configured), but repo is initialized
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pass  # Git not available or init failed, continue without it
+        except subprocess.CalledProcessError:
+            pass  # Commit failed, but repo is initialized
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass  # Git not available
 
-    # Print summary
-    console.print(f"\n[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
-    console.print("\n[bold]Project structure:[/bold]")
-    console.print(f"  {directory}/")
-    console.print("  ├── asp.yaml              [dim]# Analysis specification[/dim]")
-    console.print("  ├── README.md             [dim]# Project documentation[/dim]")
-    console.print("  ├── universes/            [dim]# Decision selections[/dim]")
-    console.print("  │   └── baseline.yaml")
-    console.print("  ├── workflows/            [dim]# Generated workflows[/dim]")
-    console.print("  ├── steps/                [dim]# Reusable workflow steps[/dim]")
-    console.print("  ├── scripts/              [dim]# Implementation scripts[/dim]")
-    console.print("  ├── results/              [dim]# Outputs (gitignored)[/dim]")
-    console.print("  └── .asp/                 [dim]# Metadata[/dim]")
 
-    if git_initialized:
-        console.print("\n[green]✓[/green] Initialized git repository")
+def _create_skill(directory: Path) -> None:
+    """Create the Claude Code skill and agents in the project directory."""
+    # Create skill
+    skill_dir = directory / ".claude" / "skills" / "asp-analysis"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(SKILL_CONTENT)
+    (skill_dir / "SCHEMA_REFERENCE.md").write_text(SCHEMA_REFERENCE_CONTENT)
 
-    console.print("\n[bold]Next steps:[/bold]")
-    console.print(f"  1. [cyan]cd {directory}[/cyan]")
-    console.print("  2. Edit [cyan]asp.yaml[/cyan] to define your inputs, outputs, and decisions")
-    console.print("  3. Run [cyan]asp validate asp.yaml[/cyan] to check your spec")
-    console.print("  4. Run [cyan]asp info[/cyan] to see a summary")
+    # Create agents
+    agents_dir = directory / ".claude" / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    (agents_dir / "design.md").write_text(DESIGN_AGENT)
+    (agents_dir / "experiment.md").write_text(EXPERIMENT_AGENT)
 
 
 @main.command()
