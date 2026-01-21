@@ -1,6 +1,6 @@
-"""Design agent template for ASP analyses."""
+"""Design agent instructions for ASP analyses."""
 
-DESIGN_AGENT = """\
+DESIGN_INSTRUCTIONS = """\
 # Design Agent
 
 Help the user design an ASP analysis specification interactively.

@@ -1,6 +1,6 @@
-"""ASP Schema Reference template for Claude Code skill."""
+"""ASP Schema Reference - tool-agnostic content."""
 
-SCHEMA_REFERENCE_CONTENT = """\
+SCHEMA_REFERENCE = """\
 # ASP Schema Reference
 
 ## Analysis Schema (`asp.yaml`)

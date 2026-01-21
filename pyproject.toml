@@ -36,6 +36,10 @@ dev = [
     "types-PyYAML",
     "types-jsonschema",
 ]
+workflow = [
+    "snakemake>=8.0",
+    "graphviz",  # Python bindings; also requires system graphviz (brew install graphviz / apt install graphviz)
+]
 
 [project.scripts]
 asp = "asp.cli:main"

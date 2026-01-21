@@ -10,25 +10,15 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
+import asp.templates  # noqa: F401  # Triggers agent registration
+from asp.agents.registry import get_agent, list_agents
 from asp.models.analysis import Analysis
 from asp.models.universe import Universe
 from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
-from asp.templates import (
-    DESIGN_AGENT,
-    EXPERIMENT_AGENT,
-    SCHEMA_REFERENCE_CONTENT,
-    SKILL_CONTENT,
-)
 from asp.validation.schema import validate_analysis_schema, validate_universe_schema
 from asp.validation.semantic import validate_analysis_file, validate_universe_file
 
 console = Console()
-
-# Initial prompt for Claude Code when using --agent claude-code
-CLAUDE_INIT_PROMPT = (
-    "I just created a new ASP analysis project. "
-    "Please read the design agent at .claude/agents/design.md and help me design my analysis."
-)
 
 
 def find_analysis_file(start_path: Path | None = None) -> Path | None:
@@ -54,11 +44,17 @@ def main() -> None:
     pass
 
 
+def _get_agent_choices() -> list[str]:
+    """Get available agent choices for CLI."""
+    # This is called at module load time, so we need to ensure agents are registered
+    return list_agents()
+
+
 @main.command()
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
 @click.option(
     "--agent",
-    type=click.Choice(["claude-code"]),
+    type=click.Choice(_get_agent_choices()),
     help="Set up project for a specific AI agent (creates agent-specific config)",
 )
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
@@ -102,32 +98,37 @@ __pycache__/
     # Create boilerplate asp.yaml
     _create_boilerplate_asp_yaml(directory)
 
+    # Get agent config if requested
+    agent_config = get_agent(agent) if agent else None
+
     # Create agent-specific config if requested
-    if agent == "claude-code":
-        _create_skill(directory)
+    if agent_config:
+        agent_config.create_files(directory)
 
     # Initialize git repository
     _init_git_repo(directory, no_git)
 
     # Print success message
     console.print(f"\n[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
-    if agent == "claude-code":
-        console.print("[dim]  Includes: asp.yaml, universes/, scripts/, .claude/[/dim]")
+    if agent_config:
+        config_dir = agent_config.config_dir
+        console.print(f"[dim]  Includes: asp.yaml, universes/, scripts/, {config_dir}/[/dim]")
     else:
         console.print("[dim]  Includes: asp.yaml, universes/, scripts/, results/[/dim]")
 
     # Launch agent or show next steps
-    if agent == "claude-code":
-        console.print("\n[cyan]Launching Claude Code...[/cyan]\n")
+    if agent_config and agent_config.launch_command:
+        console.print(f"\n[cyan]Launching {agent_config.display_name}...[/cyan]\n")
         try:
+            prompt = agent_config.get_init_prompt()
             subprocess.run(
-                ["claude", CLAUDE_INIT_PROMPT],
+                [*agent_config.launch_command, prompt],
                 cwd=directory,
                 check=False,
             )
         except FileNotFoundError:
-            console.print("[red]Error:[/red] Claude Code CLI not found.")
-            console.print("Install Claude Code or run [cyan]claude[/cyan] manually in the project.")
+            console.print(f"[red]Error:[/red] {agent_config.display_name} CLI not found.")
+            console.print(f"Install {agent_config.display_name} or run it manually in the project.")
             raise SystemExit(1)
     else:
         console.print("\n[bold]Next steps:[/bold]")
@@ -222,21 +223,6 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
             pass  # Commit failed, but repo is initialized
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass  # Git not available
-
-
-def _create_skill(directory: Path) -> None:
-    """Create the Claude Code skill and agents in the project directory."""
-    # Create skill
-    skill_dir = directory / ".claude" / "skills" / "asp-analysis"
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text(SKILL_CONTENT)
-    (skill_dir / "SCHEMA_REFERENCE.md").write_text(SCHEMA_REFERENCE_CONTENT)
-
-    # Create agents
-    agents_dir = directory / ".claude" / "agents"
-    agents_dir.mkdir(parents=True, exist_ok=True)
-    (agents_dir / "design.md").write_text(DESIGN_AGENT)
-    (agents_dir / "experiment.md").write_text(EXPERIMENT_AGENT)
 
 
 @main.command()

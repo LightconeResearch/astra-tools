@@ -243,102 +243,148 @@ class TestInitCommand:
     """Tests for the init command."""
 
     def test_init_creates_project_structure(self, runner: CliRunner, tmp_path: Path):
+        """Test that basic init creates the project structure."""
         project_dir = tmp_path / "my-analysis"
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "-n", "My Analysis", "-p", "Test problem", "--no-git"],
+            ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 0
         assert "Created ASP analysis project" in result.output
 
         # Check directory structure
         assert (project_dir / "asp.yaml").exists()
-        assert (project_dir / "README.md").exists()
         assert (project_dir / ".gitignore").exists()
         assert (project_dir / "universes").is_dir()
         assert (project_dir / "universes" / "baseline.yaml").exists()
-        assert (project_dir / "workflows" / "params").is_dir()
-        assert (project_dir / "steps" / "io").is_dir()
-        assert (project_dir / "steps" / "preprocessing").is_dir()
-        assert (project_dir / "steps" / "models").is_dir()
-        assert (project_dir / "steps" / "evaluation").is_dir()
         assert (project_dir / "scripts").is_dir()
         assert (project_dir / "results").is_dir()
-        assert (project_dir / ".asp").is_dir()
-        assert (project_dir / ".asp" / "branches.yaml").exists()
 
-    def test_init_with_prompts(self, runner: CliRunner, tmp_path: Path):
-        project_dir = tmp_path / "prompted-analysis"
+        # Without --agent, no skill should be created
+        assert not (project_dir / ".claude").exists()
+
+        # These should NOT exist
+        assert not (project_dir / "workflows").exists()
+        assert not (project_dir / "steps").exists()
+        assert not (project_dir / ".asp").exists()
+        assert not (project_dir / "executions").exists()
+
+    def test_init_with_agent_creates_skill(self, runner: CliRunner, tmp_path: Path):
+        """Test that --agent claude-code creates the skill, agents, and launches Claude."""
+        from unittest.mock import patch
+
+        project_dir = tmp_path / "agent-test"
+        with patch("asp.cli.subprocess.run") as mock_run:
+            result = runner.invoke(
+                main,
+                ["init", str(project_dir), "--agent", "claude-code", "--no-git"],
+            )
+        assert result.exit_code == 0
+        assert "Created ASP analysis project" in result.output
+        assert ".claude/" in result.output
+        assert "Launching Claude Code" in result.output
+
+        # Check skill is created
+        skill_dir = project_dir / ".claude" / "skills" / "asp-analysis"
+        assert (skill_dir / "SKILL.md").exists()
+        assert (skill_dir / "SCHEMA_REFERENCE.md").exists()
+
+        # Check agents are created
+        assert (project_dir / ".claude" / "agents" / "design.md").exists()
+        assert (project_dir / ".claude" / "agents" / "experiment.md").exists()
+
+        # Check Claude was launched with initial prompt
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args
+        assert call_args[0][0][0] == "claude"
+        assert "PHASE 1: Design" in call_args[0][0][1]
+        assert ".claude/agents/design.md" in call_args[0][0][1]
+        assert call_args[1]["cwd"] == project_dir
+
+    def test_init_asp_yaml_content(self, runner: CliRunner, tmp_path: Path):
+        """Test that the generated asp.yaml has the expected content."""
+        project_dir = tmp_path / "content-test"
         result = runner.invoke(
             main,
             ["init", str(project_dir), "--no-git"],
-            input="Test Analysis\nTest problem statement\n",
         )
         assert result.exit_code == 0
         assert (project_dir / "asp.yaml").exists()
 
         # Verify the file content
         content = (project_dir / "asp.yaml").read_text()
-        assert "Test Analysis" in content
-        assert "Test problem statement" in content
+        assert "content-test" in content  # Directory name used as analysis name
         assert "version:" in content
-
-    def test_init_with_options(self, runner: CliRunner, tmp_path: Path):
-        project_dir = tmp_path / "options-analysis"
-        result = runner.invoke(
-            main,
-            [
-                "init",
-                str(project_dir),
-                "-n",
-                "My Custom Analysis",
-                "-p",
-                "What is the effect of X on Y?",
-                "--no-git",
-            ],
-        )
-        assert result.exit_code == 0
-        assert (project_dir / "asp.yaml").exists()
-
-        content = (project_dir / "asp.yaml").read_text()
-        assert "My Custom Analysis" in content
-        assert "What is the effect of X on Y?" in content
-
-    def test_init_readme_content(self, runner: CliRunner, tmp_path: Path):
-        project_dir = tmp_path / "readme-test"
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "-n", "README Test", "-p", "Test problem", "--no-git"],
-        )
-        assert result.exit_code == 0
-
-        readme = (project_dir / "README.md").read_text()
-        assert "# README Test" in readme
-        assert "Test problem" in readme
-        assert "asp validate" in readme
-        assert "asp info" in readme
+        assert "analysis:" in content
+        assert "decisions:" in content
 
     def test_init_gitignore_content(self, runner: CliRunner, tmp_path: Path):
+        """Test gitignore content."""
         project_dir = tmp_path / "gitignore-test"
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "-n", "Test", "-p", "Problem", "--no-git"],
+            ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 0
 
         gitignore = (project_dir / ".gitignore").read_text()
         assert "results/" in gitignore
         assert "__pycache__/" in gitignore
-        assert ".venv/" in gitignore
+
+    def test_init_skill_content(self, runner: CliRunner, tmp_path: Path):
+        """Test that the Claude Code skill and agents are created with proper content."""
+        from unittest.mock import patch
+
+        project_dir = tmp_path / "skill-test"
+        with patch("asp.cli.subprocess.run"):
+            result = runner.invoke(
+                main,
+                ["init", str(project_dir), "--agent", "claude-code", "--no-git"],
+            )
+        assert result.exit_code == 0
+
+        skill_dir = project_dir / ".claude" / "skills" / "asp-analysis"
+        agents_dir = project_dir / ".claude" / "agents"
+
+        # Check SKILL.md
+        skill_path = skill_dir / "SKILL.md"
+        assert skill_path.exists()
+        skill_content = skill_path.read_text()
+        assert "name: asp-analysis" in skill_content
+        assert "# ASP Analysis Skill" in skill_content
+        assert "## Available Agents" in skill_content
+
+        # Check SCHEMA_REFERENCE.md
+        schema_ref_path = skill_dir / "SCHEMA_REFERENCE.md"
+        assert schema_ref_path.exists()
+        schema_ref_content = schema_ref_path.read_text()
+        assert "# ASP Schema Reference" in schema_ref_content
+        assert "## Analysis Schema" in schema_ref_content
+        assert "## Universe Schema" in schema_ref_content
+
+        # Check design agent
+        design_agent_path = agents_dir / "design.md"
+        assert design_agent_path.exists()
+        design_content = design_agent_path.read_text()
+        assert "# Design Agent" in design_content
+        assert "Conversation Flow" in design_content
+
+        # Check experiment agent
+        experiment_agent_path = agents_dir / "experiment.md"
+        assert experiment_agent_path.exists()
+        experiment_content = experiment_agent_path.read_text()
+        assert "# Experiment Agent" in experiment_content
+        assert "Execution Flow" in experiment_content
 
     def test_init_existing_nonempty_dir_decline(self, runner: CliRunner, tmp_path: Path):
+        """Test declining to overwrite existing non-empty directory."""
         project_dir = tmp_path / "existing"
         project_dir.mkdir()
         (project_dir / "some_file.txt").write_text("existing content")
 
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "-n", "Test", "-p", "Problem", "--no-git"],
+            ["init", str(project_dir), "--no-git"],
             input="n\n",  # Decline to continue
         )
         assert result.exit_code == 0
@@ -346,13 +392,14 @@ class TestInitCommand:
         assert not (project_dir / "asp.yaml").exists()
 
     def test_init_existing_nonempty_dir_confirm(self, runner: CliRunner, tmp_path: Path):
+        """Test confirming to overwrite existing non-empty directory."""
         project_dir = tmp_path / "existing-confirm"
         project_dir.mkdir()
         (project_dir / "some_file.txt").write_text("existing content")
 
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "-n", "Test", "-p", "Problem", "--no-git"],
+            ["init", str(project_dir), "--no-git"],
             input="y\n",  # Confirm to continue
         )
         assert result.exit_code == 0
@@ -361,7 +408,7 @@ class TestInitCommand:
         assert (project_dir / "some_file.txt").exists()
 
     def test_init_current_directory(self, runner: CliRunner, tmp_path: Path):
-        # Test init with default "." directory
+        """Test init with default '.' directory."""
         import os
 
         old_cwd = os.getcwd()
@@ -369,7 +416,7 @@ class TestInitCommand:
             os.chdir(tmp_path)
             result = runner.invoke(
                 main,
-                ["init", "-n", "Current Dir Analysis", "-p", "Problem", "--no-git"],
+                ["init", "--no-git"],
             )
             assert result.exit_code == 0
             assert (tmp_path / "asp.yaml").exists()
@@ -377,10 +424,11 @@ class TestInitCommand:
             os.chdir(old_cwd)
 
     def test_init_generated_files_are_valid(self, runner: CliRunner, tmp_path: Path):
+        """Test that generated files pass validation."""
         project_dir = tmp_path / "valid-test"
         runner.invoke(
             main,
-            ["init", str(project_dir), "-n", "Test", "-p", "Test problem", "--no-git"],
+            ["init", str(project_dir), "--no-git"],
         )
 
         # Validate the generated asp.yaml
@@ -402,10 +450,11 @@ class TestInitCommand:
         assert "Validation successful" in result.output
 
     def test_init_with_git(self, runner: CliRunner, tmp_path: Path):
+        """Test that git is initialized by default (when --no-git not passed)."""
         project_dir = tmp_path / "git-test"
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "-n", "Git Test", "-p", "Problem"],
+            ["init", str(project_dir)],
         )
         assert result.exit_code == 0
 
@@ -414,11 +463,13 @@ class TestInitCommand:
             assert "Initialized git repository" in result.output
 
     def test_init_no_git_flag(self, runner: CliRunner, tmp_path: Path):
+        """Test that --no-git flag prevents git initialization."""
         project_dir = tmp_path / "no-git-test"
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "-n", "No Git", "-p", "Problem", "--no-git"],
+            ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 0
         # Git directory should NOT exist
         assert not (project_dir / ".git").exists()
+
