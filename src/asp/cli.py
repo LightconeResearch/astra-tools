@@ -10,10 +10,10 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
+from asp.agents.registry import get_agent
 from asp.models.analysis import Analysis
 from asp.models.universe import Universe
 from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
-from asp.agents.registry import get_agent
 from asp.templates import (
     ASP_AGENT,
     SCHEMA_REFERENCE_CONTENT,
@@ -636,9 +636,7 @@ def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> 
 @click.option("-o", "--output", type=click.Path(path_type=Path), help="Write to file")
 @click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
 @click.option("--inputs/--no-inputs", default=True, help="Include ASP inputs as CWL File params")
-def params(
-    universe_file: Path, output: Path | None, analysis: Path | None, inputs: bool
-) -> None:
+def params(universe_file: Path, output: Path | None, analysis: Path | None, inputs: bool) -> None:
     """Generate CWL parameters from a universe.
 
     Outputs YAML to stdout by default. Use -o to write to a file.
@@ -764,9 +762,7 @@ def workflow_show(cwl: Path, analysis: Path | None) -> None:
 
     decision_mapping = get_decision_param_mapping(spec, cwl)
     param_to_decision = {
-        param: decision_id
-        for decision_id, params in decision_mapping.items()
-        for param in params
+        param: decision_id for decision_id, params in decision_mapping.items() for param in params
     }
 
     console.print(f"\n[bold]CWL Inputs: {cwl.name}[/bold]\n")
@@ -829,9 +825,7 @@ def workflow_run(
 
     # Generate parameters including inputs
     base_path = analysis_path.parent
-    params_yaml = generate_params_string(
-        spec, uni, include_inputs=True, base_path=base_path
-    )
+    params_yaml = generate_params_string(spec, uni, include_inputs=True, base_path=base_path)
 
     # Count resolved inputs for display
     resolved_inputs = resolve_inputs(spec, base_path)

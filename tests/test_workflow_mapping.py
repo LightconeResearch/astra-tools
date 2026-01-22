@@ -45,9 +45,7 @@ class TestApplyNamingConvention:
 
     def test_dict_multiple_keys(self):
         """Dict with multiple keys maps to decision_id_key for each."""
-        result = apply_naming_convention(
-            "scaling", {"method": "standard", "with_mean": True}
-        )
+        result = apply_naming_convention("scaling", {"method": "standard", "with_mean": True})
         assert result == {"scaling_method": "standard", "scaling_with_mean": True}
 
     def test_list_value(self):
@@ -346,9 +344,7 @@ class TestGenerateCWLParamsWithInputs:
                 },
             }
         )
-        universe = Universe.model_validate(
-            {"id": "test", "decisions": {"model": "rf"}}
-        )
+        universe = Universe.model_validate({"id": "test", "decisions": {"model": "rf"}})
         params = generate_cwl_params(analysis, universe, include_inputs=True)
 
         assert params["model"] == "rf"

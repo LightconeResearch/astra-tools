@@ -7,14 +7,16 @@ from typing import Any
 
 import yaml
 
-from asp.models.analysis import Analysis, Decision, Input, Option, Output
+from asp.models.analysis import Analysis, Decision, Input, Option
 from asp.models.universe import Universe
 from asp.workflow.mapping import generate_cwl_params
 
 
 def _to_yaml(data: dict[str, object], *, default_flow_style: bool | None = None) -> str:
     """Convert dict to YAML string."""
-    return yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=default_flow_style)
+    return yaml.safe_dump(
+        data, sort_keys=False, allow_unicode=True, default_flow_style=default_flow_style
+    )
 
 
 def _params_to_yaml(params: dict[str, object]) -> str:
@@ -72,18 +74,22 @@ def _get_decision_cwl_inputs(decision_id: str, decision: Decision) -> list[dict[
                 val_type = "float"
             else:
                 val_type = "string"
-            inputs.append({
-                "name": param_name,
-                "type": val_type,
-                "doc": f"From decision '{decision_id}', key '{key}'",
-            })
+            inputs.append(
+                {
+                    "name": param_name,
+                    "type": val_type,
+                    "doc": f"From decision '{decision_id}', key '{key}'",
+                }
+            )
     else:
         # Simple value
-        inputs.append({
-            "name": decision_id,
-            "type": cwl_type,
-            "doc": decision.label or f"Decision: {decision_id}",
-        })
+        inputs.append(
+            {
+                "name": decision_id,
+                "type": cwl_type,
+                "doc": decision.label or f"Decision: {decision_id}",
+            }
+        )
 
     return inputs
 
@@ -119,11 +125,7 @@ def generate_cwl_skeleton(analysis: Analysis) -> str:
         "class": "CommandLineTool",
         "baseCommand": ["python", "scripts/main.py"],
         "requirements": {
-            "InitialWorkDirRequirement": {
-                "listing": [
-                    {"entry": "$(inputs)", "writable": True}
-                ]
-            }
+            "InitialWorkDirRequirement": {"listing": [{"entry": "$(inputs)", "writable": True}]}
         },
     }
 

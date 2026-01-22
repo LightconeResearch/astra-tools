@@ -13,7 +13,6 @@ from asp.templates.core import (
 )
 
 
-
 def create_claude_files(directory: Path) -> None:
     """Create Claude Code skill and agents in the project directory."""
     # Create skill directory

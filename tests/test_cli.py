@@ -463,4 +463,3 @@ class TestInitCommand:
         assert result.exit_code == 0
         # Git directory should NOT exist
         assert not (project_dir / ".git").exists()
-
