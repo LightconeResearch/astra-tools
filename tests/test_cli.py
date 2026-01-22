@@ -257,49 +257,14 @@ class TestInitCommand:
         assert (project_dir / ".gitignore").exists()
         assert (project_dir / "universes").is_dir()
         assert (project_dir / "universes" / "baseline.yaml").exists()
-        assert (project_dir / "scripts").is_dir()
         assert (project_dir / "results").is_dir()
+        assert (project_dir / "scripts").is_dir()
+        assert (project_dir / "workflows").is_dir()
 
-        # Without --agent, no skill should be created
-        assert not (project_dir / ".claude").exists()
-
-        # These should NOT exist
-        assert not (project_dir / "workflows").exists()
+        # steps/ no longer created
         assert not (project_dir / "steps").exists()
         assert not (project_dir / ".asp").exists()
         assert not (project_dir / "executions").exists()
-
-    def test_init_with_agent_creates_skill(self, runner: CliRunner, tmp_path: Path):
-        """Test that --agent claude-code creates the skill, agents, and launches Claude."""
-        from unittest.mock import patch
-
-        project_dir = tmp_path / "agent-test"
-        with patch("asp.cli.subprocess.run") as mock_run:
-            result = runner.invoke(
-                main,
-                ["init", str(project_dir), "--agent", "claude-code", "--no-git"],
-            )
-        assert result.exit_code == 0
-        assert "Created ASP analysis project" in result.output
-        assert ".claude/" in result.output
-        assert "Launching Claude Code" in result.output
-
-        # Check skill is created
-        skill_dir = project_dir / ".claude" / "skills" / "asp-analysis"
-        assert (skill_dir / "SKILL.md").exists()
-        assert (skill_dir / "SCHEMA_REFERENCE.md").exists()
-
-        # Check agents are created
-        assert (project_dir / ".claude" / "agents" / "design.md").exists()
-        assert (project_dir / ".claude" / "agents" / "experiment.md").exists()
-
-        # Check Claude was launched with initial prompt
-        mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        assert call_args[0][0][0] == "claude"
-        assert "PHASE 1: Design" in call_args[0][0][1]
-        assert ".claude/agents/design.md" in call_args[0][0][1]
-        assert call_args[1]["cwd"] == project_dir
 
     def test_init_asp_yaml_content(self, runner: CliRunner, tmp_path: Path):
         """Test that the generated asp.yaml has the expected content."""
@@ -330,6 +295,36 @@ class TestInitCommand:
         gitignore = (project_dir / ".gitignore").read_text()
         assert "results/" in gitignore
         assert "__pycache__/" in gitignore
+
+    def test_init_with_agent_creates_skill(self, runner: CliRunner, tmp_path: Path):
+        """Test that --agent claude-code creates the skill, agents, and launches Claude."""
+        from unittest.mock import patch
+
+        project_dir = tmp_path / "agent-test"
+        with patch("asp.cli.subprocess.run") as mock_run:
+            result = runner.invoke(
+                main,
+                ["init", str(project_dir), "--agent", "claude-code", "--no-git"],
+            )
+        assert result.exit_code == 0
+        assert "Created ASP analysis project" in result.output
+        assert ".claude/" in result.output
+        assert "Launching Claude Code" in result.output
+
+        # Check skill is created
+        skill_dir = project_dir / ".claude" / "skills" / "asp-analysis"
+        assert (skill_dir / "SKILL.md").exists()
+        assert (skill_dir / "SCHEMA_REFERENCE.md").exists()
+
+        # Check agent is created
+        assert (project_dir / ".claude" / "agents" / "asp.md").exists()
+
+        # Check Claude was launched with initial prompt
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args
+        assert call_args[0][0][0] == "claude"
+        assert "asp.md" in call_args[0][0][1]
+        assert call_args[1]["cwd"] == project_dir
 
     def test_init_skill_content(self, runner: CliRunner, tmp_path: Path):
         """Test that the Claude Code skill and agents are created with proper content."""
@@ -362,19 +357,11 @@ class TestInitCommand:
         assert "## Analysis Schema" in schema_ref_content
         assert "## Universe Schema" in schema_ref_content
 
-        # Check design agent
-        design_agent_path = agents_dir / "design.md"
-        assert design_agent_path.exists()
-        design_content = design_agent_path.read_text()
-        assert "# Design Agent" in design_content
-        assert "Conversation Flow" in design_content
-
-        # Check experiment agent
-        experiment_agent_path = agents_dir / "experiment.md"
-        assert experiment_agent_path.exists()
-        experiment_content = experiment_agent_path.read_text()
-        assert "# Experiment Agent" in experiment_content
-        assert "Execution Flow" in experiment_content
+        # Check asp agent (combined design + experiment)
+        asp_agent_path = agents_dir / "asp.md"
+        assert asp_agent_path.exists()
+        asp_content = asp_agent_path.read_text()
+        assert "# ASP Agent" in asp_content
 
     def test_init_existing_nonempty_dir_decline(self, runner: CliRunner, tmp_path: Path):
         """Test declining to overwrite existing non-empty directory."""

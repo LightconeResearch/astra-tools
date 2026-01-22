@@ -1,6 +1,3 @@
-"""ASP Schema Reference - tool-agnostic content."""
-
-SCHEMA_REFERENCE = """\
 # ASP Schema Reference
 
 ## Analysis Schema (`asp.yaml`)
@@ -93,6 +90,5 @@ decisions:
 |-------|---------|---------|
 | IDs | `^[a-z][a-z0-9_]*$` | `primary_data` |
 | Universe ID | `^[a-z][a-z0-9_-]*$` | `experiment-1` |
-| DOI | `^10\\.\\d{4,}/.*$` | `10.1038/s41586-023-06221-2` |
+| DOI | `^10\.\d{4,}/.*$` | `10.1038/s41586-023-06221-2` |
 | Constraint ref | `decision.option` | `model.svm` |
-"""

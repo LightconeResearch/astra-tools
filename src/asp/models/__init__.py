@@ -9,10 +9,17 @@ from asp.models.insight import (
     PaperSource,
 )
 from asp.models.universe import Universe
+from asp.models.workflow import (
+    CWLParameter,
+    ParameterMapping,
+    WorkflowConfig,
+    WorkflowValidationError,
+)
 
 __all__ = [
     "Analysis",
     "AnalysisSource",
+    "CWLParameter",
     "Decision",
     "Evidence",
     "Input",
@@ -21,6 +28,9 @@ __all__ = [
     "InsightEvidence",
     "Option",
     "Output",
+    "ParameterMapping",
     "PaperSource",
     "Universe",
+    "WorkflowConfig",
+    "WorkflowValidationError",
 ]

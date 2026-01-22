@@ -1,23 +1,17 @@
-"""Core ASP templates - tool-agnostic instructions."""
+"""Core ASP templates - loaded from markdown files."""
 
-from asp.templates.core.design import DESIGN_INSTRUCTIONS
-from asp.templates.core.experiment import EXPERIMENT_INSTRUCTIONS
-from asp.templates.core.schema_reference import SCHEMA_REFERENCE
-from asp.templates.core.skill import (
-    INIT_PROMPT_CONTENT,
-    SKILL_CREATING_ANALYSIS,
-    SKILL_EXTRACTING_INSIGHTS,
-    SKILL_QUICK_REFERENCE,
-    SKILL_WORKFLOW_EXECUTION,
-)
+from pathlib import Path
+
+_CORE_DIR = Path(__file__).parent
+
+ASP_AGENT_INSTRUCTIONS = (_CORE_DIR / "ASP_AGENT.md").read_text()
+INIT_PROMPT_CONTENT = (_CORE_DIR / "INIT_PROMPT.md").read_text()
+SCHEMA_REFERENCE = (_CORE_DIR / "SCHEMA_REFERENCE.md").read_text()
+SKILL_CONTENT = (_CORE_DIR / "SKILL.md").read_text()
 
 __all__ = [
-    "DESIGN_INSTRUCTIONS",
-    "EXPERIMENT_INSTRUCTIONS",
+    "ASP_AGENT_INSTRUCTIONS",
     "INIT_PROMPT_CONTENT",
     "SCHEMA_REFERENCE",
-    "SKILL_CREATING_ANALYSIS",
-    "SKILL_EXTRACTING_INSIGHTS",
-    "SKILL_QUICK_REFERENCE",
-    "SKILL_WORKFLOW_EXECUTION",
+    "SKILL_CONTENT",
 ]
