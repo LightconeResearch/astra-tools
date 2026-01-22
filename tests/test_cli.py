@@ -258,11 +258,15 @@ class TestInitCommand:
         assert (project_dir / "universes").is_dir()
         assert (project_dir / "universes" / "baseline.yaml").exists()
         assert (project_dir / "results").is_dir()
-        assert (project_dir / "scripts").is_dir()
         assert (project_dir / "workflows").is_dir()
+        assert (project_dir / "steps").is_dir()
+        assert (project_dir / "steps" / "io").is_dir()
+        assert (project_dir / "steps" / "preprocessing").is_dir()
+        assert (project_dir / "steps" / "models").is_dir()
+        assert (project_dir / "steps" / "evaluation").is_dir()
 
-        # steps/ no longer created
-        assert not (project_dir / "steps").exists()
+        # scripts/ no longer created
+        assert not (project_dir / "scripts").exists()
         assert not (project_dir / ".asp").exists()
         assert not (project_dir / "executions").exists()
 
@@ -347,7 +351,7 @@ class TestInitCommand:
         skill_content = skill_path.read_text()
         assert "name: asp-analysis" in skill_content
         assert "# ASP Analysis Skill" in skill_content
-        assert "## Available Agents" in skill_content
+        assert "## Project Structure" in skill_content
 
         # Check SCHEMA_REFERENCE.md
         schema_ref_path = skill_dir / "SCHEMA_REFERENCE.md"

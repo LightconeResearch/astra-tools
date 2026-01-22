@@ -86,8 +86,11 @@ def init(directory: Path, agent: str | None, no_git: bool) -> None:
     # Create directory structure
     subdirs = [
         "universes",
-        "workflows",  # CWL files go here
-        "scripts",    # Python scripts go here
+        "workflows",
+        "steps/io",
+        "steps/preprocessing",
+        "steps/models",
+        "steps/evaluation",
         "results",
     ]
     for subdir in subdirs:
