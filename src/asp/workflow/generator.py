@@ -98,10 +98,7 @@ def _get_input_cwl_type(inp: Input) -> str:
     """Map ASP input type to CWL type."""
     if inp.type == "data":
         return "File"
-    if inp.type == "parameter":
-        return "string"
-    if inp.type == "config":
-        return "File"
+    # analysis and literature types default to string
     return "string"
 
 
