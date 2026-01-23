@@ -138,7 +138,10 @@ __pycache__/
             )
         except FileNotFoundError:
             console.print("[red]Error:[/red] Claude Code CLI not found.")
-            console.print("Install Claude Code or run [cyan]claude[/cyan] manually in the project.")
+            console.print("\nASP currently only supports Claude Code for AI agent integration.")
+            console.print("To proceed without agent configuration, run:")
+            console.print("  [cyan]asp init --agent=none[/cyan]")
+            console.print("\nOr install Claude Code from: https://claude.ai/code")
             raise SystemExit(1)
     else:
         console.print("\n[bold]Next steps:[/bold]")
