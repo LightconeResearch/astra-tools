@@ -265,3 +265,149 @@ my-analysis/
 3. **Precise evidence**: Include page numbers, figure labels, exact quotes
 4. **Link insights to decisions**: Every decision option should ideally have supporting evidence
 5. **Use scope**: Clarify when an insight applies (dataset, model type, conditions)
+
+---
+
+## Design Mode
+
+When the user runs `asp init`, you enter **design mode**. Your job is to guide them through creating a complete analysis specification interactively.
+
+### Design Conversation Flow
+
+1. **Understand the Problem**
+   - "What research question are you trying to answer?"
+   - "What would success look like?"
+   - "What's the scientific context?"
+
+2. **Identify Inputs**
+   - "What data do you have to work with?"
+   - "Are there any papers or prior analyses that inform this work?"
+   - "What format is the data in?"
+
+3. **Define Outputs**
+   - "What specific results do you need to produce?"
+   - "What's the primary metric you'll use to answer your question?"
+   - "Do you need figures, tables, or a written report?"
+
+4. **Map Decisions**
+   - "What methodological choices do you need to make?"
+   - "For each choice, what are the reasonable options?"
+   - "Are any options incompatible with others?"
+   - "Why might you choose one option over another?"
+
+5. **Finalize**
+   - Write the complete `asp.yaml`
+   - Validate with `asp validate asp.yaml`
+   - Show summary with `asp info`
+   - Create `universes/baseline.yaml` with default selections
+
+### Progressive Writing
+
+Don't wait until the end - write `asp.yaml` incrementally:
+- After discussing the problem: write `analysis.problem`
+- After identifying inputs: write `analysis.inputs`
+- After defining outputs: write `analysis.outputs`
+- After mapping decisions: write `decisions` section
+- Validate frequently to catch issues early
+
+### Example Design Session
+
+```
+User: I want to analyze the iris dataset
+
+Claude: Great! Let me help you design this analysis. What specific question
+are you trying to answer about the iris dataset? For example:
+- Classification accuracy comparison?
+- Feature importance analysis?
+- Clustering evaluation?
+
+User: I want to compare different classification methods
+
+Claude: Perfect. Let me start building your spec...
+[Writes initial asp.yaml with problem statement]
+
+Now, what classification methods do you want to compare?
+
+User: Random forest, SVM, and logistic regression
+
+Claude: Good choices. Should I add any preprocessing decisions too,
+like feature scaling? SVM typically needs scaled features...
+[Continues building spec interactively]
+```
+
+---
+
+## Execution Mode
+
+When the user runs `asp run universes/<name>.yaml`, you enter **execution mode**. Your job is to implement and execute the analysis specification.
+
+### Execution Flow
+
+1. **Read Context**
+   - Read `asp.yaml` completely - understand the problem, inputs, outputs
+   - Read the specified universe file - get the selected decisions
+   - Note the execution ID from the prompt
+
+2. **Plan Implementation**
+   - For each declared output, determine what code produces it
+   - Identify which decisions affect which outputs
+   - Plan the script structure in `scripts/`
+
+3. **Clarify if Needed**
+   - If the spec is ambiguous, ASK the user
+   - Don't guess - the spec should be clear
+   - Common questions: data format details, evaluation criteria, edge cases
+
+4. **Implement**
+   - Write scripts to `scripts/` directory
+   - Follow the decisions from the universe exactly
+   - Produce ALL declared outputs
+
+5. **Execute**
+   - Run the scripts
+   - Save outputs to `results/<execution_id>/`
+   - Capture all metrics
+
+6. **Verify**
+   - Check all declared outputs exist
+   - Verify metrics are within declared ranges (if specified)
+   - Verify artifact formats match spec (png, csv, etc.)
+
+7. **Record**
+   - Update `executions/<id>.yaml` with results
+   - Set status to "completed" (or "failed" with error message)
+   - Record all metric values and artifact paths
+
+### Example Execution Session
+
+```
+# User ran: asp run universes/baseline.yaml
+# Execution ID: baseline_20250120_143052
+
+Claude: I'll execute this analysis. Let me read the spec first...
+[Reads asp.yaml and universes/baseline.yaml]
+
+The analysis specifies:
+- Inputs: iris dataset from sklearn
+- Outputs: accuracy (metric), confusion_matrix (figure), conclusion (report)
+- Decisions: scaling=standard, model=random_forest, test_size=0.2, seed=42
+
+I'll implement this now...
+[Writes scripts/run_analysis.py]
+[Executes the script]
+[Saves outputs to results/baseline_20250120_143052/]
+[Updates executions/baseline_20250120_143052.yaml with results]
+
+Execution complete! Results:
+- accuracy: 0.967
+- confusion_matrix: results/baseline_20250120_143052/confusion_matrix.png
+- conclusion: results/baseline_20250120_143052/conclusion.md
+```
+
+### Key Principles for Execution
+
+1. **Follow the spec exactly** - The decisions in the universe are your instructions
+2. **Ask don't guess** - If something is unclear, ask the user
+3. **Produce all outputs** - Every declared output must be created
+4. **Verify your work** - Check outputs match the spec before marking complete
+5. **Record everything** - Update the execution record with all results

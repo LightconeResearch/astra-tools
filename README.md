@@ -16,16 +16,17 @@ ASP separates **what** you want to learn from **how** to compute it. You describ
 - **Outputs** - Metrics, figures, tables, models
 - **Decisions** - The choices that define your analysis
 
-An AI agent reads the spec and generates the implementation (workflows, scripts, etc.).
+The ASP specification is the **source of truth**. CWL workflows are generated from it, and results are always produced through the workflow for full reproducibility.
 
 ```mermaid
 flowchart LR
-    A["`**ASP Analysis**
-    _what we want_`"] --> B["`**LLM Agent**
-    _generates_`"]
-    B --> C["`**Workflow**
-    _+ Parameters_`"]
-    C --> D["`**Results**`"]
+    A["`**ASP Spec**
+    _source of truth_`"] --> B["`**CWL Workflow**
+    _generated_`"]
+    B --> C["`**Scripts**
+    _implementation_`"]
+    C --> D["`**Results**
+    _via workflow_`"]
 ```
 
 ## Key Concepts
@@ -55,25 +56,47 @@ pip install -e ".[dev]"
 
 ## Getting Started
 
-Create a new analysis project:
+### With Claude Code (Recommended)
+
+Create a new analysis project with AI agent support:
+
+```bash
+asp init my-analysis --agent claude-code
+```
+
+This creates the project structure and launches Claude Code with instructions to help you design and execute your analysis.
+
+### Manual Workflow
 
 ```bash
 asp init my-analysis
 cd my-analysis
 ```
 
-This creates a complete project structure with:
-- `asp.yaml` - Analysis specification (edit this to define your analysis)
-- `universes/baseline.yaml` - Default universe
-- `README.md` - Project documentation
-- Standard directories for workflows, steps, scripts, and results
-- Git repository with initial commit
+Then follow the workflow:
 
-Edit `asp.yaml` to define your inputs, outputs, and decisions, then validate:
+1. **Design** - Edit `asp.yaml` to define inputs, outputs, and decisions
+2. **Generate** - Run `asp workflow generate` to create CWL skeleton
+3. **Implement** - Write Python scripts in `scripts/`
+4. **Run** - Execute via `asp workflow run` (always use the workflow!)
+
+## Workflow
+
+**ASP is the source of truth. Always follow this order:**
 
 ```bash
+# 1. Design - create/edit the specification
 asp validate asp.yaml
-asp info
+asp universe generate -n baseline
+
+# 2. Generate - create CWL workflow from ASP
+asp workflow generate
+
+# 3. Implement - write scripts that the CWL calls
+#    Edit scripts/main.py and workflows/main.cwl
+
+# 4. Run - ALWAYS execute through the workflow
+asp workflow run universes/baseline.yaml --cwl workflows/main.cwl -o results/
 ```
 
 ## Quick Example
@@ -141,6 +164,7 @@ See [examples/iris/](examples/iris/) for a complete working example.
 ```bash
 # Project setup
 asp init my-analysis                   # Create new analysis project
+asp init my-analysis --agent claude-code  # Create with Claude Code support
 asp init my-analysis --no-git          # Create without git initialization
 
 # Validation
@@ -157,6 +181,13 @@ asp viz --format mermaid               # Visualize as Mermaid diagram
 asp universe generate --name baseline  # Generate universe from defaults
 asp universe check universes/foo.yaml  # Check universe constraints
 
+# Workflow commands
+asp workflow generate                  # Generate CWL skeleton from ASP
+asp workflow validate --cwl main.cwl   # Validate CWL against ASP
+asp workflow show --cwl main.cwl       # Show parameter mapping
+asp workflow run universes/x.yaml --cwl main.cwl -o results/  # Run workflow
+asp params universes/baseline.yaml     # Generate CWL parameters from universe
+
 # Schema utilities
 asp schema export                      # Export JSON schemas to schemas/
 asp schema show analysis               # Print analysis schema to stdout
@@ -168,42 +199,33 @@ An ASP project created with `asp init` has this structure:
 
 ```
 my-analysis/
-├── asp.yaml              # Analysis specification
+├── asp.yaml              # Analysis specification (SOURCE OF TRUTH)
 ├── README.md             # Project documentation
 ├── .gitignore            # Git ignore rules
 ├── universes/            # Universe definitions (decision selections)
-│   └── baseline.yaml     # Default universe
-├── workflows/            # Generated workflows (CWL, Snakemake, etc.)
-│   └── params/           # Workflow parameters per universe
-├── steps/                # Reusable workflow steps
-│   ├── io/               # Data loading steps
-│   ├── preprocessing/    # Data preprocessing steps
-│   ├── models/           # Model training steps
-│   └── evaluation/       # Evaluation steps
-├── scripts/              # Python/R implementation scripts
+│   └── baseline.yaml
+├── workflows/            # CWL workflow files (.cwl only)
+│   └── main.cwl          # Generated from asp.yaml
+├── scripts/              # Python implementation scripts (.py only)
+│   └── main.py
 ├── results/              # Execution outputs (gitignored)
-└── .asp/                 # ASP metadata
-    └── branches.yaml     # Branch tracking
+└── .claude/              # Claude Code integration (if --agent used)
+    ├── agents/
+    │   └── asp.md        # ASP agent instructions
+    └── skills/
+        └── asp-analysis/
+            └── SKILL.md
 ```
-
-## Project Scope
-
-This project currently focuses on the **specification format** itself:
-
-- Pydantic models as the source of truth for the specification
-- JSON Schemas auto-generated from models (`asp schema export`)
-- Validation tooling (schema + semantic)
-- Visualization of decision spaces
-
-Workflow generation and execution by AI agents is a future goal that builds on this foundation.
 
 ## Design Principles
 
 1. **Declarative** - Spec says WHAT, not HOW
-2. **Transparent** - All decisions and alternatives documented
-3. **Composable** - Analyses build on each other
-4. **Evidence-linked** - Decisions cite supporting evidence
-5. **Reproducible** - Precise provenance and execution records
+2. **ASP is source of truth** - CWL is derived from ASP
+3. **Workflow-enforced** - Results only through CWL execution
+4. **Transparent** - All decisions and alternatives documented
+5. **Composable** - Analyses build on each other
+6. **Evidence-linked** - Decisions cite supporting evidence
+7. **Reproducible** - Precise provenance and execution records
 
 ## Documentation
 
