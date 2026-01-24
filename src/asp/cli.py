@@ -570,7 +570,7 @@ def viz(file: Path | None, fmt: str) -> None:
         _viz_ascii(analysis)
 
 
-def _viz_ascii(analysis: dict) -> None:
+def _viz_ascii(analysis: dict[str, Any]) -> None:
     """Visualize decisions as ASCII tree."""
     analysis_content = analysis.get("analysis", {})
     tree = Tree(f"[bold]{analysis_content.get('name', 'Unknown')}[/bold]")
@@ -600,7 +600,7 @@ def _viz_ascii(analysis: dict) -> None:
     console.print(tree)
 
 
-def _viz_mermaid(analysis: dict) -> None:
+def _viz_mermaid(analysis: dict[str, Any]) -> None:
     """Generate Mermaid diagram for decisions."""
     lines = ["graph TD"]
 
