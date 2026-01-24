@@ -47,7 +47,7 @@ def get_input(data: dict[str, Any], input_id: str) -> dict[str, Any] | None:
     Returns:
         The input dict if found, None otherwise.
     """
-    inputs = data.get("analysis", {}).get("inputs", [])
+    inputs: list[dict[str, Any]] = data.get("analysis", {}).get("inputs", [])
     for inp in inputs:
         if inp.get("id") == input_id:
             return inp
@@ -64,7 +64,7 @@ def get_output(data: dict[str, Any], output_id: str) -> dict[str, Any] | None:
     Returns:
         The output dict if found, None otherwise.
     """
-    outputs = data.get("analysis", {}).get("outputs", [])
+    outputs: list[dict[str, Any]] = data.get("analysis", {}).get("outputs", [])
     for out in outputs:
         if out.get("id") == output_id:
             return out
@@ -81,7 +81,7 @@ def get_decision(data: dict[str, Any], decision_id: str) -> dict[str, Any] | Non
     Returns:
         The decision dict if found, None otherwise.
     """
-    decisions = data.get("decisions", {})
+    decisions: dict[str, dict[str, Any]] = data.get("decisions", {})
     return decisions.get(decision_id)
 
 
@@ -95,7 +95,7 @@ def get_insight(data: dict[str, Any], insight_id: str) -> dict[str, Any] | None:
     Returns:
         The insight dict if found, None otherwise.
     """
-    insights = data.get("insights", {})
+    insights: dict[str, dict[str, Any]] = data.get("insights", {})
     return insights.get(insight_id)
 
 

@@ -47,7 +47,8 @@ def _load_bundled_schema(name: str) -> dict[str, Any]:
     # Try bundled schemas first (installed package)
     try:
         schema_text = files("asp.spec").joinpath(name).read_text()
-        return json.loads(schema_text)
+        schema: dict[str, Any] = json.loads(schema_text)
+        return schema
     except (FileNotFoundError, TypeError, ModuleNotFoundError):
         pass
 
@@ -56,7 +57,8 @@ def _load_bundled_schema(name: str) -> dict[str, Any]:
     if repo_root:
         schema_path = repo_root / "spec" / "draft" / name
         if schema_path.exists():
-            return json.loads(schema_path.read_text())
+            schema = json.loads(schema_path.read_text())
+            return schema
 
     raise FileNotFoundError(
         f"Schema {name} not found. Run 'python tools/generate_schemas.py' to generate schemas."
