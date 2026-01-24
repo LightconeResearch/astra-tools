@@ -14,9 +14,7 @@ from pathlib import Path
 from typing import Any
 
 
-def extract_decision_values(
-    analysis: dict[str, Any], universe: dict[str, Any]
-) -> dict[str, Any]:
+def extract_decision_values(analysis: dict[str, Any], universe: dict[str, Any]) -> dict[str, Any]:
     """Extract the value from each selected option in a universe.
 
     For each decision in the universe, looks up the selected option and
