@@ -12,9 +12,10 @@ from asp.workflow.mapping import generate_cwl_params
 
 def _to_yaml(data: dict[str, object], *, default_flow_style: bool | None = None) -> str:
     """Convert dict to YAML string."""
-    return yaml.safe_dump(
+    result: str = yaml.safe_dump(
         data, sort_keys=False, allow_unicode=True, default_flow_style=default_flow_style
     )
+    return result
 
 
 def _params_to_yaml(params: dict[str, object]) -> str:

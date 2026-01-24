@@ -155,12 +155,13 @@ def resolve_input_source(
     source_type = source.get("type")
 
     if source_type == "file":
-        path = source.get("path")
-        if path is None:
+        file_path = source.get("path")
+        if file_path is None:
             return None
-        if base_path and not Path(path).is_absolute():
-            path = str(base_path / path)
-        return {"class": "File", "path": path}
+        path_str = str(file_path)
+        if base_path and not Path(path_str).is_absolute():
+            path_str = str(base_path / path_str)
+        return {"class": "File", "path": path_str}
 
     if source_type == "url":
         url = source.get("url")

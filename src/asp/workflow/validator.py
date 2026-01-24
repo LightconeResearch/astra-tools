@@ -10,9 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from asp.workflow.types import CWLParameter, WorkflowValidationError
 from asp.workflow.mapping import apply_naming_convention
 from asp.workflow.parser import parse_cwl_inputs
+from asp.workflow.types import CWLParameter, WorkflowValidationError
 
 
 def validate_cwl_syntax(cwl_path: Path) -> list[WorkflowValidationError]:
