@@ -13,13 +13,18 @@ from rich.tree import Tree
 from asp.agents.registry import get_agent
 from asp.models.analysis import Analysis
 from asp.models.universe import Universe
-from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
 from asp.templates import (
     ASP_AGENT,
     SCHEMA_REFERENCE_CONTENT,
     SKILL_CONTENT,
 )
-from asp.validation.schema import validate_analysis_schema, validate_universe_schema
+from asp.validation.schema import (
+    get_analysis_schema,
+    get_insights_schema,
+    get_universe_schema,
+    validate_analysis_schema,
+    validate_universe_schema,
+)
 from asp.validation.semantic import validate_analysis_file, validate_universe_file
 from asp.workflow.generator import generate_params_file, generate_params_string
 from asp.workflow.parser import parse_cwl_inputs
@@ -45,6 +50,17 @@ def find_analysis_file(start_path: Path | None = None) -> Path | None:
         current = current.parent
 
     return None
+
+
+def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> Path:
+    """Find or validate analysis file, exit with error if not found."""
+    if analysis is not None:
+        return analysis
+    found = find_analysis_file(start_path)
+    if found is None:
+        console.print("[red]Error:[/red] No asp.yaml found.")
+        raise SystemExit(1)
+    return found
 
 
 @click.group()
@@ -209,6 +225,43 @@ decisions:
 """
     (directory / "universes" / "baseline.yaml").write_text(baseline_universe)
 
+    # Create README
+    _create_readme(directory, name)
+
+
+def _create_readme(directory: Path, name: str) -> None:
+    """Create a README.md for the project."""
+    readme = f"""# {name}
+
+An ASP (Agentic Science Protocol) analysis project.
+
+## Quick Start
+
+```bash
+# Validate the specification
+asp validate asp.yaml
+
+# Show analysis info
+asp info
+
+# Generate a universe from defaults
+asp universe generate -n baseline
+```
+
+## Structure
+
+- `asp.yaml` - Analysis specification (source of truth)
+- `universes/` - Universe definitions (decision selections)
+- `workflows/` - CWL workflow files
+- `steps/` - Reusable workflow steps
+- `results/` - Execution outputs (gitignored)
+
+## Documentation
+
+See [ASP documentation](https://github.com/LightconeResearch/ASP) for more information.
+"""
+    (directory / "README.md").write_text(readme)
+
 
 def _create_skill(directory: Path) -> None:
     """Create the Claude Code skill and agents in the project directory."""
@@ -327,12 +380,7 @@ def info(
     outputs: bool,
 ) -> None:
     """Show information about an analysis."""
-    if file is None:
-        file = find_analysis_file()
-        if file is None:
-            console.print("[red]Error:[/red] No asp.yaml found in current or parent directories.")
-            raise SystemExit(1)
-
+    file = _require_analysis(file)
     analysis = Analysis.from_yaml(file)
 
     # Header
@@ -433,12 +481,7 @@ def generate_universe(
     description: str | None,
 ) -> None:
     """Generate a universe from analysis defaults."""
-    if analysis is None:
-        analysis = find_analysis_file()
-        if analysis is None:
-            console.print("[red]Error:[/red] No asp.yaml found.")
-            raise SystemExit(1)
-
+    analysis = _require_analysis(analysis)
     spec = Analysis.from_yaml(analysis)
 
     # Check all decisions have defaults
@@ -473,12 +516,7 @@ def generate_universe(
 )
 def check_universe(universe_file: Path, analysis: Path | None) -> None:
     """Check a universe against its analysis constraints."""
-    if analysis is None:
-        analysis = find_analysis_file(universe_file.parent)
-        if analysis is None:
-            console.print("[red]Error:[/red] No asp.yaml found.")
-            raise SystemExit(1)
-
+    analysis = _require_analysis(analysis, universe_file.parent)
     errors = validate_universe_file(universe_file, analysis)
 
     if errors:
@@ -506,12 +544,7 @@ def check_universe(universe_file: Path, analysis: Path | None) -> None:
 )
 def viz(file: Path | None, fmt: str) -> None:
     """Visualize the decision space."""
-    if file is None:
-        file = find_analysis_file()
-        if file is None:
-            console.print("[red]Error:[/red] No asp.yaml found.")
-            raise SystemExit(1)
-
+    file = _require_analysis(file)
     analysis = Analysis.from_yaml(file)
 
     if fmt == "mermaid":
@@ -592,8 +625,20 @@ def schema() -> None:
 )
 def schema_export(output: Path) -> None:
     """Export JSON schemas to files."""
+    import json
 
-    export_schemas(output)
+    output.mkdir(parents=True, exist_ok=True)
+
+    schemas = {
+        "analysis.schema.json": get_analysis_schema(),
+        "universe.schema.json": get_universe_schema(),
+        "insights.schema.json": get_insights_schema(),
+    }
+
+    for name, schema_data in schemas.items():
+        with open(output / name, "w") as f:
+            json.dump(schema_data, f, indent=2)
+            f.write("\n")
 
     console.print(f"[green]✓[/green] Exported schemas to [cyan]{output}/[/cyan]")
     console.print(f"  • {output}/analysis.schema.json")
@@ -607,32 +652,18 @@ def schema_show(schema_type: str) -> None:
     """Print a JSON schema to stdout."""
     import json
 
-    from asp.schemas import get_insights_schema
-
-    if schema_type == "analysis":
-        schema_data = get_analysis_schema()
-    elif schema_type == "universe":
-        schema_data = get_universe_schema()
-    else:
-        schema_data = get_insights_schema()
-
+    schema_getters = {
+        "analysis": get_analysis_schema,
+        "universe": get_universe_schema,
+        "insights": get_insights_schema,
+    }
+    schema_data = schema_getters[schema_type]()
     console.print(json.dumps(schema_data, indent=2))
 
 
 # =============================================================================
 # Workflow commands
 # =============================================================================
-
-
-def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> Path:
-    """Find or validate analysis file, exit with error if not found."""
-    if analysis is not None:
-        return analysis
-    found = find_analysis_file(start_path)
-    if found is None:
-        console.print("[red]Error:[/red] No asp.yaml found.")
-        raise SystemExit(1)
-    return found
 
 
 @main.command("params")

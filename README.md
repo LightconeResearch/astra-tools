@@ -77,7 +77,7 @@ Then follow the workflow:
 
 1. **Design** - Edit `asp.yaml` to define inputs, outputs, and decisions
 2. **Generate** - Run `asp workflow generate` to create CWL skeleton
-3. **Implement** - Write Python scripts in `scripts/`
+3. **Implement** - Write implementation scripts
 4. **Run** - Execute via `asp workflow run` (always use the workflow!)
 
 ## Workflow
@@ -92,8 +92,8 @@ asp universe generate -n baseline
 # 2. Generate - create CWL workflow from ASP
 asp workflow generate
 
-# 3. Implement - write scripts that the CWL calls
-#    Edit scripts/main.py and workflows/main.cwl
+# 3. Implement - write scripts that the CWL workflow calls
+#    Edit workflows/main.cwl and create implementation scripts
 
 # 4. Run - ALWAYS execute through the workflow
 asp workflow run universes/baseline.yaml --cwl workflows/main.cwl -o results/
@@ -204,17 +204,14 @@ my-analysis/
 ├── .gitignore            # Git ignore rules
 ├── universes/            # Universe definitions (decision selections)
 │   └── baseline.yaml
-├── workflows/            # CWL workflow files (.cwl only)
-│   └── main.cwl          # Generated from asp.yaml
-├── scripts/              # Python implementation scripts (.py only)
-│   └── main.py
+├── workflows/            # CWL workflow files
+├── steps/                # Reusable workflow steps
 ├── results/              # Execution outputs (gitignored)
 └── .claude/              # Claude Code integration (if --agent used)
     ├── agents/
-    │   └── asp.md        # ASP agent instructions
+    │   └── asp.md
     └── skills/
         └── asp-analysis/
-            └── SKILL.md
 ```
 
 ## Design Principles

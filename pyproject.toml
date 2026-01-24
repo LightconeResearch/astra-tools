@@ -54,6 +54,13 @@ source = "vcs"
 [tool.hatch.build.targets.wheel]
 packages = ["src/asp"]
 
+# Automatically bundle spec/draft/ into the package as asp/spec/
+[tool.hatch.build.targets.wheel.force-include]
+"spec/draft" = "asp/spec"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/asp", "spec/draft"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

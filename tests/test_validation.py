@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from asp.models.analysis import Analysis
+from asp.helpers import load_yaml
 from asp.validation.schema import (
     is_valid_analysis,
     is_valid_universe,
@@ -61,8 +61,8 @@ class TestSemanticValidation:
     """Tests for semantic validation."""
 
     def test_valid_analysis(self, full_analysis_path: Path):
-        analysis = Analysis.from_yaml(full_analysis_path)
-        errors = validate_analysis(analysis)
+        data = load_yaml(full_analysis_path)
+        errors = validate_analysis(data)
         assert errors == []
 
     def test_valid_analysis_file(self, full_analysis_path: Path):
