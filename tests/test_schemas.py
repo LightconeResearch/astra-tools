@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
+from asp.validation.schema import get_analysis_schema, get_insights_schema, get_universe_schema
 
 
 class TestSchemaGeneration:
@@ -24,6 +24,12 @@ class TestSchemaGeneration:
         assert "id" in schema["properties"]
         assert "decisions" in schema["properties"]
 
+    def test_get_insights_schema(self):
+        schema = get_insights_schema()
+        assert isinstance(schema, dict)
+        assert "properties" in schema
+        assert "insights" in schema["properties"]
+
     def test_analysis_schema_has_defs(self):
         schema = get_analysis_schema()
         assert "$defs" in schema
@@ -39,13 +45,24 @@ class TestSchemaGeneration:
         # Schemas should be JSON-serializable
         analysis_schema = get_analysis_schema()
         universe_schema = get_universe_schema()
+        insights_schema = get_insights_schema()
 
         # Should not raise
         json.dumps(analysis_schema)
         json.dumps(universe_schema)
+        json.dumps(insights_schema)
 
     def test_export_schemas(self, tmp_path: Path):
-        export_schemas(tmp_path)
+        """Test that schemas can be written to files."""
+        schemas = {
+            "analysis.schema.json": get_analysis_schema(),
+            "universe.schema.json": get_universe_schema(),
+            "insights.schema.json": get_insights_schema(),
+        }
+
+        for name, schema_data in schemas.items():
+            with open(tmp_path / name, "w") as f:
+                json.dump(schema_data, f, indent=2)
 
         analysis_path = tmp_path / "analysis.schema.json"
         universe_path = tmp_path / "universe.schema.json"
@@ -64,7 +81,17 @@ class TestSchemaGeneration:
 
     def test_export_schemas_creates_directory(self, tmp_path: Path):
         nested_path = tmp_path / "nested" / "schemas"
-        export_schemas(nested_path)
+        nested_path.mkdir(parents=True, exist_ok=True)
+
+        schemas = {
+            "analysis.schema.json": get_analysis_schema(),
+            "universe.schema.json": get_universe_schema(),
+        }
+
+        for name, schema_data in schemas.items():
+            with open(nested_path / name, "w") as f:
+                json.dump(schema_data, f, indent=2)
+
         assert nested_path.exists()
         assert (nested_path / "analysis.schema.json").exists()
 

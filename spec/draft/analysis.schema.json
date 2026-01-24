@@ -85,6 +85,48 @@
       "title": "AnalysisContent",
       "type": "object"
     },
+    "AnalysisSource": {
+      "additionalProperties": false,
+      "description": "Source reference to a previous ASP analysis.",
+      "properties": {
+        "analysis": {
+          "description": "Reference to the analysis (e.g., 'org/analysis-name')",
+          "title": "Analysis",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Version of the analysis",
+          "title": "Version"
+        },
+        "universe": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Specific universe used",
+          "title": "Universe"
+        }
+      },
+      "required": [
+        "analysis"
+      ],
+      "title": "AnalysisSource",
+      "type": "object"
+    },
     "Checksum": {
       "additionalProperties": false,
       "description": "Checksum for data integrity verification.",
@@ -182,26 +224,109 @@
       "title": "Decision",
       "type": "object"
     },
-    "Evidence": {
+    "EquationEvidence": {
       "additionalProperties": false,
-      "description": "Evidence supporting a decision option.",
+      "description": "Evidence from an equation.",
       "properties": {
-        "ref": {
-          "description": "Reference to an input (e.g., 'inputs.study_name')",
-          "title": "Ref",
+        "equation": {
+          "description": "Equation reference (e.g., 'Equation 7')",
+          "title": "Equation",
           "type": "string"
         },
-        "finding": {
-          "description": "What the evidence shows",
-          "title": "Finding",
-          "type": "string"
+        "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The mathematical expression",
+          "title": "Expression"
         }
       },
       "required": [
-        "ref",
-        "finding"
+        "equation"
       ],
+      "title": "EquationEvidence",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Evidence supporting a decision option.\n\nCan reference either:\n- An insight by ID (preferred): `insight: insight_id`\n- A legacy input reference: `ref: inputs.study_name` with `finding`",
+      "properties": {
+        "insight": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference to an insight by ID (e.g., 'compute_scaling')",
+          "title": "Insight"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference to an input (e.g., 'inputs.study_name') - deprecated, use insight",
+          "title": "Ref"
+        },
+        "finding": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the evidence shows - required when using ref",
+          "title": "Finding"
+        }
+      },
       "title": "Evidence",
+      "type": "object"
+    },
+    "FigureEvidence": {
+      "additionalProperties": false,
+      "description": "Evidence from a figure.",
+      "properties": {
+        "figure": {
+          "description": "Figure reference (e.g., 'Figure 3a')",
+          "title": "Figure",
+          "type": "string"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Figure caption or description",
+          "title": "Caption"
+        }
+      },
+      "required": [
+        "figure"
+      ],
+      "title": "FigureEvidence",
       "type": "object"
     },
     "Input": {
@@ -301,6 +426,99 @@
         "type"
       ],
       "title": "Input",
+      "type": "object"
+    },
+    "Insight": {
+      "additionalProperties": false,
+      "description": "A scientific insight with provenance and supporting evidence.\n\nAn insight is a discrete unit of scientific knowledge that can come from\neither literature (papers) or computation (previous analyses).",
+      "properties": {
+        "claim": {
+          "description": "The insight content - what we learned (1-2 sentences)",
+          "title": "Claim",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PaperSource"
+            },
+            {
+              "$ref": "#/$defs/AnalysisSource"
+            }
+          ],
+          "description": "Where this insight comes from (paper DOI or analysis reference)",
+          "title": "Source"
+        },
+        "evidence": {
+          "description": "Supporting evidence for this insight (figures, quotes, tables, etc.)",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FigureEvidence"
+              },
+              {
+                "$ref": "#/$defs/QuoteEvidence"
+              },
+              {
+                "$ref": "#/$defs/TableEvidence"
+              },
+              {
+                "$ref": "#/$defs/EquationEvidence"
+              },
+              {
+                "$ref": "#/$defs/ResultEvidence"
+              },
+              {
+                "$ref": "#/$defs/MetricEvidence"
+              },
+              {
+                "$ref": "#/$defs/OutputEvidence"
+              }
+            ]
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Context or conditions where this insight applies",
+          "title": "Scope"
+        }
+      },
+      "required": [
+        "claim",
+        "source"
+      ],
+      "title": "Insight",
+      "type": "object"
+    },
+    "MetricEvidence": {
+      "additionalProperties": false,
+      "description": "Evidence from an analysis metric output.",
+      "properties": {
+        "metric": {
+          "description": "Name of the metric",
+          "title": "Metric",
+          "type": "string"
+        },
+        "value": {
+          "description": "The metric value(s)",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "metric",
+        "value"
+      ],
+      "title": "MetricEvidence",
       "type": "object"
     },
     "Option": {
@@ -499,6 +717,108 @@
       "title": "Output",
       "type": "object"
     },
+    "OutputEvidence": {
+      "additionalProperties": false,
+      "description": "Evidence from an analysis output artifact.",
+      "properties": {
+        "output": {
+          "description": "Output ID or path",
+          "title": "Output",
+          "type": "string"
+        }
+      },
+      "required": [
+        "output"
+      ],
+      "title": "OutputEvidence",
+      "type": "object"
+    },
+    "PaperSource": {
+      "additionalProperties": false,
+      "description": "Source reference to a scientific paper.",
+      "properties": {
+        "doi": {
+          "description": "DOI of the paper (e.g., '10.1038/s41586-023-06221-2')",
+          "pattern": "^10\\.\\d{4,}/.*$",
+          "title": "Doi",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doi"
+      ],
+      "title": "PaperSource",
+      "type": "object"
+    },
+    "QuoteEvidence": {
+      "additionalProperties": false,
+      "description": "Evidence from a direct quote.",
+      "properties": {
+        "quote": {
+          "description": "The exact quoted text",
+          "title": "Quote",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Location in source (e.g., 'Section 2.1, p.3')",
+          "title": "Location"
+        }
+      },
+      "required": [
+        "quote"
+      ],
+      "title": "QuoteEvidence",
+      "type": "object"
+    },
+    "ResultEvidence": {
+      "additionalProperties": false,
+      "description": "Evidence from a numerical result.",
+      "properties": {
+        "result": {
+          "description": "Description of the result",
+          "title": "Result",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where in the source",
+          "title": "Location"
+        },
+        "value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The numerical value",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "result"
+      ],
+      "title": "ResultEvidence",
+      "type": "object"
+    },
     "Source": {
       "additionalProperties": false,
       "description": "Source specification for inputs.",
@@ -676,6 +996,48 @@
       ],
       "title": "Source",
       "type": "object"
+    },
+    "TableEvidence": {
+      "additionalProperties": false,
+      "description": "Evidence from a table.",
+      "properties": {
+        "table": {
+          "description": "Table reference (e.g., 'Table 1')",
+          "title": "Table",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Specific row/column if applicable",
+          "title": "Location"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The specific value referenced",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "table"
+      ],
+      "title": "TableEvidence",
+      "type": "object"
     }
   },
   "$id": "https://asp-spec.org/v1/analysis.schema.json",
@@ -713,6 +1075,14 @@
       "description": "Map of decision IDs to decision specifications",
       "title": "Decisions",
       "type": "object"
+    },
+    "insights": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Insight"
+      },
+      "description": "Map of insight IDs to insight specifications",
+      "title": "Insights",
+      "type": "object"
     }
   },
   "required": [
@@ -720,6 +1090,5 @@
     "analysis"
   ],
   "title": "ASP Analysis Specification",
-  "type": "object",
-  "$comment": "Generated by asp v0.1.dev5+g4f3131113.d20251227"
+  "type": "object"
 }

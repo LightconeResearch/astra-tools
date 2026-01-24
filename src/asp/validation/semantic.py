@@ -1,11 +1,15 @@
-"""Semantic validation for ASP specifications."""
+"""Semantic validation for ASP specifications.
+
+This module performs semantic validation (cross-references, constraints)
+using dict-based data structures loaded from YAML files.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-from asp.models.analysis import Analysis
-from asp.models.universe import Universe
+from asp.helpers import get_insight_ids, get_input_ids, load_yaml
 
 
 class SemanticError:
@@ -22,7 +26,7 @@ class SemanticError:
         return f"[{self.code}] {self.message}"
 
 
-def validate_analysis(analysis: Analysis) -> list[SemanticError]:
+def validate_analysis(data: dict[str, Any]) -> list[SemanticError]:
     """Validate an analysis specification semantically.
 
     Checks:
@@ -32,94 +36,109 @@ def validate_analysis(analysis: Analysis) -> list[SemanticError]:
     - Input/output IDs are unique
 
     Args:
-        analysis: The analysis to validate.
+        data: The analysis data as a dict.
 
     Returns:
         List of semantic errors (empty if valid).
     """
     errors: list[SemanticError] = []
 
+    analysis_content = data.get("analysis", {})
+    inputs = analysis_content.get("inputs", [])
+    outputs = analysis_content.get("outputs", [])
+    decisions = data.get("decisions", {})
+    insights = data.get("insights", {})
+
     # Check for duplicate input IDs
     input_ids: set[str] = set()
-    for inp in analysis.analysis.inputs:
-        if inp.id in input_ids:
+    for inp in inputs:
+        inp_id = inp.get("id")
+        if inp_id in input_ids:
             errors.append(
                 SemanticError(
-                    "DUPLICATE_INPUT", f"Duplicate input ID: {inp.id}", f"inputs.{inp.id}"
+                    "DUPLICATE_INPUT", f"Duplicate input ID: {inp_id}", f"inputs.{inp_id}"
                 )
             )
-        input_ids.add(inp.id)
+        if inp_id:
+            input_ids.add(inp_id)
 
     # Check for duplicate output IDs
     output_ids: set[str] = set()
-    for out in analysis.analysis.outputs:
-        if out.id in output_ids:
+    for out in outputs:
+        out_id = out.get("id")
+        if out_id in output_ids:
             errors.append(
                 SemanticError(
-                    "DUPLICATE_OUTPUT", f"Duplicate output ID: {out.id}", f"outputs.{out.id}"
+                    "DUPLICATE_OUTPUT", f"Duplicate output ID: {out_id}", f"outputs.{out_id}"
                 )
             )
-        output_ids.add(out.id)
+        if out_id:
+            output_ids.add(out_id)
 
     # Validate decisions
-    for decision_id, decision in analysis.decisions.items():
+    for decision_id, decision in decisions.items():
         decision_path = f"decisions.{decision_id}"
+        options = decision.get("options", {})
 
         # Check default option exists
-        if decision.default is not None and decision.default not in decision.options:
+        default = decision.get("default")
+        if default is not None and default not in options:
             errors.append(
                 SemanticError(
                     "INVALID_DEFAULT",
-                    f"Default option '{decision.default}' not found in options",
+                    f"Default option '{default}' not found in options",
                     decision_path,
                 )
             )
 
         # Validate options
-        for option_id, option in decision.options.items():
+        for option_id, option in options.items():
             option_path = f"{decision_path}.options.{option_id}"
 
             # Check evidence refs
-            if option.evidence:
-                for i, evidence in enumerate(option.evidence):
-                    # Check insight reference
-                    if evidence.insight:
-                        if evidence.insight not in analysis.insights:
+            evidence_list = option.get("evidence") or []
+            for i, evidence in enumerate(evidence_list):
+                # Check insight reference
+                insight_ref = evidence.get("insight")
+                if insight_ref:
+                    if insight_ref not in insights:
+                        errors.append(
+                            SemanticError(
+                                "INVALID_INSIGHT_REF",
+                                f"Evidence insight '{insight_ref}' not found in insights",
+                                f"{option_path}.evidence[{i}]",
+                            )
+                        )
+                # Check legacy input reference
+                elif evidence.get("ref"):
+                    ref = evidence["ref"]
+                    if ref.startswith("inputs."):
+                        ref_input_id = ref[7:]  # Remove "inputs." prefix
+                        if ref_input_id not in input_ids:
                             errors.append(
                                 SemanticError(
-                                    "INVALID_INSIGHT_REF",
-                                    f"Evidence insight '{evidence.insight}' not found in insights",
+                                    "INVALID_EVIDENCE_REF",
+                                    f"Evidence ref '{ref}' points to non-existent input",
                                     f"{option_path}.evidence[{i}]",
                                 )
                             )
-                    # Check legacy input reference
-                    elif evidence.ref:
-                        ref = evidence.ref
-                        if ref.startswith("inputs."):
-                            input_id = ref[7:]  # Remove "inputs." prefix
-                            if input_id not in input_ids:
-                                errors.append(
-                                    SemanticError(
-                                        "INVALID_EVIDENCE_REF",
-                                        f"Evidence ref '{ref}' points to non-existent input",
-                                        f"{option_path}.evidence[{i}]",
-                                    )
-                                )
 
             # Check incompatible_with refs
-            if option.incompatible_with:
-                for ref in option.incompatible_with:
-                    errors.extend(_validate_constraint_ref(ref, analysis, option_path))
+            incompatible_with = option.get("incompatible_with") or []
+            for ref in incompatible_with:
+                errors.extend(_validate_constraint_ref(ref, decisions, option_path))
 
             # Check requires refs
-            if option.requires:
-                for ref in option.requires:
-                    errors.extend(_validate_constraint_ref(ref, analysis, option_path))
+            requires = option.get("requires") or []
+            for ref in requires:
+                errors.extend(_validate_constraint_ref(ref, decisions, option_path))
 
     return errors
 
 
-def _validate_constraint_ref(ref: str, analysis: Analysis, option_path: str) -> list[SemanticError]:
+def _validate_constraint_ref(
+    ref: str, decisions: dict[str, Any], option_path: str
+) -> list[SemanticError]:
     """Validate a constraint reference (decision.option format)."""
     errors: list[SemanticError] = []
 
@@ -136,7 +155,7 @@ def _validate_constraint_ref(ref: str, analysis: Analysis, option_path: str) -> 
 
     decision_id, option_id = parts
 
-    if decision_id not in analysis.decisions:
+    if decision_id not in decisions:
         errors.append(
             SemanticError(
                 "INVALID_CONSTRAINT_REF",
@@ -144,7 +163,7 @@ def _validate_constraint_ref(ref: str, analysis: Analysis, option_path: str) -> 
                 option_path,
             )
         )
-    elif option_id not in analysis.decisions[decision_id].options:
+    elif option_id not in decisions[decision_id].get("options", {}):
         errors.append(
             SemanticError(
                 "INVALID_CONSTRAINT_REF",
@@ -156,7 +175,9 @@ def _validate_constraint_ref(ref: str, analysis: Analysis, option_path: str) -> 
     return errors
 
 
-def validate_universe(universe: Universe, analysis: Analysis) -> list[SemanticError]:
+def validate_universe(
+    universe_data: dict[str, Any], analysis_data: dict[str, Any]
+) -> list[SemanticError]:
     """Validate a universe against an analysis specification.
 
     Checks:
@@ -165,17 +186,20 @@ def validate_universe(universe: Universe, analysis: Analysis) -> list[SemanticEr
     - No constraint violations (requires, incompatible_with)
 
     Args:
-        universe: The universe to validate.
-        analysis: The analysis specification.
+        universe_data: The universe data as a dict.
+        analysis_data: The analysis data as a dict.
 
     Returns:
         List of semantic errors (empty if valid).
     """
     errors: list[SemanticError] = []
 
+    universe_decisions = universe_data.get("decisions", {})
+    analysis_decisions = analysis_data.get("decisions", {})
+
     # Check all decisions are covered
-    for decision_id in analysis.decisions:
-        if decision_id not in universe.decisions:
+    for decision_id in analysis_decisions:
+        if decision_id not in universe_decisions:
             errors.append(
                 SemanticError(
                     "MISSING_DECISION",
@@ -185,8 +209,8 @@ def validate_universe(universe: Universe, analysis: Analysis) -> list[SemanticEr
             )
 
     # Check all selections are valid
-    for decision_id, option_id in universe.decisions.items():
-        if decision_id not in analysis.decisions:
+    for decision_id, option_id in universe_decisions.items():
+        if decision_id not in analysis_decisions:
             errors.append(
                 SemanticError(
                     "UNKNOWN_DECISION",
@@ -196,8 +220,9 @@ def validate_universe(universe: Universe, analysis: Analysis) -> list[SemanticEr
             )
             continue
 
-        decision = analysis.decisions[decision_id]
-        if option_id not in decision.options:
+        decision = analysis_decisions[decision_id]
+        options = decision.get("options", {})
+        if option_id not in options:
             errors.append(
                 SemanticError(
                     "UNKNOWN_OPTION",
@@ -207,65 +232,71 @@ def validate_universe(universe: Universe, analysis: Analysis) -> list[SemanticEr
             )
 
     # Check constraints
-    errors.extend(_validate_universe_constraints(universe, analysis))
+    errors.extend(_validate_universe_constraints(universe_data, analysis_data))
 
     return errors
 
 
-def _validate_universe_constraints(universe: Universe, analysis: Analysis) -> list[SemanticError]:
+def _validate_universe_constraints(
+    universe_data: dict[str, Any], analysis_data: dict[str, Any]
+) -> list[SemanticError]:
     """Validate that the universe respects all constraints."""
     errors: list[SemanticError] = []
 
-    for decision_id, option_id in universe.decisions.items():
-        if decision_id not in analysis.decisions:
+    universe_decisions = universe_data.get("decisions", {})
+    analysis_decisions = analysis_data.get("decisions", {})
+
+    for decision_id, option_id in universe_decisions.items():
+        if decision_id not in analysis_decisions:
             continue
 
-        decision = analysis.decisions[decision_id]
-        if option_id not in decision.options:
+        decision = analysis_decisions[decision_id]
+        options = decision.get("options", {})
+        if option_id not in options:
             continue
 
-        option = decision.options[option_id]
+        option = options[option_id]
 
         # Check incompatible_with
-        if option.incompatible_with:
-            for ref in option.incompatible_with:
-                parts = ref.split(".")
-                if len(parts) == 2:
-                    other_decision_id, other_option_id = parts
-                    if universe.decisions.get(other_decision_id) == other_option_id:
-                        errors.append(
-                            SemanticError(
-                                "INCOMPATIBLE_OPTIONS",
-                                f"Option '{decision_id}.{option_id}' is incompatible with "
-                                f"'{other_decision_id}.{other_option_id}'",
-                                f"decisions.{decision_id}",
-                            )
+        incompatible_with = option.get("incompatible_with") or []
+        for ref in incompatible_with:
+            parts = ref.split(".")
+            if len(parts) == 2:
+                other_decision_id, other_option_id = parts
+                if universe_decisions.get(other_decision_id) == other_option_id:
+                    errors.append(
+                        SemanticError(
+                            "INCOMPATIBLE_OPTIONS",
+                            f"Option '{decision_id}.{option_id}' is incompatible with "
+                            f"'{other_decision_id}.{other_option_id}'",
+                            f"decisions.{decision_id}",
                         )
+                    )
 
         # Check requires
-        if option.requires:
-            for ref in option.requires:
-                parts = ref.split(".")
-                if len(parts) == 2:
-                    other_decision_id, other_option_id = parts
-                    if universe.decisions.get(other_decision_id) != other_option_id:
-                        actual = universe.decisions.get(other_decision_id, "(not set)")
-                        errors.append(
-                            SemanticError(
-                                "MISSING_REQUIRED_OPTION",
-                                f"Option '{decision_id}.{option_id}' requires "
-                                f"'{other_decision_id}.{other_option_id}' but got '{actual}'",
-                                f"decisions.{decision_id}",
-                            )
+        requires = option.get("requires") or []
+        for ref in requires:
+            parts = ref.split(".")
+            if len(parts) == 2:
+                other_decision_id, other_option_id = parts
+                if universe_decisions.get(other_decision_id) != other_option_id:
+                    actual = universe_decisions.get(other_decision_id, "(not set)")
+                    errors.append(
+                        SemanticError(
+                            "MISSING_REQUIRED_OPTION",
+                            f"Option '{decision_id}.{option_id}' requires "
+                            f"'{other_decision_id}.{other_option_id}' but got '{actual}'",
+                            f"decisions.{decision_id}",
                         )
+                    )
 
     return errors
 
 
 def validate_analysis_file(path: str | Path) -> list[SemanticError]:
     """Load and validate an analysis file."""
-    analysis = Analysis.from_yaml(path)
-    return validate_analysis(analysis)
+    data = load_yaml(path)
+    return validate_analysis(data)
 
 
 def validate_universe_file(
@@ -273,6 +304,6 @@ def validate_universe_file(
     analysis_path: str | Path,
 ) -> list[SemanticError]:
     """Load and validate a universe file against an analysis."""
-    analysis = Analysis.from_yaml(analysis_path)
-    universe = Universe.from_yaml(universe_path)
-    return validate_universe(universe, analysis)
+    analysis_data = load_yaml(analysis_path)
+    universe_data = load_yaml(universe_path)
+    return validate_universe(universe_data, analysis_data)

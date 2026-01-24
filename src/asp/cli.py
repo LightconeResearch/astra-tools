@@ -13,13 +13,18 @@ from rich.tree import Tree
 from asp.agents.registry import get_agent
 from asp.models.analysis import Analysis
 from asp.models.universe import Universe
-from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
 from asp.templates import (
     ASP_AGENT,
     SCHEMA_REFERENCE_CONTENT,
     SKILL_CONTENT,
 )
-from asp.validation.schema import validate_analysis_schema, validate_universe_schema
+from asp.validation.schema import (
+    get_analysis_schema,
+    get_insights_schema,
+    get_universe_schema,
+    validate_analysis_schema,
+    validate_universe_schema,
+)
 from asp.validation.semantic import validate_analysis_file, validate_universe_file
 from asp.workflow.generator import generate_params_file, generate_params_string
 from asp.workflow.parser import parse_cwl_inputs
@@ -592,8 +597,20 @@ def schema() -> None:
 )
 def schema_export(output: Path) -> None:
     """Export JSON schemas to files."""
+    import json
 
-    export_schemas(output)
+    output.mkdir(parents=True, exist_ok=True)
+
+    schemas = {
+        "analysis.schema.json": get_analysis_schema(),
+        "universe.schema.json": get_universe_schema(),
+        "insights.schema.json": get_insights_schema(),
+    }
+
+    for name, schema_data in schemas.items():
+        with open(output / name, "w") as f:
+            json.dump(schema_data, f, indent=2)
+            f.write("\n")
 
     console.print(f"[green]✓[/green] Exported schemas to [cyan]{output}/[/cyan]")
     console.print(f"  • {output}/analysis.schema.json")
@@ -606,8 +623,6 @@ def schema_export(output: Path) -> None:
 def schema_show(schema_type: str) -> None:
     """Print a JSON schema to stdout."""
     import json
-
-    from asp.schemas import get_insights_schema
 
     if schema_type == "analysis":
         schema_data = get_analysis_schema()

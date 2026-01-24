@@ -1,11 +1,33 @@
 """Validation utilities for ASP specifications."""
 
-from asp.validation.schema import validate_analysis_schema, validate_universe_schema
-from asp.validation.semantic import validate_analysis, validate_universe
+from asp.validation.schema import (
+    get_analysis_schema,
+    get_insights_schema,
+    get_universe_schema,
+    is_valid_analysis,
+    is_valid_universe,
+    validate_analysis_schema,
+    validate_universe_schema,
+)
+from asp.validation.semantic import (
+    SemanticError,
+    validate_analysis,
+    validate_analysis_file,
+    validate_universe,
+    validate_universe_file,
+)
 
 __all__ = [
+    "SemanticError",
+    "get_analysis_schema",
+    "get_insights_schema",
+    "get_universe_schema",
+    "is_valid_analysis",
+    "is_valid_universe",
     "validate_analysis",
+    "validate_analysis_file",
     "validate_analysis_schema",
     "validate_universe",
+    "validate_universe_file",
     "validate_universe_schema",
 ]

@@ -1,14 +1,19 @@
-"""JSON Schema validation for ASP specifications."""
+"""JSON Schema validation for ASP specifications.
+
+This module validates ASP YAML files against bundled JSON schemas.
+Schemas are loaded from the asp.spec package (populated from spec/draft/
+at build time), or directly from spec/draft/ during development.
+"""
 
 from __future__ import annotations
 
+import json
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 import jsonschema
 import yaml
-
-from asp.schemas import get_analysis_schema, get_universe_schema
 
 
 class ValidationError(Exception):
@@ -17,6 +22,60 @@ class ValidationError(Exception):
     def __init__(self, message: str, errors: list[str] | None = None):
         super().__init__(message)
         self.errors = errors or []
+
+
+def _find_repo_root() -> Path | None:
+    """Find the repository root by looking for spec/draft/."""
+    # Start from this file's location and walk up
+    current = Path(__file__).resolve().parent
+    for _ in range(5):  # Don't go too far up
+        if (current / "spec" / "draft").is_dir():
+            return current
+        current = current.parent
+    return None
+
+
+def _load_bundled_schema(name: str) -> dict[str, Any]:
+    """Load a JSON schema from bundled package or spec/draft/ in development.
+
+    Args:
+        name: Schema filename (e.g., "analysis.schema.json").
+
+    Returns:
+        The loaded JSON schema as a dict.
+    """
+    # Try bundled schemas first (installed package)
+    try:
+        schema_text = files("asp.spec").joinpath(name).read_text()
+        return json.loads(schema_text)
+    except (FileNotFoundError, TypeError, ModuleNotFoundError):
+        pass
+
+    # Fall back to spec/draft/ for development
+    repo_root = _find_repo_root()
+    if repo_root:
+        schema_path = repo_root / "spec" / "draft" / name
+        if schema_path.exists():
+            return json.loads(schema_path.read_text())
+
+    raise FileNotFoundError(
+        f"Schema {name} not found. Run 'python tools/generate_schemas.py' to generate schemas."
+    )
+
+
+def get_analysis_schema() -> dict[str, Any]:
+    """Get the JSON Schema for analysis specifications."""
+    return _load_bundled_schema("analysis.schema.json")
+
+
+def get_universe_schema() -> dict[str, Any]:
+    """Get the JSON Schema for universe specifications."""
+    return _load_bundled_schema("universe.schema.json")
+
+
+def get_insights_schema() -> dict[str, Any]:
+    """Get the JSON Schema for standalone insight collections."""
+    return _load_bundled_schema("insights.schema.json")
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
