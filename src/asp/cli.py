@@ -58,21 +58,22 @@ def main() -> None:
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
 @click.option(
     "--agent",
-    type=click.Choice(["claude-code"]),
-    help="Set up project for a specific AI agent (creates agent-specific config)",
+    type=click.Choice(["claude-code", "none"]),
+    default="claude-code",
+    help="AI agent to configure (default: claude-code). Use --agent=none for no agent config.",
 )
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
-def init(directory: Path, agent: str | None, no_git: bool) -> None:
+def init(directory: Path, agent: str, no_git: bool) -> None:
     """Create a new ASP analysis project.
 
-    Creates the project scaffolding for an ASP analysis. Use --agent to
-    configure the project for a specific AI agent.
+    Creates the project scaffolding for an ASP analysis with Claude Code
+    configuration by default.
 
     DIRECTORY is the project folder to create (default: current directory).
 
     Examples:
-        asp init my-analysis                      # Basic scaffolding
-        asp init my-analysis --agent claude-code  # With Claude Code skill
+        asp init my-analysis              # With Claude Code skill (default)
+        asp init my-analysis --agent none # Without AI agent config
     """
     # Create project directory
     if directory != Path("."):
@@ -137,7 +138,10 @@ __pycache__/
             )
         except FileNotFoundError:
             console.print("[red]Error:[/red] Claude Code CLI not found.")
-            console.print("Install Claude Code or run [cyan]claude[/cyan] manually in the project.")
+            console.print("\nASP currently only supports Claude Code for AI agent integration.")
+            console.print("To proceed without agent configuration, run:")
+            console.print("  [cyan]asp init --agent=none[/cyan]")
+            console.print("\nOr install Claude Code from: https://claude.ai/code")
             raise SystemExit(1)
     else:
         console.print("\n[bold]Next steps:[/bold]")

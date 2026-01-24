@@ -247,7 +247,7 @@ class TestInitCommand:
         project_dir = tmp_path / "my-analysis"
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "--no-git"],
+            ["init", str(project_dir), "--agent=none", "--no-git"],
         )
         assert result.exit_code == 0
         assert "Created ASP analysis project" in result.output
@@ -275,7 +275,7 @@ class TestInitCommand:
         project_dir = tmp_path / "content-test"
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "--no-git"],
+            ["init", str(project_dir), "--agent=none", "--no-git"],
         )
         assert result.exit_code == 0
         assert (project_dir / "asp.yaml").exists()
@@ -292,7 +292,7 @@ class TestInitCommand:
         project_dir = tmp_path / "gitignore-test"
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "--no-git"],
+            ["init", str(project_dir), "--agent=none", "--no-git"],
         )
         assert result.exit_code == 0
 
@@ -375,7 +375,7 @@ class TestInitCommand:
 
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "--no-git"],
+            ["init", str(project_dir), "--agent=none", "--no-git"],
             input="n\n",  # Decline to continue
         )
         assert result.exit_code == 0
@@ -390,7 +390,7 @@ class TestInitCommand:
 
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "--no-git"],
+            ["init", str(project_dir), "--agent=none", "--no-git"],
             input="y\n",  # Confirm to continue
         )
         assert result.exit_code == 0
@@ -407,7 +407,7 @@ class TestInitCommand:
             os.chdir(tmp_path)
             result = runner.invoke(
                 main,
-                ["init", "--no-git"],
+                ["init", "--agent=none", "--no-git"],
             )
             assert result.exit_code == 0
             assert (tmp_path / "asp.yaml").exists()
@@ -419,7 +419,7 @@ class TestInitCommand:
         project_dir = tmp_path / "valid-test"
         runner.invoke(
             main,
-            ["init", str(project_dir), "--no-git"],
+            ["init", str(project_dir), "--agent=none", "--no-git"],
         )
 
         # Validate the generated asp.yaml
@@ -445,7 +445,7 @@ class TestInitCommand:
         project_dir = tmp_path / "git-test"
         result = runner.invoke(
             main,
-            ["init", str(project_dir)],
+            ["init", str(project_dir), "--agent=none"],
         )
         assert result.exit_code == 0
 
@@ -458,7 +458,7 @@ class TestInitCommand:
         project_dir = tmp_path / "no-git-test"
         result = runner.invoke(
             main,
-            ["init", str(project_dir), "--no-git"],
+            ["init", str(project_dir), "--agent=none", "--no-git"],
         )
         assert result.exit_code == 0
         # Git directory should NOT exist
