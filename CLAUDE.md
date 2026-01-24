@@ -104,6 +104,11 @@ my-analysis/
 │   └── evaluation/
 ├── scripts/              # Implementation scripts
 ├── results/              # Execution outputs (gitignored)
+├── .claude/              # Claude Code agent configuration (default)
+│   ├── skills/
+│   │   └── asp-analysis/ # ASP-specific skill for Claude Code
+│   └── agents/
+│       └── asp.md        # ASP agent configuration
 └── .asp/
     └── branches.yaml     # Branch metadata
 ```
