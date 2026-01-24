@@ -214,6 +214,43 @@ decisions:
 """
     (directory / "universes" / "baseline.yaml").write_text(baseline_universe)
 
+    # Create README
+    _create_readme(directory, name)
+
+
+def _create_readme(directory: Path, name: str) -> None:
+    """Create a README.md for the project."""
+    readme = f"""# {name}
+
+An ASP (Agentic Science Protocol) analysis project.
+
+## Quick Start
+
+```bash
+# Validate the specification
+asp validate asp.yaml
+
+# Show analysis info
+asp info
+
+# Generate a universe from defaults
+asp universe generate -n baseline
+```
+
+## Structure
+
+- `asp.yaml` - Analysis specification (source of truth)
+- `universes/` - Universe definitions (decision selections)
+- `workflows/` - CWL workflow files
+- `steps/` - Reusable workflow steps
+- `results/` - Execution outputs (gitignored)
+
+## Documentation
+
+See [ASP documentation](https://github.com/LightconeResearch/ASP) for more information.
+"""
+    (directory / "README.md").write_text(readme)
+
 
 def _create_skill(directory: Path) -> None:
     """Create the Claude Code skill and agents in the project directory."""
