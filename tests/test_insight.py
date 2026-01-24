@@ -1,9 +1,9 @@
-"""Tests for Insight models."""
+"""Tests for Insight models (schema generation source of truth)."""
 
 import pytest
 from pydantic import ValidationError
 
-from asp.models.insight import (
+from models.insight import (
     AnalysisSource,
     EquationEvidence,
     FigureEvidence,

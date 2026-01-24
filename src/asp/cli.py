@@ -11,8 +11,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from asp.agents.registry import get_agent
-from asp.models.analysis import Analysis
-from asp.models.universe import Universe
+from asp.helpers import create_universe_from_defaults, load_yaml, save_yaml
 from asp.templates import (
     ASP_AGENT,
     SCHEMA_REFERENCE_CONTENT,
@@ -381,23 +380,29 @@ def info(
 ) -> None:
     """Show information about an analysis."""
     file = _require_analysis(file)
-    analysis = Analysis.from_yaml(file)
+    analysis = load_yaml(file)
+
+    analysis_content = analysis.get("analysis", {})
 
     # Header
-    console.print(f"\n[bold]{analysis.analysis.name}[/bold]")
-    console.print(f"Version: {analysis.version}")
-    if analysis.analysis.description:
-        console.print(f"\n{analysis.analysis.description}")
+    console.print(f"\n[bold]{analysis_content.get('name', 'Unknown')}[/bold]")
+    console.print(f"Version: {analysis.get('version', 'Unknown')}")
+    if analysis_content.get("description"):
+        console.print(f"\n{analysis_content['description']}")
 
     # Problem statement
     console.print("\n[bold]Problem:[/bold]")
-    console.print(analysis.analysis.problem.strip())
+    problem = analysis_content.get("problem", "")
+    console.print(problem.strip() if problem else "No problem statement")
 
     # Summary stats
+    input_list = analysis_content.get("inputs", [])
+    output_list = analysis_content.get("outputs", [])
+    decision_dict = analysis.get("decisions", {})
     console.print(
-        f"\n[dim]Inputs: {len(analysis.analysis.inputs)} | "
-        f"Outputs: {len(analysis.analysis.outputs)} | "
-        f"Decisions: {len(analysis.decisions)}[/dim]"
+        f"\n[dim]Inputs: {len(input_list)} | "
+        f"Outputs: {len(output_list)} | "
+        f"Decisions: {len(decision_dict)}[/dim]"
     )
 
     # Show all by default if no flags
@@ -411,8 +416,12 @@ def info(
         table.add_column("Type")
         table.add_column("Description")
 
-        for inp in analysis.analysis.inputs:
-            table.add_row(inp.id, inp.type, inp.description or "")
+        for inp in input_list:
+            table.add_row(
+                inp.get("id", ""),
+                inp.get("type", ""),
+                inp.get("description", ""),
+            )
         console.print(table)
 
     # Outputs
@@ -424,29 +433,36 @@ def info(
         table.add_column("Primary")
         table.add_column("Description")
 
-        for out in analysis.analysis.outputs:
-            primary = "✓" if out.primary else ""
-            table.add_row(out.id, out.type, primary, out.description or "")
+        for out in output_list:
+            primary = "✓" if out.get("primary") else ""
+            table.add_row(
+                out.get("id", ""),
+                out.get("type", ""),
+                primary,
+                out.get("description", ""),
+            )
         console.print(table)
 
     # Decisions
     if decisions or show_all:
         console.print("\n[bold]Decisions:[/bold]")
-        for decision_id, decision in analysis.decisions.items():
-            tree = Tree(f"[cyan]{decision_id}[/cyan]: {decision.label}")
-            tree.add(f"[dim]Type:[/dim] {decision.type}")
-            tree.add(f"[dim]Importance:[/dim] {decision.importance}/5")
-            if decision.rationale:
-                tree.add(f"[dim]Rationale:[/dim] {decision.rationale}")
+        for decision_id, decision in decision_dict.items():
+            tree = Tree(f"[cyan]{decision_id}[/cyan]: {decision.get('label', '')}")
+            tree.add(f"[dim]Type:[/dim] {decision.get('type', '')}")
+            tree.add(f"[dim]Importance:[/dim] {decision.get('importance', 3)}/5")
+            if decision.get("rationale"):
+                tree.add(f"[dim]Rationale:[/dim] {decision['rationale']}")
 
             options_branch = tree.add("[dim]Options:[/dim]")
-            for option_id, option in decision.options.items():
+            for option_id, option in decision.get("options", {}).items():
                 default_marker = (
-                    " [yellow](default)[/yellow]" if option_id == decision.default else ""
+                    " [yellow](default)[/yellow]" if option_id == decision.get("default") else ""
                 )
-                option_text = f"{option_id}: {option.label}{default_marker}"
-                if option.description:
-                    option_text += f" - [dim]{option.description}[/dim]"
+                label = option.get("label", "") if isinstance(option, dict) else ""
+                description = option.get("description", "") if isinstance(option, dict) else ""
+                option_text = f"{option_id}: {label}{default_marker}"
+                if description:
+                    option_text += f" - [dim]{description}[/dim]"
                 options_branch.add(option_text)
 
             console.print(tree)
@@ -482,27 +498,28 @@ def generate_universe(
 ) -> None:
     """Generate a universe from analysis defaults."""
     analysis = _require_analysis(analysis)
-    spec = Analysis.from_yaml(analysis)
+    spec = load_yaml(analysis)
 
     # Check all decisions have defaults
-    missing_defaults = [d_id for d_id, d in spec.decisions.items() if d.default is None]
+    decisions = spec.get("decisions", {})
+    missing_defaults = [d_id for d_id, d in decisions.items() if d.get("default") is None]
     if missing_defaults:
         console.print("[red]Error:[/red] Some decisions don't have defaults:")
         for d_id in missing_defaults:
             console.print(f"  • {d_id}")
         raise SystemExit(1)
 
-    uni = Universe.from_defaults(spec, name, description)
+    uni = create_universe_from_defaults(spec, name, description)
 
     if output is None:
         output = analysis.parent / "universes" / f"{name}.yaml"
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    uni.to_yaml(output)
+    save_yaml(uni, output)
 
     console.print(f"[green]✓[/green] Generated universe at [cyan]{output}[/cyan]")
     console.print("\nDecisions:")
-    for d_id, opt_id in uni.decisions.items():
+    for d_id, opt_id in uni.get("decisions", {}).items():
         console.print(f"  {d_id}: {opt_id}")
 
 
@@ -545,7 +562,7 @@ def check_universe(universe_file: Path, analysis: Path | None) -> None:
 def viz(file: Path | None, fmt: str) -> None:
     """Visualize the decision space."""
     file = _require_analysis(file)
-    analysis = Analysis.from_yaml(file)
+    analysis = load_yaml(file)
 
     if fmt == "mermaid":
         _viz_mermaid(analysis)
@@ -553,23 +570,29 @@ def viz(file: Path | None, fmt: str) -> None:
         _viz_ascii(analysis)
 
 
-def _viz_ascii(analysis: Analysis) -> None:
+def _viz_ascii(analysis: dict) -> None:
     """Visualize decisions as ASCII tree."""
-    tree = Tree(f"[bold]{analysis.analysis.name}[/bold]")
+    analysis_content = analysis.get("analysis", {})
+    tree = Tree(f"[bold]{analysis_content.get('name', 'Unknown')}[/bold]")
 
-    for decision_id, decision in analysis.decisions.items():
-        importance_stars = "★" * decision.importance + "☆" * (5 - decision.importance)
-        branch = tree.add(f"[cyan]{decision_id}[/cyan] ({decision.type}) [{importance_stars}]")
+    for decision_id, decision in analysis.get("decisions", {}).items():
+        importance = decision.get("importance", 3)
+        importance_stars = "★" * importance + "☆" * (5 - importance)
+        branch = tree.add(
+            f"[cyan]{decision_id}[/cyan] ({decision.get('type', '')}) [{importance_stars}]"
+        )
 
-        for option_id, option in decision.options.items():
-            default = " [default]" if option_id == decision.default else ""
+        for option_id, option in decision.get("options", {}).items():
+            default = " [default]" if option_id == decision.get("default") else ""
             constraints = []
-            if option.incompatible_with:
-                constraints.append(f"✗ {', '.join(option.incompatible_with)}")
-            if option.requires:
-                constraints.append(f"→ {', '.join(option.requires)}")
+            if isinstance(option, dict):
+                if option.get("incompatible_with"):
+                    constraints.append(f"✗ {', '.join(option['incompatible_with'])}")
+                if option.get("requires"):
+                    constraints.append(f"→ {', '.join(option['requires'])}")
 
-            option_text = f"{option_id}: {option.label}{default}"
+            label = option.get("label", "") if isinstance(option, dict) else ""
+            option_text = f"{option_id}: {label}{default}"
             if constraints:
                 option_text += f" [dim]({'; '.join(constraints)})[/dim]"
             branch.add(option_text)
@@ -577,31 +600,33 @@ def _viz_ascii(analysis: Analysis) -> None:
     console.print(tree)
 
 
-def _viz_mermaid(analysis: Analysis) -> None:
+def _viz_mermaid(analysis: dict) -> None:
     """Generate Mermaid diagram for decisions."""
     lines = ["graph TD"]
 
-    for decision_id, decision in analysis.decisions.items():
+    for decision_id, decision in analysis.get("decisions", {}).items():
         # Decision node
-        lines.append(f"    {decision_id}[{decision.label}]")
+        lines.append(f"    {decision_id}[{decision.get('label', decision_id)}]")
 
         # Option nodes
-        for option_id, option in decision.options.items():
+        for option_id, option in decision.get("options", {}).items():
             node_id = f"{decision_id}_{option_id}"
-            style = ":::default" if option_id == decision.default else ""
-            lines.append(f"    {node_id}(({option.label})){style}")
+            label = option.get("label", option_id) if isinstance(option, dict) else option_id
+            style = ":::default" if option_id == decision.get("default") else ""
+            lines.append(f"    {node_id}(({label})){style}")
             lines.append(f"    {decision_id} --> {node_id}")
 
             # Constraints
-            if option.incompatible_with:
-                for ref in option.incompatible_with:
-                    target = ref.replace(".", "_")
-                    lines.append(f"    {node_id} -.->|incompatible| {target}")
+            if isinstance(option, dict):
+                if option.get("incompatible_with"):
+                    for ref in option["incompatible_with"]:
+                        target = ref.replace(".", "_")
+                        lines.append(f"    {node_id} -.->|incompatible| {target}")
 
-            if option.requires:
-                for ref in option.requires:
-                    target = ref.replace(".", "_")
-                    lines.append(f"    {node_id} -->|requires| {target}")
+                if option.get("requires"):
+                    for ref in option["requires"]:
+                        target = ref.replace(".", "_")
+                        lines.append(f"    {node_id} -->|requires| {target}")
 
     lines.append("")
     lines.append("    classDef default fill:#90EE90")
@@ -678,8 +703,8 @@ def params(universe_file: Path, output: Path | None, analysis: Path | None, inpu
     Includes ASP input files by default (use --no-inputs to exclude).
     """
     analysis_path = _require_analysis(analysis, universe_file.parent)
-    spec = Analysis.from_yaml(analysis_path)
-    uni = Universe.from_yaml(universe_file)
+    spec = load_yaml(analysis_path)
+    uni = load_yaml(universe_file)
     base_path = analysis_path.parent if inputs else None
     yaml_output = generate_params_string(spec, uni, include_inputs=inputs, base_path=base_path)
 
@@ -715,7 +740,7 @@ def workflow_generate(analysis: Path | None, output: Path | None) -> None:
     from asp.workflow.generator import generate_cwl_file
 
     analysis_path = _require_analysis(analysis)
-    spec = Analysis.from_yaml(analysis_path)
+    spec = load_yaml(analysis_path)
 
     # Default output path
     if output is None:
@@ -762,7 +787,7 @@ def workflow_validate(cwl: Path, analysis: Path | None, syntax_only: bool) -> No
 
     # ASP mapping validation
     analysis_path = _require_analysis(analysis)
-    spec = Analysis.from_yaml(analysis_path)
+    spec = load_yaml(analysis_path)
     console.print(f"Checking mapping against [cyan]{analysis_path}[/cyan]...")
 
     errors = validate_decision_coverage(spec, cwl)
@@ -784,7 +809,7 @@ def workflow_validate(cwl: Path, analysis: Path | None, syntax_only: bool) -> No
 def workflow_show(cwl: Path, analysis: Path | None) -> None:
     """Show CWL workflow inputs and their ASP mappings."""
     analysis_path = _require_analysis(analysis)
-    spec = Analysis.from_yaml(analysis_path)
+    spec = load_yaml(analysis_path)
 
     try:
         cwl_params = parse_cwl_inputs(cwl)
@@ -855,8 +880,8 @@ def workflow_run(
     from asp.workflow.mapping import resolve_inputs
 
     analysis_path = _require_analysis(analysis, universe_file.parent)
-    spec = Analysis.from_yaml(analysis_path)
-    uni = Universe.from_yaml(universe_file)
+    spec = load_yaml(analysis_path)
+    uni = load_yaml(universe_file)
 
     # Generate parameters including inputs
     base_path = analysis_path.parent
@@ -864,7 +889,8 @@ def workflow_run(
 
     # Count resolved inputs for display
     resolved_inputs = resolve_inputs(spec, base_path)
-    data_inputs = [i for i in spec.analysis.inputs if i.type == "data"]
+    analysis_content = spec.get("analysis", {})
+    data_inputs = [i for i in analysis_content.get("inputs", []) if i.get("type") == "data"]
 
     console.print(f"[dim]Universe:[/dim] {universe_file.name}")
     console.print(f"[dim]Workflow:[/dim] {cwl.name}")

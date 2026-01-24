@@ -1,11 +1,11 @@
-"""Tests for Pydantic models."""
+"""Tests for Pydantic models (schema generation source of truth)."""
 
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from asp.models.analysis import (
+from models.analysis import (
     Analysis,
     Checksum,
     Decision,
@@ -15,7 +15,7 @@ from asp.models.analysis import (
     Output,
     Source,
 )
-from asp.models.universe import Universe
+from models.universe import Universe
 
 
 class TestChecksum:
