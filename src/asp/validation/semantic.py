@@ -237,6 +237,14 @@ def validate_universe(
     return errors
 
 
+def _parse_constraint_ref(ref: str) -> tuple[str, str] | None:
+    """Parse a constraint reference into (decision_id, option_id)."""
+    parts = ref.split(".")
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return None
+
+
 def _validate_universe_constraints(
     universe_data: dict[str, Any], analysis_data: dict[str, Any]
 ) -> list[SemanticError]:
@@ -247,48 +255,40 @@ def _validate_universe_constraints(
     analysis_decisions = analysis_data.get("decisions", {})
 
     for decision_id, option_id in universe_decisions.items():
-        if decision_id not in analysis_decisions:
+        decision = analysis_decisions.get(decision_id)
+        if not decision:
             continue
 
-        decision = analysis_decisions[decision_id]
-        options = decision.get("options", {})
-        if option_id not in options:
+        option = decision.get("options", {}).get(option_id)
+        if not option:
             continue
 
-        option = options[option_id]
+        path = f"decisions.{decision_id}"
 
         # Check incompatible_with
-        incompatible_with = option.get("incompatible_with") or []
-        for ref in incompatible_with:
-            parts = ref.split(".")
-            if len(parts) == 2:
-                other_decision_id, other_option_id = parts
-                if universe_decisions.get(other_decision_id) == other_option_id:
-                    errors.append(
-                        SemanticError(
-                            "INCOMPATIBLE_OPTIONS",
-                            f"Option '{decision_id}.{option_id}' is incompatible with "
-                            f"'{other_decision_id}.{other_option_id}'",
-                            f"decisions.{decision_id}",
-                        )
+        for ref in option.get("incompatible_with") or []:
+            parsed = _parse_constraint_ref(ref)
+            if parsed and universe_decisions.get(parsed[0]) == parsed[1]:
+                errors.append(
+                    SemanticError(
+                        "INCOMPATIBLE_OPTIONS",
+                        f"Option '{decision_id}.{option_id}' is incompatible with '{ref}'",
+                        path,
                     )
+                )
 
         # Check requires
-        requires = option.get("requires") or []
-        for ref in requires:
-            parts = ref.split(".")
-            if len(parts) == 2:
-                other_decision_id, other_option_id = parts
-                if universe_decisions.get(other_decision_id) != other_option_id:
-                    actual = universe_decisions.get(other_decision_id, "(not set)")
-                    errors.append(
-                        SemanticError(
-                            "MISSING_REQUIRED_OPTION",
-                            f"Option '{decision_id}.{option_id}' requires "
-                            f"'{other_decision_id}.{other_option_id}' but got '{actual}'",
-                            f"decisions.{decision_id}",
-                        )
+        for ref in option.get("requires") or []:
+            parsed = _parse_constraint_ref(ref)
+            if parsed and universe_decisions.get(parsed[0]) != parsed[1]:
+                actual = universe_decisions.get(parsed[0], "(not set)")
+                errors.append(
+                    SemanticError(
+                        "MISSING_REQUIRED_OPTION",
+                        f"Option '{decision_id}.{option_id}' requires '{ref}' but got '{actual}'",
+                        path,
                     )
+                )
 
     return errors
 

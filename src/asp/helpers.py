@@ -132,16 +132,11 @@ def create_universe_from_defaults(
     Returns:
         A universe dict with the default decisions selected.
     """
-    decisions = get_default_universe(data)
-    result: dict[str, Any] = {
+    return {
         "id": universe_id,
-        "decisions": decisions,
+        "description": description or "Default configuration using standard practices",
+        "decisions": get_default_universe(data),
     }
-    if description:
-        result["description"] = description
-    else:
-        result["description"] = "Default configuration using standard practices"
-    return result
 
 
 def get_input_ids(data: dict[str, Any]) -> set[str]:

@@ -52,6 +52,17 @@ def find_analysis_file(start_path: Path | None = None) -> Path | None:
     return None
 
 
+def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> Path:
+    """Find or validate analysis file, exit with error if not found."""
+    if analysis is not None:
+        return analysis
+    found = find_analysis_file(start_path)
+    if found is None:
+        console.print("[red]Error:[/red] No asp.yaml found.")
+        raise SystemExit(1)
+    return found
+
+
 @click.group()
 @click.version_option()
 def main() -> None:
@@ -369,12 +380,7 @@ def info(
     outputs: bool,
 ) -> None:
     """Show information about an analysis."""
-    if file is None:
-        file = find_analysis_file()
-        if file is None:
-            console.print("[red]Error:[/red] No asp.yaml found in current or parent directories.")
-            raise SystemExit(1)
-
+    file = _require_analysis(file)
     analysis = Analysis.from_yaml(file)
 
     # Header
@@ -475,12 +481,7 @@ def generate_universe(
     description: str | None,
 ) -> None:
     """Generate a universe from analysis defaults."""
-    if analysis is None:
-        analysis = find_analysis_file()
-        if analysis is None:
-            console.print("[red]Error:[/red] No asp.yaml found.")
-            raise SystemExit(1)
-
+    analysis = _require_analysis(analysis)
     spec = Analysis.from_yaml(analysis)
 
     # Check all decisions have defaults
@@ -515,12 +516,7 @@ def generate_universe(
 )
 def check_universe(universe_file: Path, analysis: Path | None) -> None:
     """Check a universe against its analysis constraints."""
-    if analysis is None:
-        analysis = find_analysis_file(universe_file.parent)
-        if analysis is None:
-            console.print("[red]Error:[/red] No asp.yaml found.")
-            raise SystemExit(1)
-
+    analysis = _require_analysis(analysis, universe_file.parent)
     errors = validate_universe_file(universe_file, analysis)
 
     if errors:
@@ -548,12 +544,7 @@ def check_universe(universe_file: Path, analysis: Path | None) -> None:
 )
 def viz(file: Path | None, fmt: str) -> None:
     """Visualize the decision space."""
-    if file is None:
-        file = find_analysis_file()
-        if file is None:
-            console.print("[red]Error:[/red] No asp.yaml found.")
-            raise SystemExit(1)
-
+    file = _require_analysis(file)
     analysis = Analysis.from_yaml(file)
 
     if fmt == "mermaid":
@@ -661,30 +652,18 @@ def schema_show(schema_type: str) -> None:
     """Print a JSON schema to stdout."""
     import json
 
-    if schema_type == "analysis":
-        schema_data = get_analysis_schema()
-    elif schema_type == "universe":
-        schema_data = get_universe_schema()
-    else:
-        schema_data = get_insights_schema()
-
+    schema_getters = {
+        "analysis": get_analysis_schema,
+        "universe": get_universe_schema,
+        "insights": get_insights_schema,
+    }
+    schema_data = schema_getters[schema_type]()
     console.print(json.dumps(schema_data, indent=2))
 
 
 # =============================================================================
 # Workflow commands
 # =============================================================================
-
-
-def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> Path:
-    """Find or validate analysis file, exit with error if not found."""
-    if analysis is not None:
-        return analysis
-    found = find_analysis_file(start_path)
-    if found is None:
-        console.print("[red]Error:[/red] No asp.yaml found.")
-        raise SystemExit(1)
-    return found
 
 
 @main.command("params")

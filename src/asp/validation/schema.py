@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
-import yaml
+
+from asp.helpers import load_yaml
 
 
 class ValidationError(Exception):
@@ -80,13 +81,6 @@ def get_insights_schema() -> dict[str, Any]:
     return _load_bundled_schema("insights.schema.json")
 
 
-def load_yaml(path: str | Path) -> dict[str, Any]:
-    """Load a YAML file."""
-    with open(path) as f:
-        data: dict[str, Any] = yaml.safe_load(f)
-        return data
-
-
 def validate_against_schema(
     data: dict[str, Any],
     schema: dict[str, Any],
@@ -135,9 +129,9 @@ def validate_universe_schema(path: str | Path) -> list[str]:
 
 def is_valid_analysis(path: str | Path) -> bool:
     """Check if an analysis file is valid."""
-    return len(validate_analysis_schema(path)) == 0
+    return not validate_analysis_schema(path)
 
 
 def is_valid_universe(path: str | Path) -> bool:
     """Check if a universe file is valid."""
-    return len(validate_universe_schema(path)) == 0
+    return not validate_universe_schema(path)
