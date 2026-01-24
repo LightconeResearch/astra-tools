@@ -1,0 +1,136 @@
+{
+  "name": "asp-vscode",
+  "displayName": "ASP - Agentic Science Protocol",
+  "description": "Visualize and interact with ASP analysis specifications",
+  "version": "0.1.0",
+  "publisher": "lightcone-research",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LightconeResearch/ASP"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "asp",
+    "analysis",
+    "scientific",
+    "multiverse",
+    "yaml"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/asp.yaml",
+    "onLanguage:yaml"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "asp.openVisualization",
+        "title": "ASP: Open Visualization",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "asp.validateAnalysis",
+        "title": "ASP: Validate Analysis"
+      },
+      {
+        "command": "asp.openUniverseBuilder",
+        "title": "ASP: Open Universe Builder"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "asp.openVisualization",
+          "when": "resourceFilename == asp.yaml",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "asp.openVisualization",
+          "when": "resourceFilename == asp.yaml",
+          "group": "asp"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ASP",
+      "properties": {
+        "asp.autoValidate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically validate asp.yaml on save"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "asp-yaml",
+        "aliases": [
+          "ASP YAML"
+        ],
+        "filenames": [
+          "asp.yaml"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "asp.yaml",
+        "url": "./schemas/analysis.schema.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "npm run build:extension && npm run build:webview",
+    "build:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "build:webview": "vite build",
+    "watch": "concurrently \"npm run watch:extension\" \"npm run watch:webview\"",
+    "watch:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "watch:webview": "vite build --watch",
+    "dev": "npm run watch",
+    "lint": "eslint src --ext ts,tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/vscode": "^1.85.0",
+    "@types/vscode-webview": "^1.57.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "@vscode/vsce": "^2.22.0",
+    "autoprefixer": "^10.4.0",
+    "concurrently": "^8.2.0",
+    "esbuild": "^0.19.0",
+    "eslint": "^8.56.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "js-yaml": "^4.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^4.4.0"
+  }
+}

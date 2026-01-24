@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles for VSCode webview integration */
+body {
+  margin: 0;
+  padding: 12px;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+  line-height: 1.5;
+}
+
+/* Scrollbar styling for native VSCode look */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbarSlider-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* Focus ring utility for accessibility */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-background;
+}
+
+/* Editable text styling for MarkdownEditor */
+.editable-text {
+  cursor: text;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: background-color 150ms ease;
+}
+
+.editable-text:hover {
+  background: var(--vscode-input-background);
+}
+
+.editable-text:focus {
+  outline: none;
+  background: var(--vscode-input-background);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+/* Input base styles */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
