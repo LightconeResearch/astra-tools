@@ -1,0 +1,12 @@
+# Invalid output type
+version: "1.0"
+
+analysis:
+  name: "Test"
+  problem: "Test problem"
+  inputs:
+    - id: data
+      type: data
+  outputs:
+    - id: result
+      type: invalid_type  # Should be metric, figure, table, data, model, or report

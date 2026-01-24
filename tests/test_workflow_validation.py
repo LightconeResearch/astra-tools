@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from asp.models.analysis import Analysis
+from models.analysis import Analysis
 from asp.workflow.parser import parse_cwl_inputs
 from asp.workflow.validator import (
     get_decision_param_mapping,

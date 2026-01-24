@@ -6,12 +6,42 @@ on:
       - "v*"
 
 jobs:
-  build:
+  # First, validate everything is in order
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Needed for hatch-vcs versioning
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Verify schemas are in sync
+        run: |
+          asp schema export -o /tmp/schemas
+          for schema in analysis universe; do
+            diff "spec/draft/${schema}.schema.json" "/tmp/schemas/${schema}.schema.json"
+          done
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  # Build the Python package
+  build:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,7 +62,8 @@ jobs:
           name: dist
           path: dist/
 
-  test:
+  # Test the built package
+  test-package:
     needs: build
     runs-on: ubuntu-latest
     strategy:
@@ -62,8 +93,70 @@ jobs:
       - name: Run tests
         run: pytest tests/ -v
 
+  # Create the versioned spec directory
+  create-versioned-spec:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.major_minor }}
+      spec_created: ${{ steps.create.outputs.created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Extract version
+        id: version
+        run: |
+          # v1.0.0 -> 1.0
+          VERSION="${GITHUB_REF_NAME#v}"
+          MAJOR_MINOR="${VERSION%.*}"
+          echo "full=$VERSION" >> $GITHUB_OUTPUT
+          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+
+      - name: Create versioned spec directory
+        id: create
+        run: |
+          VERSION="${{ steps.version.outputs.major_minor }}"
+          SPEC_DIR="spec/v${VERSION}"
+
+          if [ -d "$SPEC_DIR" ]; then
+            echo "Spec version $VERSION already exists, skipping..."
+            echo "created=false" >> $GITHUB_OUTPUT
+          else
+            echo "Creating $SPEC_DIR..."
+            mkdir -p "$SPEC_DIR"
+            cp spec/draft/*.schema.json "$SPEC_DIR/"
+
+            # Add a README for this version
+            cat > "$SPEC_DIR/README.md" << EOF
+          # ASP Specification v${VERSION}
+
+          Released: $(date -u +%Y-%m-%d)
+          Tag: ${GITHUB_REF_NAME}
+
+          This directory contains the frozen JSON Schema files for ASP v${VERSION}.
+          These schemas are immutable and represent the official specification.
+
+          ## Files
+
+          $(ls -1 "$SPEC_DIR"/*.schema.json | while read f; do echo "- \`$(basename $f)\`"; done)
+          EOF
+
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add "$SPEC_DIR"
+            git commit -m "Release spec v${VERSION} from ${GITHUB_REF_NAME}"
+            git push origin main
+            echo "created=true" >> $GITHUB_OUTPUT
+          fi
+
+  # Publish to PyPI
   publish:
-    needs: test
+    needs: [test-package, create-versioned-spec]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -77,3 +170,63 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  # Create GitHub Release with spec files attached
+  github-release:
+    needs: [publish, create-versioned-spec]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main  # Get the updated main with versioned spec
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          MAJOR_MINOR="${VERSION%.*}"
+          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+
+      - name: Create spec bundle
+        run: |
+          VERSION="${{ steps.version.outputs.major_minor }}"
+          SPEC_DIR="spec/v${VERSION}"
+
+          # Check if versioned spec exists, fall back to draft
+          if [ ! -d "$SPEC_DIR" ]; then
+            SPEC_DIR="spec/draft"
+            VERSION="draft"
+          fi
+
+          zip -j "asp-spec-v${VERSION}.zip" ${SPEC_DIR}/*.schema.json
+          tar -czf "asp-spec-v${VERSION}.tar.gz" -C spec "v${VERSION}" 2>/dev/null || \
+            tar -czf "asp-spec-v${VERSION}.tar.gz" -C spec "draft"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            asp-spec-*.zip
+            asp-spec-*.tar.gz
+            dist/*
+          generate_release_notes: true
+          body: |
+            ## ASP ${{ github.ref_name }}
+
+            ### Specification
+            The JSON Schema specification files are attached as `asp-spec-v${{ steps.version.outputs.major_minor }}.zip`.
+
+            You can also find the schemas in the repository under `spec/v${{ steps.version.outputs.major_minor }}/`.
+
+            ### Installation
+            ```bash
+            pip install asp==${{ github.ref_name }}
+            ```

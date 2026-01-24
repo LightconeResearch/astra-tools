@@ -1,13 +1,12 @@
-"""Tests for schema generation."""
+"""Tests for JSON schema loading."""
 
 import json
-from pathlib import Path
 
-from asp.schemas import export_schemas, get_analysis_schema, get_universe_schema
+from asp.validation.schema import get_analysis_schema, get_universe_schema
 
 
-class TestSchemaGeneration:
-    """Tests for JSON schema generation from Pydantic models."""
+class TestSchemaLoading:
+    """Tests for loading JSON schemas from spec/draft/."""
 
     def test_get_analysis_schema(self):
         schema = get_analysis_schema()
@@ -43,30 +42,6 @@ class TestSchemaGeneration:
         # Should not raise
         json.dumps(analysis_schema)
         json.dumps(universe_schema)
-
-    def test_export_schemas(self, tmp_path: Path):
-        export_schemas(tmp_path)
-
-        analysis_path = tmp_path / "analysis.schema.json"
-        universe_path = tmp_path / "universe.schema.json"
-
-        assert analysis_path.exists()
-        assert universe_path.exists()
-
-        # Load and verify they're valid JSON
-        with open(analysis_path) as f:
-            analysis_schema = json.load(f)
-        assert "properties" in analysis_schema
-
-        with open(universe_path) as f:
-            universe_schema = json.load(f)
-        assert "properties" in universe_schema
-
-    def test_export_schemas_creates_directory(self, tmp_path: Path):
-        nested_path = tmp_path / "nested" / "schemas"
-        export_schemas(nested_path)
-        assert nested_path.exists()
-        assert (nested_path / "analysis.schema.json").exists()
 
     def test_analysis_schema_metadata(self):
         schema = get_analysis_schema()

@@ -1,0 +1,12 @@
+# Invalid input type
+version: "1.0"
+
+analysis:
+  name: "Test"
+  problem: "Test problem"
+  inputs:
+    - id: data
+      type: invalid_type  # Should be data, analysis, or literature
+  outputs:
+    - id: result
+      type: metric

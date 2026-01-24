@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from asp.models.insight import (
+from models.insight import (
     AnalysisSource,
     EquationEvidence,
     FigureEvidence,

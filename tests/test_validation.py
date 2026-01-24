@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from asp.models.analysis import Analysis
+from models.analysis import Analysis
 from asp.validation.schema import (
     is_valid_analysis,
     is_valid_universe,

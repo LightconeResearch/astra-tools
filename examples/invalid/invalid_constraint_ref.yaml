@@ -1,0 +1,22 @@
+# Constraint references non-existent decision/option
+version: "1.0"
+
+analysis:
+  name: "Test"
+  problem: "Test problem"
+  inputs:
+    - id: data
+      type: data
+  outputs:
+    - id: result
+      type: metric
+
+decisions:
+  method:
+    label: "Method"
+    type: method
+    options:
+      a:
+        label: "A"
+        requires:
+          - nonexistent.option  # This decision doesn't exist

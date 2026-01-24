@@ -1,0 +1,9 @@
+# Universe selects non-existent option
+id: invalid-option
+description: "Invalid option selection"
+
+decisions:
+  preprocessing: standard
+  model: nonexistent_model  # This option doesn't exist
+  test_split: split_20
+  seed: seed_42

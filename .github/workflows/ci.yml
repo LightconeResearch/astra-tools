@@ -23,10 +23,10 @@ jobs:
           pip install ruff
 
       - name: Run ruff check
-        run: ruff check src/ tests/
+        run: ruff check asp/ models/ tests/
 
       - name: Run ruff format check
-        run: ruff format --check src/ tests/
+        run: ruff format --check asp/ models/ tests/
 
   typecheck:
     runs-on: ubuntu-latest
@@ -44,7 +44,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run mypy
-        run: mypy src/
+        run: mypy asp/ models/
 
   test:
     runs-on: ubuntu-latest
@@ -76,7 +76,8 @@ jobs:
           files: coverage.xml
           fail_ci_if_error: false
 
-  validate-schemas:
+  schema-check:
+    name: Schema Integrity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -88,18 +89,117 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install package
         run: |
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Validate example files
-        run: |
-          asp validate examples/iris/asp.yaml
-          asp validate examples/iris/universes/baseline.yaml -a examples/iris/asp.yaml
+      - name: Regenerate schemas to temp directory
+        run: asp schema export -o /tmp/generated-schemas
 
-      - name: Verify schema generation
+      - name: Check schemas are up to date
         run: |
-          asp schema export -o /tmp/schemas
-          diff -q schemas/analysis.schema.json /tmp/schemas/analysis.schema.json || echo "Note: Schema files may differ due to version"
-          diff -q schemas/universe.schema.json /tmp/schemas/universe.schema.json || echo "Note: Schema files may differ due to version"
+          echo "Comparing committed schemas with generated schemas..."
+
+          exit_code=0
+          for schema in analysis universe; do
+            committed="spec/draft/${schema}.schema.json"
+            generated="/tmp/generated-schemas/${schema}.schema.json"
+
+            if [ -f "$committed" ]; then
+              if ! diff -q "$committed" "$generated" > /dev/null 2>&1; then
+                echo "❌ $committed is out of sync with models"
+                echo ""
+                echo "Diff (first 50 lines):"
+                diff "$committed" "$generated" | head -50 || true
+                echo ""
+                echo "Run 'make schemas' locally and commit the changes."
+                exit_code=1
+              else
+                echo "✅ $committed is up to date"
+              fi
+            else
+              echo "⚠️  $committed does not exist"
+              exit_code=1
+            fi
+          done
+
+          exit $exit_code
+
+      - name: Show schema changes in PR
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }}
+
+          echo "## Schema Changes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          for schema in spec/draft/*.schema.json; do
+            if [ -f "$schema" ]; then
+              if git diff --quiet origin/${{ github.base_ref }} -- "$schema" 2>/dev/null; then
+                echo "- \`$schema\`: No changes" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- \`$schema\`: **Modified**" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+          done
+
+  validate-examples:
+    name: Validate Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Validate valid examples
+        run: |
+          echo "Validating examples/valid/..."
+
+          # Find all asp.yaml files in valid examples
+          find examples/valid -name "asp.yaml" | while read -r file; do
+            echo "  ✓ Validating $file"
+            asp validate "$file"
+
+            # Also validate any universe files
+            dir=$(dirname "$file")
+            if [ -d "$dir/universes" ]; then
+              find "$dir/universes" -name "*.yaml" | while read -r universe; do
+                echo "    ✓ Validating $universe"
+                asp validate "$universe" -a "$file"
+              done
+            fi
+          done
+
+          # Validate standalone examples
+          for f in examples/valid/minimal.yaml examples/valid/full.yaml; do
+            if [ -f "$f" ]; then
+              echo "  ✓ Validating $f"
+              asp validate "$f"
+            fi
+          done
+
+      - name: Check invalid examples fail
+        run: |
+          echo "Checking examples/invalid/ properly fail..."
+
+          for file in examples/invalid/*.yaml; do
+            if [ -f "$file" ]; then
+              if asp validate "$file" 2>/dev/null; then
+                echo "  ✗ $file should have failed validation but passed"
+                exit 1
+              else
+                echo "  ✓ $file correctly failed validation"
+              fi
+            fi
+          done

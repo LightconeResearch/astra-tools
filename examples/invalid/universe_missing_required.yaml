@@ -1,0 +1,10 @@
+# Universe violates requires constraint
+# svm requires preprocessing.standard
+id: missing-required
+description: "Violates requires constraint"
+
+decisions:
+  preprocessing: none  # svm requires standard
+  model: svm
+  test_split: split_20
+  seed: seed_42

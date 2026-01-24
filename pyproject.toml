@@ -52,7 +52,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/asp"]
+packages = ["asp"]
 
 [tool.ruff]
 target-version = "py311"
@@ -64,6 +64,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+mypy_path = "."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

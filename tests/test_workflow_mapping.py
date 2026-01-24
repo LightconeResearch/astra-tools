@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from asp.models.analysis import Analysis, Input, Source
-from asp.models.universe import Universe
+from models.analysis import Analysis, Input, Source
+from models.universe import Universe
 from asp.workflow.mapping import (
     apply_naming_convention,
     extract_decision_values,

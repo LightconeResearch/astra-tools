@@ -1,0 +1,124 @@
+$schema: "https://asp-spec.org/v1/schema.json"
+version: "1.0"
+
+analysis:
+  name: "Full Analysis"
+  description: "A comprehensive test analysis with all features"
+  authors:
+    - "Test Author"
+  tags:
+    - test
+    - example
+  problem: |
+    This is a comprehensive test analysis that exercises
+    all features of the ASP specification.
+  inputs:
+    - id: primary_data
+      type: data
+      source: "test.csv"
+      description: "Primary test data"
+    - id: reference_study
+      type: analysis
+      ref: "analyses/reference"
+      version: "v1.0"
+      description: "Reference study for evidence"
+    - id: paper
+      type: literature
+      description: "Supporting literature"
+  outputs:
+    - id: accuracy
+      type: metric
+      dtype: float
+      range: [0, 1]
+      primary: true
+      description: "Model accuracy"
+    - id: f1_score
+      type: metric
+      dtype: float
+      range: [0, 1]
+      description: "F1 score"
+    - id: plot
+      type: figure
+      formats: [png, svg]
+      description: "Results plot"
+    - id: summary
+      type: table
+      formats: [csv]
+      description: "Results summary"
+    - id: trained_model
+      type: model
+      formats: [joblib]
+      description: "Trained model"
+    - id: conclusion
+      type: report
+      description: "Analysis conclusion"
+
+decisions:
+  preprocessing:
+    label: "Preprocessing Method"
+    type: method
+    importance: 2
+    rationale: "Choice of preprocessing affects model performance"
+    default: standard
+    options:
+      none:
+        label: "No Preprocessing"
+        description: "Use raw data"
+      standard:
+        label: "Standardization"
+        description: "Z-score normalization"
+        evidence:
+          - ref: inputs.reference_study
+            finding: "Showed 5% improvement"
+      minmax:
+        label: "Min-Max Scaling"
+        description: "Scale to [0, 1]"
+        incompatible_with:
+          - model.svm
+
+  model:
+    label: "Model Type"
+    type: method
+    importance: 1
+    rationale: "Core algorithmic choice"
+    default: rf
+    options:
+      svm:
+        label: "SVM"
+        description: "Support Vector Machine"
+        requires:
+          - preprocessing.standard
+      rf:
+        label: "Random Forest"
+        description: "Ensemble of decision trees"
+      lr:
+        label: "Logistic Regression"
+        description: "Linear classifier"
+
+  test_split:
+    label: "Test Split"
+    type: parameter
+    importance: 3
+    rationale: "Trade-off between training data and evaluation"
+    default: split_20
+    options:
+      split_20:
+        label: "20%"
+        value: 0.2
+      split_30:
+        label: "30%"
+        value: 0.3
+
+  seed:
+    label: "Random Seed"
+    type: parameter
+    importance: 5
+    rationale: "For reproducibility"
+    default: seed_42
+    options:
+      seed_42:
+        label: "42"
+        value: 42
+      seed_123:
+        label: "123"
+        value: 123

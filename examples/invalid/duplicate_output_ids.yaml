@@ -1,0 +1,14 @@
+# Duplicate output IDs
+version: "1.0"
+
+analysis:
+  name: "Test"
+  problem: "Test problem"
+  inputs:
+    - id: data
+      type: data
+  outputs:
+    - id: result
+      type: metric
+    - id: result  # Duplicate ID
+      type: figure

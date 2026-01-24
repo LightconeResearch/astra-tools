@@ -186,13 +186,6 @@ class TestVizCommand:
 class TestSchemaCommands:
     """Tests for schema subcommands."""
 
-    def test_schema_export(self, runner: CliRunner, tmp_path: Path):
-        result = runner.invoke(main, ["schema", "export", "-o", str(tmp_path / "schemas")])
-        assert result.exit_code == 0
-        assert "Exported schemas" in result.output
-        assert (tmp_path / "schemas" / "analysis.schema.json").exists()
-        assert (tmp_path / "schemas" / "universe.schema.json").exists()
-
     def test_schema_show_analysis(self, runner: CliRunner):
         result = runner.invoke(main, ["schema", "show", "analysis"])
         assert result.exit_code == 0
