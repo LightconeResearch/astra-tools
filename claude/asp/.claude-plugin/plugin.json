@@ -1,11 +1,40 @@
 {
   "name": "asp",
   "description": "Work with ASP (Agentic Science Protocol) analyses. Create new analyses, extract insights from papers, validate specifications, and manage universes.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Lightcone Research"
   },
   "repository": "https://github.com/LightconeResearch/ASP",
   "license": "MIT",
-  "hooks": "./hooks/hooks.json"
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/activate-venv.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/validate-on-save.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
 }
