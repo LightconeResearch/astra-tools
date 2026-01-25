@@ -47,9 +47,7 @@ def _infer_cwl_type_from_option(option: dict[str, Any]) -> str:
     return "string"
 
 
-def _get_decision_cwl_inputs(
-    decision_id: str, decision: dict[str, Any]
-) -> list[dict[str, Any]]:
+def _get_decision_cwl_inputs(decision_id: str, decision: dict[str, Any]) -> list[dict[str, Any]]:
     """Generate CWL input definitions for a decision.
 
     Handles dict values by creating separate inputs for each key.
