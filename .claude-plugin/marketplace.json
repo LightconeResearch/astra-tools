@@ -1,0 +1,16 @@
+{
+  "name": "asp-plugins",
+  "owner": {
+    "name": "Lightcone Research"
+  },
+  "metadata": {
+    "description": "Plugins for the Agentic Science Protocol (ASP)"
+  },
+  "plugins": [
+    {
+      "name": "asp-analysis",
+      "source": "./agent-plugins/asp-analysis",
+      "description": "Work with ASP analyses - create specs, extract insights, validate, manage universes"
+    }
+  ]
+}

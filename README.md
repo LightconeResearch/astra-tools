@@ -58,13 +58,15 @@ pip install -e ".[dev]"
 
 ### With Claude Code (Recommended)
 
-Create a new analysis project with AI agent support:
+Create a new analysis project:
 
 ```bash
-asp init my-analysis --agent claude-code
+asp init my-analysis
+cd my-analysis
+claude
 ```
 
-This creates the project structure and launches Claude Code with instructions to help you design and execute your analysis.
+This creates the project structure and configures Claude Code to auto-install the ASP plugin, which provides skills and tools for designing and executing your analysis.
 
 ### Manual Workflow
 
@@ -163,8 +165,7 @@ See [examples/iris/](examples/iris/) for a complete working example.
 
 ```bash
 # Project setup
-asp init my-analysis                   # Create new analysis project
-asp init my-analysis --agent claude-code  # Create with Claude Code support
+asp init my-analysis                   # Create new analysis project (with Claude Code plugin config)
 asp init my-analysis --no-git          # Create without git initialization
 
 # Validation
@@ -207,11 +208,8 @@ my-analysis/
 ├── workflows/            # CWL workflow files
 ├── steps/                # Reusable workflow steps
 ├── results/              # Execution outputs (gitignored)
-└── .claude/              # Claude Code integration (if --agent used)
-    ├── agents/
-    │   └── asp.md
-    └── skills/
-        └── asp-analysis/
+└── .claude/              # Claude Code configuration
+    └── settings.json     # Auto-installs ASP plugin
 ```
 
 ## Design Principles

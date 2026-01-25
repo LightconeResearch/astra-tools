@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -10,14 +11,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
-from asp.agents.registry import get_agent
 from asp.models.analysis import Analysis
 from asp.models.universe import Universe
-from asp.templates import (
-    ASP_AGENT,
-    SCHEMA_REFERENCE_CONTENT,
-    SKILL_CONTENT,
-)
 from asp.validation.schema import (
     get_analysis_schema,
     get_insights_schema,
@@ -72,24 +67,18 @@ def main() -> None:
 
 @main.command()
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
-@click.option(
-    "--agent",
-    type=click.Choice(["claude-code", "none"]),
-    default="claude-code",
-    help="AI agent to configure (default: claude-code). Use --agent=none for no agent config.",
-)
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
-def init(directory: Path, agent: str, no_git: bool) -> None:
+def init(directory: Path, no_git: bool) -> None:
     """Create a new ASP analysis project.
 
     Creates the project scaffolding for an ASP analysis with Claude Code
-    configuration by default.
+    plugin configuration.
 
     DIRECTORY is the project folder to create (default: current directory).
 
     Examples:
-        asp init my-analysis              # With Claude Code skill (default)
-        asp init my-analysis --agent none # Without AI agent config
+        asp init my-analysis
+        asp init my-analysis --no-git   # Without git initialization
     """
     # Create project directory
     if directory != Path("."):
@@ -127,43 +116,21 @@ __pycache__/
     # Create boilerplate asp.yaml
     _create_boilerplate_asp_yaml(directory)
 
-    # Create agent-specific config if requested
-    if agent == "claude-code":
-        _create_skill(directory)
+    # Create Claude Code settings to auto-install ASP plugin
+    _create_claude_settings(directory)
 
     # Initialize git repository
     _init_git_repo(directory, no_git)
 
     # Print success message
     console.print(f"\n[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
-    if agent == "claude-code":
-        console.print("[dim]  Includes: asp.yaml, universes/, workflows/, scripts/, .claude/[/dim]")
-    else:
-        console.print("[dim]  Includes: asp.yaml, universes/, workflows/, scripts/, results/[/dim]")
+    console.print("[dim]  Includes: asp.yaml, universes/, workflows/, steps/, .claude/[/dim]")
 
-    # Launch agent or show next steps
-    if agent == "claude-code":
-        console.print("\n[cyan]Launching Claude Code...[/cyan]\n")
-        try:
-            agent_config = get_agent("claude-code")
-            init_prompt = agent_config.get_init_prompt() if agent_config else ""
-            subprocess.run(
-                ["claude", init_prompt],
-                cwd=directory,
-                check=False,
-            )
-        except FileNotFoundError:
-            console.print("[red]Error:[/red] Claude Code CLI not found.")
-            console.print("\nASP currently only supports Claude Code for AI agent integration.")
-            console.print("To proceed without agent configuration, run:")
-            console.print("  [cyan]asp init --agent=none[/cyan]")
-            console.print("\nOr install Claude Code from: https://claude.ai/code")
-            raise SystemExit(1)
-    else:
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  1. [cyan]cd {directory}[/cyan]")
-        console.print("  2. Edit [cyan]asp.yaml[/cyan] to define inputs, outputs, and decisions")
-        console.print("  3. Run [cyan]asp validate asp.yaml[/cyan] to check your spec")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. [cyan]cd {directory}[/cyan]")
+    console.print("  2. Run [cyan]claude[/cyan] to launch Claude Code (ASP plugin auto-installs)")
+    console.print("  3. Edit [cyan]asp.yaml[/cyan] to define inputs, outputs, and decisions")
+    console.print("  4. Run [cyan]asp validate asp.yaml[/cyan] to check your spec")
 
 
 def _create_boilerplate_asp_yaml(directory: Path) -> None:
@@ -263,18 +230,25 @@ See [ASP documentation](https://github.com/LightconeResearch/ASP) for more infor
     (directory / "README.md").write_text(readme)
 
 
-def _create_skill(directory: Path) -> None:
-    """Create the Claude Code skill and agents in the project directory."""
-    # Create skill
-    skill_dir = directory / ".claude" / "skills" / "asp-analysis"
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text(SKILL_CONTENT)
-    (skill_dir / "SCHEMA_REFERENCE.md").write_text(SCHEMA_REFERENCE_CONTENT)
+def _create_claude_settings(directory: Path) -> None:
+    """Create Claude Code settings to auto-install ASP plugin."""
+    claude_dir = directory / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create agent
-    agents_dir = directory / ".claude" / "agents"
-    agents_dir.mkdir(parents=True, exist_ok=True)
-    (agents_dir / "asp.md").write_text(ASP_AGENT)
+    settings = {
+        "extraKnownMarketplaces": {
+            "asp-plugins": {
+                "source": {
+                    "source": "github",
+                    "repo": "LightconeResearch/ASP",
+                }
+            }
+        },
+        "enabledPlugins": {"asp-analysis@asp-plugins": True},
+    }
+
+    settings_file = claude_dir / "settings.json"
+    settings_file.write_text(json.dumps(settings, indent=2) + "\n")
 
 
 def _init_git_repo(directory: Path, no_git: bool) -> None:
