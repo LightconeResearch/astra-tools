@@ -324,10 +324,19 @@ class TestInitCommand:
         assert "enabledPlugins" in settings
         assert settings["enabledPlugins"].get("asp@asp") is True
 
-        # Check marketplace source (SSH git URL)
+        # Check marketplace source (GitHub)
         marketplace = settings["extraKnownMarketplaces"]["asp"]
-        assert marketplace["source"]["source"] == "git"
-        assert marketplace["source"]["url"] == "git@github.com:LightconeResearch/ASP.git"
+        assert marketplace["source"]["source"] == "github"
+        assert marketplace["source"]["repo"] == "LightconeResearch/ASP"
+
+        # Check permissions
+        assert "permissions" in settings
+        assert "allow" in settings["permissions"]
+        allowed = settings["permissions"]["allow"]
+        assert "Bash(asp:*)" in allowed
+        assert "Edit" in allowed
+        assert "WebSearch" in allowed
+        assert "WebFetch" in allowed
 
     def test_init_existing_nonempty_dir_decline(self, runner: CliRunner, tmp_path: Path):
         """Test declining to overwrite existing non-empty directory."""

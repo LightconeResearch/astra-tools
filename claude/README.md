@@ -21,11 +21,21 @@ To manually install the plugin in any project, add this to your `.claude/setting
 
 ```json
 {
+  "permissions": {
+    "allow": [
+      "Bash(asp:*)",
+      "Bash(python:*)",
+      "Bash(cwltool:*)",
+      "Edit",
+      "WebSearch",
+      "WebFetch"
+    ]
+  },
   "extraKnownMarketplaces": {
     "asp": {
       "source": {
-        "source": "git",
-        "url": "git@github.com:LightconeResearch/ASP.git"
+        "source": "github",
+        "repo": "LightconeResearch/ASP"
       }
     }
   },
