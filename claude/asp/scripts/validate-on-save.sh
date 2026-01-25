@@ -69,9 +69,9 @@ if [ $exit_code -eq 0 ]; then
     echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"ASP validation passed for $filename\"}}"
 else
     # Validation failed - provide context to Claude
-    # Escape the result for JSON
-    escaped_result=$(echo "$result" | jq -Rs .)
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"ASP validation FAILED for $filename:\\n$result\"}}"
+    # Escape the result for JSON (jq -Rs . adds quotes, so use it directly)
+    escaped_result=$(echo "ASP validation FAILED for $filename:\n$result" | jq -Rs .)
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": $escaped_result}}"
 fi
 
 exit 0
