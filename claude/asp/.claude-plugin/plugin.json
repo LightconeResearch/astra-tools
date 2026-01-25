@@ -1,0 +1,10 @@
+{
+  "name": "asp",
+  "description": "Work with ASP (Agentic Science Protocol) analyses. Create new analyses, extract insights from papers, validate specifications, and manage universes.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Lightcone Research"
+  },
+  "repository": "https://github.com/LightconeResearch/ASP",
+  "license": "MIT"
+}

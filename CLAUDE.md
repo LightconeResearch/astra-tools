@@ -19,6 +19,17 @@ agentic-science-protocol/
 │       └── insights.schema.json
 │   # 1.0/, 1.1/, 2.0/, etc. created at release (immutable once released)
 │
+├── .claude-plugin/                # Claude Code plugin marketplace (at repo root)
+│   └── marketplace.json           # Marketplace definition
+│
+├── claude/                        # Claude Code plugin implementations
+│   └── asp/                       # ASP plugin
+│       ├── .claude-plugin/
+│       │   └── plugin.json        # Plugin manifest
+│       └── skills/
+│           └── asp/
+│               └── SKILL.md       # Skill instructions
+│
 ├── models/                        # Pydantic models (dev only, NOT installed)
 │   ├── __init__.py
 │   ├── analysis.py                # Source of truth for analysis schema
@@ -147,12 +158,11 @@ my-analysis/
 ├── workflows/            # Generated workflows
 ├── steps/                # Reusable workflow steps
 ├── results/              # Execution outputs (gitignored)
-├── .claude/              # Claude Code agent configuration (default)
-│   ├── skills/
-│   │   └── asp-analysis/
-│   └── agents/
-│       └── asp.md
+├── .claude/              # Claude Code configuration
+│   └── settings.json     # Auto-installs ASP plugin from marketplace
 ```
+
+The `settings.json` configures Claude Code to automatically install the ASP plugin from the marketplace when the project is opened.
 
 ## Important Design Patterns
 
@@ -276,4 +286,4 @@ version: "1.0"  # Must match a spec/X.Y/ directory
 
 - **DESIGN.md**: Complete specification of the ASP format
 - **README.md**: User-facing documentation and quick start
-- **.claude/skills/asp-analysis/SKILL.md**: Skill instructions for working with ASP
+- **claude/asp/skills/asp/SKILL.md**: Skill instructions for working with ASP
