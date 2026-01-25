@@ -6,5 +6,6 @@
     "name": "Lightcone Research"
   },
   "repository": "https://github.com/LightconeResearch/ASP",
-  "license": "MIT"
+  "license": "MIT",
+  "hooks": "./hooks/hooks.json"
 }

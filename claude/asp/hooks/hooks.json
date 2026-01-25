@@ -1,0 +1,9 @@
+{
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "command": "${CLAUDE_PLUGIN_ROOT}/hooks/activate-venv.sh",
+      "timeout": 5000
+    }
+  ]
+}

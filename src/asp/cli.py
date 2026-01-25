@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -75,17 +76,19 @@ def main() -> None:
 @main.command()
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
-def init(directory: Path, no_git: bool) -> None:
+@click.option("--no-venv", is_flag=True, help="Don't create Python virtual environment")
+def init(directory: Path, no_git: bool, no_venv: bool) -> None:
     """Create a new ASP analysis project.
 
     Creates the project scaffolding for an ASP analysis with Claude Code
-    plugin configuration.
+    plugin configuration and a Python virtual environment.
 
     DIRECTORY is the project folder to create (default: current directory).
 
     Examples:
         asp init my-analysis
-        asp init my-analysis --no-git   # Without git initialization
+        asp init my-analysis --no-git    # Without git initialization
+        asp init my-analysis --no-venv   # Without virtual environment
     """
     # Create project directory
     if directory != Path("."):
@@ -126,12 +129,18 @@ __pycache__/
     # Create Claude Code settings to auto-install ASP plugin
     _create_claude_settings(directory)
 
+    # Create virtual environment
+    venv_created = _create_venv(directory, no_venv)
+
     # Initialize git repository
     _init_git_repo(directory, no_git)
 
     # Print success message
     console.print(f"\n[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
-    console.print("[dim]  Includes: asp.yaml, universes/, workflows/, steps/, .claude/[/dim]")
+    includes = "asp.yaml, universes/, workflows/, steps/, .claude/"
+    if venv_created:
+        includes += ", .venv/"
+    console.print(f"[dim]  Includes: {includes}[/dim]")
 
     console.print("\n[bold]Next steps:[/bold]")
     console.print(f"  1. [cyan]cd {directory}[/cyan]")
@@ -294,6 +303,52 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
             pass  # Commit failed, but repo is initialized
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass  # Git not available
+
+
+def _create_venv(directory: Path, no_venv: bool) -> bool:
+    """Create a virtual environment with asp installed.
+
+    Returns True if venv was created successfully.
+    """
+    if no_venv:
+        return False
+
+    venv_path = directory / ".venv"
+
+    # Create the virtual environment
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(venv_path)],
+            capture_output=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        console.print(f"[yellow]Warning:[/yellow] Failed to create virtual environment: {e}")
+        return False
+
+    console.print("[green]✓[/green] Created virtual environment (.venv)")
+
+    # Determine pip path
+    if sys.platform == "win32":
+        pip_path = venv_path / "Scripts" / "pip"
+    else:
+        pip_path = venv_path / "bin" / "pip"
+
+    # Try to install asp from GitHub via SSH
+    try:
+        subprocess.run(
+            [str(pip_path), "install", "git+ssh://git@github.com/LightconeResearch/ASP.git"],
+            capture_output=True,
+            check=True,
+        )
+        console.print("[green]✓[/green] Installed asp in virtual environment")
+    except subprocess.CalledProcessError:
+        console.print(
+            "[yellow]Warning:[/yellow] Could not install asp (SSH auth may have failed). "
+            "You can install manually with: .venv/bin/pip install asp"
+        )
+
+    return True
 
 
 @main.command()
