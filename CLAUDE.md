@@ -28,8 +28,7 @@ agentic-science-protocol/
 │       │   └── plugin.json        # Plugin manifest
 │       └── skills/
 │           └── asp/
-│               ├── SKILL.md       # Skill instructions
-│               └── SCHEMA_REFERENCE.md
+│               └── SKILL.md       # Skill instructions
 │
 ├── models/                        # Pydantic models (dev only, NOT installed)
 │   ├── __init__.py
