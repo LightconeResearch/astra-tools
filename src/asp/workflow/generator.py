@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from asp.helpers import get_decisions, get_inputs, get_option, get_outputs
+from asp.helpers import get_decisions, get_inputs, get_outputs
 from asp.workflow.mapping import generate_cwl_params
 
 

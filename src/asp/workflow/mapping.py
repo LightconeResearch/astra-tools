@@ -122,7 +122,9 @@ def generate_cwl_params(
     return params
 
 
-def resolve_input_source(inp: dict[str, Any], base_path: Path | None = None) -> dict[str, Any] | None:
+def resolve_input_source(
+    inp: dict[str, Any], base_path: Path | None = None
+) -> dict[str, Any] | None:
     """Resolve an ASP input source to a CWL File reference.
 
     Args:
@@ -150,12 +152,13 @@ def resolve_input_source(inp: dict[str, Any], base_path: Path | None = None) -> 
     source_type = source.get("type")
 
     if source_type == "file":
-        path = source.get("path")
-        if path is None:
+        path_value = source.get("path")
+        if path_value is None:
             return None
-        if base_path and not Path(path).is_absolute():
-            path = str(base_path / path)
-        return {"class": "File", "path": path}
+        file_path = str(path_value)
+        if base_path and not Path(file_path).is_absolute():
+            file_path = str(base_path / file_path)
+        return {"class": "File", "path": file_path}
 
     if source_type == "url":
         url = source.get("url")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import click
 from rich.console import Console
@@ -551,7 +552,7 @@ def viz(file: Path | None, fmt: str) -> None:
         _viz_ascii(data)
 
 
-def _viz_ascii(data: dict) -> None:
+def _viz_ascii(data: dict[str, Any]) -> None:
     """Visualize decisions as ASCII tree."""
     analysis_name = data.get("analysis", {}).get("name", "Unknown")
     tree = Tree(f"[bold]{analysis_name}[/bold]")
@@ -581,7 +582,7 @@ def _viz_ascii(data: dict) -> None:
     console.print(tree)
 
 
-def _viz_mermaid(data: dict) -> None:
+def _viz_mermaid(data: dict[str, Any]) -> None:
     """Generate Mermaid diagram for decisions."""
     lines = ["graph TD"]
 

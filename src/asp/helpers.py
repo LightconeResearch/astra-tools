@@ -198,7 +198,8 @@ def get_inputs(data: dict[str, Any]) -> list[dict[str, Any]]:
     Returns:
         List of input dicts.
     """
-    return data.get("analysis", {}).get("inputs", [])
+    result: list[dict[str, Any]] = data.get("analysis", {}).get("inputs", [])
+    return result
 
 
 def get_outputs(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -210,7 +211,8 @@ def get_outputs(data: dict[str, Any]) -> list[dict[str, Any]]:
     Returns:
         List of output dicts.
     """
-    return data.get("analysis", {}).get("outputs", [])
+    result: list[dict[str, Any]] = data.get("analysis", {}).get("outputs", [])
+    return result
 
 
 def get_decisions(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -222,7 +224,8 @@ def get_decisions(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     Returns:
         Dict mapping decision_id to decision dict.
     """
-    return data.get("decisions", {})
+    result: dict[str, dict[str, Any]] = data.get("decisions", {})
+    return result
 
 
 def get_option(decision: dict[str, Any], option_id: str) -> dict[str, Any] | None:
@@ -235,7 +238,8 @@ def get_option(decision: dict[str, Any], option_id: str) -> dict[str, Any] | Non
     Returns:
         The option dict if found, None otherwise.
     """
-    return decision.get("options", {}).get(option_id)
+    result: dict[str, Any] | None = decision.get("options", {}).get(option_id)
+    return result
 
 
 def get_option_value(decision: dict[str, Any], option_id: str) -> Any:
