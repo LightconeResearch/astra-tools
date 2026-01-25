@@ -7,8 +7,7 @@ from typing import Any
 
 import yaml
 
-from asp.models.analysis import Analysis, Decision, Input, Option
-from asp.models.universe import Universe
+from asp.helpers import get_decisions, get_inputs, get_option, get_outputs
 from asp.workflow.mapping import generate_cwl_params
 
 
@@ -24,12 +23,12 @@ def _params_to_yaml(params: dict[str, object]) -> str:
     return _to_yaml(params)
 
 
-def _infer_cwl_type_from_option(option: Option) -> str:
+def _infer_cwl_type_from_option(option: dict[str, Any]) -> str:
     """Infer CWL type from an option's value."""
-    if option.value is None:
+    value = option.get("value")
+    if value is None:
         return "string"  # Option ID will be used as string
 
-    value = option.value
     if isinstance(value, bool):
         return "boolean"
     if isinstance(value, int):
@@ -48,23 +47,27 @@ def _infer_cwl_type_from_option(option: Option) -> str:
     return "string"
 
 
-def _get_decision_cwl_inputs(decision_id: str, decision: Decision) -> list[dict[str, Any]]:
+def _get_decision_cwl_inputs(
+    decision_id: str, decision: dict[str, Any]
+) -> list[dict[str, Any]]:
     """Generate CWL input definitions for a decision.
 
     Handles dict values by creating separate inputs for each key.
     """
     inputs: list[dict[str, Any]] = []
+    options = decision.get("options", {})
 
     # Look at first option to determine structure
-    first_option = next(iter(decision.options.values()), None)
+    first_option = next(iter(options.values()), None)
     if first_option is None:
         return inputs
 
     cwl_type = _infer_cwl_type_from_option(first_option)
+    first_value = first_option.get("value")
 
-    if cwl_type == "record" and isinstance(first_option.value, dict):
+    if cwl_type == "record" and isinstance(first_value, dict):
         # Dict value - create separate input for each key
-        for key, val in first_option.value.items():
+        for key, val in first_value.items():
             param_name = f"{decision_id}_{key}"
             if isinstance(val, bool):
                 val_type = "boolean"
@@ -87,100 +90,118 @@ def _get_decision_cwl_inputs(decision_id: str, decision: Decision) -> list[dict[
             {
                 "name": decision_id,
                 "type": cwl_type,
-                "doc": decision.label or f"Decision: {decision_id}",
+                "doc": decision.get("label") or f"Decision: {decision_id}",
             }
         )
 
     return inputs
 
 
-def _get_input_cwl_type(inp: Input) -> str:
+def _get_input_cwl_type(inp: dict[str, Any]) -> str:
     """Map ASP input type to CWL type."""
-    if inp.type == "data":
+    if inp.get("type") == "data":
         return "File"
     # analysis and literature types default to string
     return "string"
 
 
-def generate_cwl_skeleton(analysis: Analysis) -> str:
+def generate_cwl_skeleton(analysis: dict[str, Any]) -> str:
     """Generate a CWL workflow skeleton from an ASP analysis specification.
 
-    Creates a CommandLineTool with:
-    - Inputs for each ASP input (data -> File)
+    Creates a Workflow with:
+    - Inputs for data-type ASP inputs only (as File type)
     - Inputs for each ASP decision (using naming convention)
-    - Outputs for each ASP output
-    - Placeholder baseCommand
+    - Outputs referencing step outputs via outputSource
+    - A single step referencing steps/main.cwl
 
     Args:
-        analysis: The ASP analysis specification.
+        analysis: The ASP analysis specification as a dict.
 
     Returns:
         CWL workflow as YAML string.
     """
     cwl: dict[str, Any] = {
         "cwlVersion": "v1.2",
-        "class": "CommandLineTool",
-        "baseCommand": ["python", "scripts/main.py"],
-        "requirements": {
-            "InitialWorkDirRequirement": {"listing": [{"entry": "$(inputs)", "writable": True}]}
-        },
+        "class": "Workflow",
     }
 
     # Build inputs section
     inputs: dict[str, Any] = {}
+    input_names: list[str] = []
 
-    # Add ASP inputs
-    for inp in analysis.analysis.inputs:
+    # Add only data-type ASP inputs
+    for inp in get_inputs(analysis):
+        if inp.get("type") != "data":
+            continue  # Skip analysis/literature inputs
         cwl_type = _get_input_cwl_type(inp)
-        inputs[inp.id] = {
+        inputs[inp["id"]] = {
             "type": cwl_type,
-            "doc": inp.description or f"Input: {inp.id}",
-            "inputBinding": {"prefix": f"--{inp.id.replace('_', '-')}"},
+            "doc": inp.get("description") or f"Input: {inp['id']}",
         }
+        input_names.append(inp["id"])
 
     # Add ASP decisions
-    for decision_id, decision in analysis.decisions.items():
+    decision_input_names: list[str] = []
+    for decision_id, decision in get_decisions(analysis).items():
         decision_inputs = _get_decision_cwl_inputs(decision_id, decision)
         for dinp in decision_inputs:
             name = dinp.pop("name")
-            dinp["inputBinding"] = {"prefix": f"--{name.replace('_', '-')}"}
             inputs[name] = dinp
+            decision_input_names.append(name)
 
     cwl["inputs"] = inputs
 
     # Build outputs section
     outputs: dict[str, Any] = {}
-    for out in analysis.analysis.outputs:
-        # Default to JSON file output - user should customize
-        outputs[out.id] = {
+    output_ids: list[str] = []
+    for out in get_outputs(analysis):
+        outputs[out["id"]] = {
             "type": "File",
-            "doc": out.description or f"Output: {out.id}",
-            "outputBinding": {"glob": f"{out.id}.json"},
+            "outputSource": f"run_analysis/{out['id']}",
+            "doc": out.get("description") or f"Output: {out['id']}",
         }
+        output_ids.append(out["id"])
 
     cwl["outputs"] = outputs
+
+    # Build steps section
+    step_inputs: dict[str, str] = {}
+    for name in input_names + decision_input_names:
+        step_inputs[name] = name
+
+    cwl["steps"] = {
+        "run_analysis": {
+            "run": "steps/main.cwl",
+            "in": step_inputs,
+            "out": output_ids,
+        }
+    }
 
     # Generate YAML with comments
     yaml_str = _to_yaml(cwl)
 
+    # Get analysis name
+    analysis_name = analysis.get("analysis", {}).get("name", "Unknown")
+
     # Add header comment
-    header = f"""# CWL workflow generated from ASP specification
-# Analysis: {analysis.analysis.name}
+    header = f"""# CWL Workflow generated from ASP specification
+# Analysis: {analysis_name}
 #
-# TODO: Customize this workflow:
-# 1. Update baseCommand to point to your script
-# 2. Adjust output glob patterns
-# 3. Add any additional requirements
+# This workflow orchestrates the analysis by passing inputs and decisions
+# to the main step. Customize by:
+# 1. Implementing steps/main.cwl as a CommandLineTool
+# 2. Adding additional steps for preprocessing, training, evaluation
+# 3. Connecting step outputs to workflow outputs
 #
 """
     return header + yaml_str
 
 
-def generate_cwl_file(analysis: Analysis, output_path: Path) -> None:
+def generate_cwl_file(analysis: dict[str, Any], output_path: Path) -> None:
     """Generate CWL workflow skeleton file from an ASP analysis.
 
     Args:
-        analysis: The ASP analysis specification.
+        analysis: The ASP analysis specification as a dict.
         output_path: Path to write the CWL file.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,8 +210,8 @@ def generate_cwl_file(analysis: Analysis, output_path: Path) -> None:
 
 
 def generate_params_string(
-    analysis: Analysis,
-    universe: Universe,
+    analysis: dict[str, Any],
+    universe: dict[str, Any],
     *,
     include_inputs: bool = False,
     base_path: Path | None = None,
@@ -198,8 +219,8 @@ def generate_params_string(
     """Generate CWL parameters as YAML string.
 
     Args:
-        analysis: The ASP analysis specification.
-        universe: The universe with decision selections.
+        analysis: The ASP analysis specification as a dict.
+        universe: The universe with decision selections as a dict.
         include_inputs: Whether to include ASP inputs as CWL File parameters.
         base_path: Base path for resolving relative file paths in inputs.
 
@@ -213,8 +234,8 @@ def generate_params_string(
 
 
 def generate_params_file(
-    analysis: Analysis,
-    universe: Universe,
+    analysis: dict[str, Any],
+    universe: dict[str, Any],
     output_path: Path,
     *,
     include_inputs: bool = False,
@@ -226,8 +247,8 @@ def generate_params_file(
     universe's decision selections.
 
     Args:
-        analysis: The ASP analysis specification.
-        universe: The universe with decision selections.
+        analysis: The ASP analysis specification as a dict.
+        universe: The universe with decision selections as a dict.
         output_path: Path to write the YAML file.
         include_inputs: Whether to include ASP inputs as CWL File parameters.
         base_path: Base path for resolving relative file paths in inputs.

@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from asp.models.workflow import CWLParameter
+from asp.workflow.models import CWLParameter
 
 
 def parse_cwl_inputs(cwl_path: Path) -> list[CWLParameter]:

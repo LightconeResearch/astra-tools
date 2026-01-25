@@ -8,14 +8,12 @@ CWL syntax using cwltool.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
-from asp.models.workflow import CWLParameter, WorkflowValidationError
+from asp.helpers import get_decisions
 from asp.workflow.mapping import apply_naming_convention
+from asp.workflow.models import CWLParameter, WorkflowValidationError
 from asp.workflow.parser import parse_cwl_inputs
-
-if TYPE_CHECKING:
-    from asp.models.analysis import Analysis, Decision
 
 
 def validate_cwl_syntax(cwl_path: Path) -> list[WorkflowValidationError]:
@@ -59,25 +57,27 @@ def validate_cwl_syntax(cwl_path: Path) -> list[WorkflowValidationError]:
     return [WorkflowValidationError(code="CWL_SYNTAX_ERROR", message=error_msg)]
 
 
-def _get_possible_params(decision_id: str, decision: Decision) -> set[str]:
+def _get_possible_params(decision_id: str, decision: dict[str, Any]) -> set[str]:
     """Get all possible CWL parameter names a decision could produce."""
     possible: set[str] = set()
-    for option in decision.options.values():
-        if option.value is not None:
-            possible.update(apply_naming_convention(decision_id, option.value).keys())
+    options = decision.get("options", {})
+    for option in options.values():
+        value = option.get("value")
+        if value is not None:
+            possible.update(apply_naming_convention(decision_id, value).keys())
         else:
             possible.add(decision_id)
     return possible
 
 
 def get_decision_param_mapping(
-    analysis: Analysis,
+    analysis: dict[str, Any],
     cwl_path: Path,
 ) -> dict[str, list[str]]:
     """Get mapping of ASP decisions to CWL parameters.
 
     Args:
-        analysis: The ASP analysis specification.
+        analysis: The ASP analysis specification as a dict.
         cwl_path: Path to CWL workflow file.
 
     Returns:
@@ -91,7 +91,7 @@ def get_decision_param_mapping(
     cwl_param_names = {p.name for p in cwl_params}
     mapping: dict[str, list[str]] = {}
 
-    for decision_id, decision in analysis.decisions.items():
+    for decision_id, decision in get_decisions(analysis).items():
         matched = sorted(_get_possible_params(decision_id, decision) & cwl_param_names)
         if matched:
             mapping[decision_id] = matched
@@ -100,7 +100,7 @@ def get_decision_param_mapping(
 
 
 def validate_decision_coverage(
-    analysis: Analysis,
+    analysis: dict[str, Any],
     cwl_path: Path,
 ) -> list[WorkflowValidationError]:
     """Validate all ASP decisions map to CWL parameters.
@@ -110,7 +110,7 @@ def validate_decision_coverage(
     2. Every required CWL parameter has a corresponding ASP decision
 
     Args:
-        analysis: The ASP analysis specification.
+        analysis: The ASP analysis specification as a dict.
         cwl_path: Path to CWL workflow file.
 
     Returns:
@@ -129,7 +129,7 @@ def validate_decision_coverage(
     errors: list[WorkflowValidationError] = []
     covered_params: set[str] = set()
 
-    for decision_id, decision in analysis.decisions.items():
+    for decision_id, decision in get_decisions(analysis).items():
         possible = _get_possible_params(decision_id, decision)
         matched = possible & cwl_param_names
 
@@ -158,13 +158,13 @@ def validate_decision_coverage(
 
 
 def get_unmapped_cwl_params(
-    analysis: Analysis,
+    analysis: dict[str, Any],
     cwl_path: Path,
 ) -> list[CWLParameter]:
     """Get CWL parameters that don't map to any ASP decision.
 
     Args:
-        analysis: The ASP analysis specification.
+        analysis: The ASP analysis specification as a dict.
         cwl_path: Path to CWL workflow file.
 
     Returns:

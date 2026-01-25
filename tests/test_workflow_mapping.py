@@ -4,8 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from asp.models.analysis import Analysis, Input, Source
-from asp.models.universe import Universe
 from asp.workflow.mapping import (
     apply_naming_convention,
     extract_decision_values,
@@ -58,74 +56,66 @@ class TestExtractDecisionValues:
     """Tests for extract_decision_values function."""
 
     @pytest.fixture
-    def analysis_with_values(self) -> Analysis:
+    def analysis_with_values(self) -> dict:
         """Analysis with options that have value fields."""
-        return Analysis.model_validate(
-            {
-                "version": "1.0",
-                "analysis": {
-                    "name": "Test",
-                    "problem": "Test problem",
-                    "inputs": [{"id": "data", "type": "data"}],
-                    "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
-                },
-                "decisions": {
-                    "test_size": {
-                        "label": "Test Size",
-                        "type": "parameter",
-                        "default": "split_20",
-                        "options": {
-                            "split_20": {"label": "20%", "value": 0.2},
-                            "split_30": {"label": "30%", "value": 0.3},
-                        },
-                    },
-                    "model": {
-                        "label": "Model",
-                        "type": "method",
-                        "default": "rf",
-                        "options": {
-                            "rf": {"label": "Random Forest"},  # No value field
-                            "svm": {"label": "SVM"},
-                        },
+        return {
+            "version": "1.0",
+            "analysis": {
+                "name": "Test",
+                "problem": "Test problem",
+                "inputs": [{"id": "data", "type": "data"}],
+                "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
+            },
+            "decisions": {
+                "test_size": {
+                    "label": "Test Size",
+                    "type": "parameter",
+                    "default": "split_20",
+                    "options": {
+                        "split_20": {"label": "20%", "value": 0.2},
+                        "split_30": {"label": "30%", "value": 0.3},
                     },
                 },
-            }
-        )
+                "model": {
+                    "label": "Model",
+                    "type": "method",
+                    "default": "rf",
+                    "options": {
+                        "rf": {"label": "Random Forest"},  # No value field
+                        "svm": {"label": "SVM"},
+                    },
+                },
+            },
+        }
 
-    def test_extract_with_value_field(self, analysis_with_values: Analysis):
+    def test_extract_with_value_field(self, analysis_with_values: dict):
         """Options with value field return the value."""
-        universe = Universe.model_validate(
-            {
-                "id": "test",
-                "decisions": {"test_size": "split_20", "model": "rf"},
-            }
-        )
+        universe = {
+            "id": "test",
+            "decisions": {"test_size": "split_20", "model": "rf"},
+        }
         values = extract_decision_values(analysis_with_values, universe)
         assert values["test_size"] == 0.2
 
-    def test_extract_without_value_field(self, analysis_with_values: Analysis):
+    def test_extract_without_value_field(self, analysis_with_values: dict):
         """Options without value field return option_id as string."""
-        universe = Universe.model_validate(
-            {
-                "id": "test",
-                "decisions": {"test_size": "split_20", "model": "rf"},
-            }
-        )
+        universe = {
+            "id": "test",
+            "decisions": {"test_size": "split_20", "model": "rf"},
+        }
         values = extract_decision_values(analysis_with_values, universe)
         assert values["model"] == "rf"
 
-    def test_extract_ignores_unknown_decisions(self, analysis_with_values: Analysis):
+    def test_extract_ignores_unknown_decisions(self, analysis_with_values: dict):
         """Unknown decisions in universe are ignored."""
-        universe = Universe.model_validate(
-            {
-                "id": "test",
-                "decisions": {
-                    "test_size": "split_20",
-                    "model": "rf",
-                    "unknown": "option",
-                },
-            }
-        )
+        universe = {
+            "id": "test",
+            "decisions": {
+                "test_size": "split_20",
+                "model": "rf",
+                "unknown": "option",
+            },
+        }
         values = extract_decision_values(analysis_with_values, universe)
         assert "unknown" not in values
 
@@ -134,61 +124,57 @@ class TestGenerateCWLParams:
     """Tests for generate_cwl_params function."""
 
     @pytest.fixture
-    def full_analysis(self) -> Analysis:
+    def full_analysis(self) -> dict:
         """Analysis with various value types."""
-        return Analysis.model_validate(
-            {
-                "version": "1.0",
-                "analysis": {
-                    "name": "Test",
-                    "problem": "Test problem",
-                    "inputs": [{"id": "data", "type": "data"}],
-                    "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
+        return {
+            "version": "1.0",
+            "analysis": {
+                "name": "Test",
+                "problem": "Test problem",
+                "inputs": [{"id": "data", "type": "data"}],
+                "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
+            },
+            "decisions": {
+                "test_size": {
+                    "label": "Test Size",
+                    "type": "parameter",
+                    "default": "split_20",
+                    "options": {
+                        "split_20": {"label": "20%", "value": 0.2},
+                    },
                 },
-                "decisions": {
-                    "test_size": {
-                        "label": "Test Size",
-                        "type": "parameter",
-                        "default": "split_20",
-                        "options": {
-                            "split_20": {"label": "20%", "value": 0.2},
-                        },
-                    },
-                    "scaling": {
-                        "label": "Scaling",
-                        "type": "method",
-                        "default": "standard",
-                        "options": {
-                            "standard": {
-                                "label": "Standard",
-                                "value": {"method": "standard", "with_mean": True},
-                            },
-                        },
-                    },
-                    "model": {
-                        "label": "Model",
-                        "type": "method",
-                        "default": "rf",
-                        "options": {
-                            "rf": {"label": "Random Forest"},
+                "scaling": {
+                    "label": "Scaling",
+                    "type": "method",
+                    "default": "standard",
+                    "options": {
+                        "standard": {
+                            "label": "Standard",
+                            "value": {"method": "standard", "with_mean": True},
                         },
                     },
                 },
-            }
-        )
+                "model": {
+                    "label": "Model",
+                    "type": "method",
+                    "default": "rf",
+                    "options": {
+                        "rf": {"label": "Random Forest"},
+                    },
+                },
+            },
+        }
 
-    def test_generate_mixed_params(self, full_analysis: Analysis):
+    def test_generate_mixed_params(self, full_analysis: dict):
         """Generate params with mixed value types."""
-        universe = Universe.model_validate(
-            {
-                "id": "test",
-                "decisions": {
-                    "test_size": "split_20",
-                    "scaling": "standard",
-                    "model": "rf",
-                },
-            }
-        )
+        universe = {
+            "id": "test",
+            "decisions": {
+                "test_size": "split_20",
+                "scaling": "standard",
+                "model": "rf",
+            },
+        }
         params = generate_cwl_params(full_analysis, universe)
 
         # Simple value
@@ -207,49 +193,49 @@ class TestResolveInputSource:
 
     def test_string_source(self):
         """String source resolves to CWL File."""
-        inp = Input(id="data", type="data", source="data.csv")
+        inp = {"id": "data", "type": "data", "source": "data.csv"}
         result = resolve_input_source(inp)
         assert result == {"class": "File", "path": "data.csv"}
 
     def test_string_source_with_base_path(self):
         """String source with base path resolves to absolute path."""
-        inp = Input(id="data", type="data", source="data.csv")
+        inp = {"id": "data", "type": "data", "source": "data.csv"}
         result = resolve_input_source(inp, base_path=Path("/project"))
         assert result == {"class": "File", "path": "/project/data.csv"}
 
     def test_file_source(self):
         """Source with type=file resolves to CWL File."""
-        inp = Input(
-            id="data",
-            type="data",
-            source=Source(type="file", path="/abs/path/data.csv"),
-        )
+        inp = {
+            "id": "data",
+            "type": "data",
+            "source": {"type": "file", "path": "/abs/path/data.csv"},
+        }
         result = resolve_input_source(inp)
         assert result == {"class": "File", "path": "/abs/path/data.csv"}
 
     def test_url_source(self):
         """Source with type=url resolves to CWL File with location."""
-        inp = Input(
-            id="data",
-            type="data",
-            source=Source(type="url", url="https://example.com/data.csv"),
-        )
+        inp = {
+            "id": "data",
+            "type": "data",
+            "source": {"type": "url", "url": "https://example.com/data.csv"},
+        }
         result = resolve_input_source(inp)
         assert result == {"class": "File", "location": "https://example.com/data.csv"}
 
     def test_no_source(self):
         """Input without source returns None."""
-        inp = Input(id="data", type="data")
+        inp = {"id": "data", "type": "data"}
         result = resolve_input_source(inp)
         assert result is None
 
     def test_s3_source_returns_none(self):
         """S3 source returns None (not yet supported at runtime)."""
-        inp = Input(
-            id="data",
-            type="data",
-            source=Source(type="s3", bucket="my-bucket", key="data.csv"),
-        )
+        inp = {
+            "id": "data",
+            "type": "data",
+            "source": {"type": "s3", "bucket": "my-bucket", "key": "data.csv"},
+        }
         result = resolve_input_source(inp)
         assert result is None
 
@@ -259,20 +245,18 @@ class TestResolveInputs:
 
     def test_resolve_data_inputs(self):
         """Resolve all data inputs with sources."""
-        analysis = Analysis.model_validate(
-            {
-                "version": "1.0",
-                "analysis": {
-                    "name": "Test",
-                    "problem": "Test problem",
-                    "inputs": [
-                        {"id": "train_data", "type": "data", "source": "train.csv"},
-                        {"id": "test_data", "type": "data", "source": "test.csv"},
-                    ],
-                    "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
-                },
-            }
-        )
+        analysis = {
+            "version": "1.0",
+            "analysis": {
+                "name": "Test",
+                "problem": "Test problem",
+                "inputs": [
+                    {"id": "train_data", "type": "data", "source": "train.csv"},
+                    {"id": "test_data", "type": "data", "source": "test.csv"},
+                ],
+                "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
+            },
+        }
         result = resolve_inputs(analysis)
         assert result == {
             "train_data": {"class": "File", "path": "train.csv"},
@@ -281,40 +265,36 @@ class TestResolveInputs:
 
     def test_skip_non_data_inputs(self):
         """Skip inputs that are not type=data."""
-        analysis = Analysis.model_validate(
-            {
-                "version": "1.0",
-                "analysis": {
-                    "name": "Test",
-                    "problem": "Test problem",
-                    "inputs": [
-                        {"id": "data", "type": "data", "source": "data.csv"},
-                        {"id": "paper", "type": "literature"},
-                    ],
-                    "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
-                },
-            }
-        )
+        analysis = {
+            "version": "1.0",
+            "analysis": {
+                "name": "Test",
+                "problem": "Test problem",
+                "inputs": [
+                    {"id": "data", "type": "data", "source": "data.csv"},
+                    {"id": "paper", "type": "literature"},
+                ],
+                "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
+            },
+        }
         result = resolve_inputs(analysis)
         assert "data" in result
         assert "paper" not in result
 
     def test_skip_inputs_without_source(self):
         """Skip data inputs without source."""
-        analysis = Analysis.model_validate(
-            {
-                "version": "1.0",
-                "analysis": {
-                    "name": "Test",
-                    "problem": "Test problem",
-                    "inputs": [
-                        {"id": "with_source", "type": "data", "source": "data.csv"},
-                        {"id": "no_source", "type": "data"},
-                    ],
-                    "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
-                },
-            }
-        )
+        analysis = {
+            "version": "1.0",
+            "analysis": {
+                "name": "Test",
+                "problem": "Test problem",
+                "inputs": [
+                    {"id": "with_source", "type": "data", "source": "data.csv"},
+                    {"id": "no_source", "type": "data"},
+                ],
+                "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
+            },
+        }
         result = resolve_inputs(analysis)
         assert "with_source" in result
         assert "no_source" not in result
@@ -325,26 +305,24 @@ class TestGenerateCWLParamsWithInputs:
 
     def test_include_inputs(self):
         """Generate params including inputs."""
-        analysis = Analysis.model_validate(
-            {
-                "version": "1.0",
-                "analysis": {
-                    "name": "Test",
-                    "problem": "Test problem",
-                    "inputs": [{"id": "data", "type": "data", "source": "train.csv"}],
-                    "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
+        analysis = {
+            "version": "1.0",
+            "analysis": {
+                "name": "Test",
+                "problem": "Test problem",
+                "inputs": [{"id": "data", "type": "data", "source": "train.csv"}],
+                "outputs": [{"id": "result", "type": "metric", "dtype": "float"}],
+            },
+            "decisions": {
+                "model": {
+                    "label": "Model",
+                    "type": "method",
+                    "default": "rf",
+                    "options": {"rf": {"label": "RF"}},
                 },
-                "decisions": {
-                    "model": {
-                        "label": "Model",
-                        "type": "method",
-                        "default": "rf",
-                        "options": {"rf": {"label": "RF"}},
-                    },
-                },
-            }
-        )
-        universe = Universe.model_validate({"id": "test", "decisions": {"model": "rf"}})
+            },
+        }
+        universe = {"id": "test", "decisions": {"model": "rf"}}
         params = generate_cwl_params(analysis, universe, include_inputs=True)
 
         assert params["model"] == "rf"

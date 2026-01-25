@@ -1,37 +1,35 @@
-"""Pydantic models for CWL workflow integration."""
+"""Data models for CWL workflow integration.
+
+Uses dataclasses instead of Pydantic to avoid model dependencies.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
 
-
-class ParameterMapping(BaseModel):
+@dataclass
+class ParameterMapping:
     """Explicit mapping override from ASP decision to CWL parameter."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    decision: str = Field(description="ASP decision reference")
-    cwl_param: str = Field(description="CWL parameter name")
-    transform: str | None = Field(default=None, description="Optional transform expression")
+    decision: str
+    cwl_param: str
+    transform: str | None = None
 
 
-class WorkflowConfig(BaseModel):
+@dataclass
+class WorkflowConfig:
     """Workflow configuration for an ASP analysis."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    path: Path = Field(description="Path to CWL workflow file")
-    mappings: list[ParameterMapping] = Field(default_factory=list)
+    path: Path
+    mappings: list[ParameterMapping] = field(default_factory=list)
 
 
-class CWLParameter(BaseModel):
+@dataclass
+class CWLParameter:
     """Parsed CWL input parameter."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str
     type: str

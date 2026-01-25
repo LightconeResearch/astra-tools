@@ -3,19 +3,22 @@
 A declarative specification format for scientific analyses.
 """
 
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
 from asp.helpers import (
     create_universe_from_defaults,
     get_decision,
+    get_decisions,
     get_default_universe,
     get_input,
+    get_inputs,
+    get_option,
+    get_option_value,
     get_output,
+    get_outputs,
     load_yaml,
     save_yaml,
 )
-from asp.models.analysis import Analysis, Decision, Input, Option, Output
-from asp.models.universe import Universe
 from asp.validation import (
     get_analysis_schema,
     get_insights_schema,
@@ -28,22 +31,23 @@ from asp.validation import (
     validate_universe_schema,
 )
 
-__version__ = version("asp")
+try:
+    __version__ = version("asp")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev"
 
 __all__ = [
-    # Pydantic Models (for convenience and workflow module)
-    "Analysis",
-    "Decision",
-    "Input",
-    "Option",
-    "Output",
-    "Universe",
     # Dict-based helpers
     "create_universe_from_defaults",
     "get_decision",
+    "get_decisions",
     "get_default_universe",
     "get_input",
+    "get_inputs",
+    "get_option",
+    "get_option_value",
     "get_output",
+    "get_outputs",
     "load_yaml",
     "save_yaml",
     # Validation

@@ -187,3 +187,68 @@ def get_insight_ids(data: dict[str, Any]) -> set[str]:
         Set of insight IDs.
     """
     return set(data.get("insights", {}).keys())
+
+
+def get_inputs(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Get all inputs from analysis data.
+
+    Args:
+        data: Analysis data as a dict.
+
+    Returns:
+        List of input dicts.
+    """
+    return data.get("analysis", {}).get("inputs", [])
+
+
+def get_outputs(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Get all outputs from analysis data.
+
+    Args:
+        data: Analysis data as a dict.
+
+    Returns:
+        List of output dicts.
+    """
+    return data.get("analysis", {}).get("outputs", [])
+
+
+def get_decisions(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Get all decisions from analysis data.
+
+    Args:
+        data: Analysis data as a dict.
+
+    Returns:
+        Dict mapping decision_id to decision dict.
+    """
+    return data.get("decisions", {})
+
+
+def get_option(decision: dict[str, Any], option_id: str) -> dict[str, Any] | None:
+    """Get an option from a decision by ID.
+
+    Args:
+        decision: Decision dict.
+        option_id: The option ID to find.
+
+    Returns:
+        The option dict if found, None otherwise.
+    """
+    return decision.get("options", {}).get(option_id)
+
+
+def get_option_value(decision: dict[str, Any], option_id: str) -> Any:
+    """Get the value from an option, or option_id if no value field.
+
+    Args:
+        decision: Decision dict.
+        option_id: The option ID to get the value from.
+
+    Returns:
+        The option's value field if present, otherwise the option_id string.
+    """
+    option = get_option(decision, option_id)
+    if option is None:
+        return option_id
+    return option.get("value", option_id)
