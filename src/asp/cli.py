@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -77,7 +78,12 @@ def main() -> None:
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
 @click.option("--no-venv", is_flag=True, help="Don't create Python virtual environment")
-def init(directory: Path, no_git: bool, no_venv: bool) -> None:
+@click.option(
+    "--local",
+    is_flag=True,
+    help="Copy Claude skills locally instead of using marketplace (useful for development)",
+)
+def init(directory: Path, no_git: bool, no_venv: bool, local: bool) -> None:
     """Create a new ASP analysis project.
 
     Creates the project scaffolding for an ASP analysis with Claude Code
@@ -89,6 +95,7 @@ def init(directory: Path, no_git: bool, no_venv: bool) -> None:
         asp init my-analysis
         asp init my-analysis --no-git    # Without git initialization
         asp init my-analysis --no-venv   # Without virtual environment
+        asp init my-analysis --local     # Copy skills locally for development
     """
     # Create project directory
     if directory != Path("."):
@@ -126,8 +133,11 @@ __pycache__/
     # Create boilerplate asp.yaml
     _create_boilerplate_asp_yaml(directory)
 
-    # Create Claude Code settings to auto-install ASP plugin
-    _create_claude_settings(directory)
+    # Create Claude Code settings (either marketplace or local)
+    if local:
+        _create_local_claude_settings(directory)
+    else:
+        _create_claude_settings(directory)
 
     # Create virtual environment
     venv_created = _create_venv(directory, no_venv)
@@ -141,10 +151,17 @@ __pycache__/
     if venv_created:
         includes += ", .venv/"
     console.print(f"[dim]  Includes: {includes}[/dim]")
+    if local:
+        console.print("[dim]  Mode: local (skills copied into project)[/dim]")
+    else:
+        console.print("[dim]  Mode: marketplace (skills fetched from GitHub)[/dim]")
 
     console.print("\n[bold]Next steps:[/bold]")
     console.print(f"  1. [cyan]cd {directory}[/cyan]")
-    console.print("  2. Run [cyan]claude[/cyan] to launch Claude Code (ASP plugin auto-installs)")
+    if local:
+        console.print("  2. Run [cyan]claude[/cyan] to launch Claude Code (skills are local)")
+    else:
+        console.print("  2. Run [cyan]claude[/cyan] to launch Claude Code (ASP plugin auto-installs)")
     console.print("  3. Edit [cyan]asp.yaml[/cyan] to define inputs, outputs, and decisions")
     console.print("  4. Run [cyan]asp validate asp.yaml[/cyan] to check your spec")
 
@@ -271,6 +288,117 @@ def _create_claude_settings(directory: Path) -> None:
             }
         },
         "enabledPlugins": {"asp@asp": True},
+    }
+
+    settings_file = claude_dir / "settings.json"
+    settings_file.write_text(json.dumps(settings, indent=2) + "\n")
+
+
+def _get_plugin_source_dir() -> Path | None:
+    """Find the ASP plugin source directory.
+
+    Looks for the plugin files in:
+    1. Bundled location (installed package): asp/claude/asp/
+    2. Development location (repo): claude/asp/ relative to repo root
+    """
+    # Try bundled location first (installed package)
+    import asp
+
+    package_dir = Path(asp.__file__).parent
+    bundled_plugin = package_dir / "claude" / "asp"
+    if bundled_plugin.exists():
+        return bundled_plugin
+
+    # Try development location (running from repo)
+    # Go up from src/asp/ to repo root, then into claude/asp/
+    repo_root = package_dir.parent.parent
+    dev_plugin = repo_root / "claude" / "asp"
+    if dev_plugin.exists():
+        return dev_plugin
+
+    return None
+
+
+def _create_local_claude_settings(directory: Path) -> None:
+    """Create Claude Code settings with skills copied locally.
+
+    Instead of using the marketplace, this copies the plugin files directly
+    into the project's .claude/ directory for local development.
+    """
+    claude_dir = directory / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find the plugin source directory
+    plugin_source = _get_plugin_source_dir()
+    if plugin_source is None:
+        console.print(
+            "[yellow]Warning:[/yellow] Could not find ASP plugin source files. "
+            "Falling back to marketplace mode."
+        )
+        _create_claude_settings(directory)
+        return
+
+    # Copy scripts
+    scripts_src = plugin_source / "scripts"
+    scripts_dst = claude_dir / "scripts"
+    if scripts_src.exists():
+        if scripts_dst.exists():
+            shutil.rmtree(scripts_dst)
+        shutil.copytree(scripts_src, scripts_dst)
+        # Make scripts executable
+        for script in scripts_dst.glob("*.sh"):
+            script.chmod(script.stat().st_mode | 0o111)
+
+    # Copy skills
+    skills_src = plugin_source / "skills"
+    skills_dst = claude_dir / "skills"
+    if skills_src.exists():
+        if skills_dst.exists():
+            shutil.rmtree(skills_dst)
+        shutil.copytree(skills_src, skills_dst)
+
+    # Create settings.json with hooks configured directly (no marketplace)
+    settings = {
+        "permissions": {
+            "allow": [
+                "Bash(asp:*)",
+                "Bash(python:*)",
+                "Bash(cwltool:*)",
+                "Edit",
+                "WebSearch",
+                "WebFetch",
+            ],
+        },
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": ".claude/scripts/activate-venv.sh",
+                            "timeout": 5,
+                        },
+                        {
+                            "type": "command",
+                            "command": ".claude/scripts/session-start.sh",
+                            "timeout": 10,
+                        },
+                    ],
+                },
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "Write|Edit",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": ".claude/scripts/validate-on-save.sh",
+                            "timeout": 15,
+                        },
+                    ],
+                },
+            ],
+        },
     }
 
     settings_file = claude_dir / "settings.json"

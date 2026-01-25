@@ -165,8 +165,9 @@ See [examples/iris/](examples/iris/) for a complete working example.
 
 ```bash
 # Project setup
-asp init my-analysis                   # Create new analysis project (with Claude Code plugin config)
+asp init my-analysis                   # Create new analysis project (with Claude Code plugin)
 asp init my-analysis --no-git          # Create without git initialization
+asp init my-analysis --local           # Copy skills locally (for development)
 
 # Validation
 asp validate asp.yaml                  # Validate analysis specification
@@ -211,6 +212,27 @@ my-analysis/
 └── .claude/              # Claude Code configuration
     └── settings.json     # Auto-installs ASP plugin
 ```
+
+### Plugin Modes
+
+By default, `asp init` configures Claude Code to fetch the ASP plugin from GitHub (marketplace mode). Use `--local` to copy skills directly into the project:
+
+```bash
+asp init my-analysis --local
+```
+
+This creates:
+```
+.claude/
+├── settings.json         # Hooks configured directly
+├── scripts/              # Hook scripts (activate-venv, validate-on-save, etc.)
+└── skills/asp/           # Skill files (SKILL.md, workflow-guide.md)
+```
+
+**When to use `--local`:**
+- Developing or customizing ASP skills
+- Offline environments
+- Self-contained projects that don't depend on external repos
 
 ## Design Principles
 
