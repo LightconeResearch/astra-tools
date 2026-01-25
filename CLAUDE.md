@@ -22,12 +22,12 @@ agentic-science-protocol/
 ├── .claude-plugin/                # Claude Code plugin marketplace (at repo root)
 │   └── marketplace.json           # Marketplace definition
 │
-├── agent-plugins/                 # Plugin implementations
-│   └── asp-analysis/              # ASP analysis plugin
+├── claude/                        # Claude Code plugin implementations
+│   └── asp/                       # ASP plugin
 │       ├── .claude-plugin/
 │       │   └── plugin.json        # Plugin manifest
 │       └── skills/
-│           └── asp-analysis/
+│           └── asp/
 │               ├── SKILL.md       # Skill instructions
 │               └── SCHEMA_REFERENCE.md
 │
@@ -287,4 +287,4 @@ version: "1.0"  # Must match a spec/X.Y/ directory
 
 - **DESIGN.md**: Complete specification of the ASP format
 - **README.md**: User-facing documentation and quick start
-- **agent-plugins/asp-analysis/skills/asp-analysis/SKILL.md**: Skill instructions for working with ASP
+- **claude/asp/skills/asp/SKILL.md**: Skill instructions for working with ASP

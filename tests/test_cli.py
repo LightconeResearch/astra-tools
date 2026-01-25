@@ -320,15 +320,14 @@ class TestInitCommand:
         # Check settings content
         settings = json.loads(settings_path.read_text())
         assert "extraKnownMarketplaces" in settings
-        assert "asp-plugins" in settings["extraKnownMarketplaces"]
+        assert "asp" in settings["extraKnownMarketplaces"]
         assert "enabledPlugins" in settings
-        assert settings["enabledPlugins"].get("asp-analysis@asp-plugins") is True
+        assert settings["enabledPlugins"].get("asp@asp") is True
 
-        # Check marketplace source (at repo root, so no path needed)
-        marketplace = settings["extraKnownMarketplaces"]["asp-plugins"]
-        assert marketplace["source"]["source"] == "github"
-        assert marketplace["source"]["repo"] == "LightconeResearch/ASP"
-        assert "path" not in marketplace["source"]
+        # Check marketplace source (SSH git URL)
+        marketplace = settings["extraKnownMarketplaces"]["asp"]
+        assert marketplace["source"]["source"] == "git"
+        assert marketplace["source"]["url"] == "git@github.com:LightconeResearch/ASP.git"
 
     def test_init_existing_nonempty_dir_decline(self, runner: CliRunner, tmp_path: Path):
         """Test declining to overwrite existing non-empty directory."""

@@ -4,12 +4,12 @@ This directory contains Claude Code plugins for working with ASP (Agentic Scienc
 
 ## Available Plugins
 
-### asp-analysis
+### asp
 
 Work with ASP analyses - create specs, extract insights, validate, and manage universes.
 
 **Skills provided:**
-- `asp-analysis`: Help design and execute ASP analyses
+- `asp`: Help design and execute ASP analyses
 
 ## Plugin Installation
 
@@ -22,22 +22,22 @@ To manually install the plugin in any project, add this to your `.claude/setting
 ```json
 {
   "extraKnownMarketplaces": {
-    "asp-plugins": {
+    "asp": {
       "source": {
-        "source": "github",
-        "repo": "LightconeResearch/ASP"
+        "source": "git",
+        "url": "git@github.com:LightconeResearch/ASP.git"
       }
     }
   },
   "enabledPlugins": {
-    "asp-analysis@asp-plugins": true
+    "asp@asp": true
   }
 }
 ```
 
 ## Plugin Development
 
-The marketplace is defined in `/.claude-plugin/marketplace.json` at the repository root. Each plugin has its own directory under `agent-plugins/` with:
+The marketplace is defined in `/.claude-plugin/marketplace.json` at the repository root. Each plugin has its own directory under `claude/` with:
 
 - `.claude-plugin/plugin.json` - Plugin manifest
 - `skills/` - Skill definitions (markdown files with frontmatter)

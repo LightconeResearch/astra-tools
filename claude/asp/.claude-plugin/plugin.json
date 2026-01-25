@@ -1,5 +1,5 @@
 {
-  "name": "asp-analysis",
+  "name": "asp",
   "description": "Work with ASP (Agentic Science Protocol) analyses. Create new analyses, extract insights from papers, validate specifications, and manage universes.",
   "version": "1.0.0",
   "author": {

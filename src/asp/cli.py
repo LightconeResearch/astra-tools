@@ -237,14 +237,14 @@ def _create_claude_settings(directory: Path) -> None:
 
     settings = {
         "extraKnownMarketplaces": {
-            "asp-plugins": {
+            "asp": {
                 "source": {
-                    "source": "github",
-                    "repo": "LightconeResearch/ASP",
+                    "source": "git",
+                    "url": "git@github.com:LightconeResearch/ASP.git",
                 }
             }
         },
-        "enabledPlugins": {"asp-analysis@asp-plugins": True},
+        "enabledPlugins": {"asp@asp": True},
     }
 
     settings_file = claude_dir / "settings.json"

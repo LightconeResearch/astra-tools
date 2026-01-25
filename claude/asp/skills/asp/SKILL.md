@@ -1,5 +1,5 @@
 ---
-name: asp-analysis
+name: asp
 description: Work with ASP (Agentic Science Protocol) analyses. Use when creating new analyses, extracting insights from papers, validating specifications, or managing universes. Triggers on mentions of ASP, analysis specs, scientific insights, paper extraction, or decision documentation.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(asp:*), Bash(python:*)
 ---

@@ -1,5 +1,5 @@
 {
-  "name": "asp-plugins",
+  "name": "asp",
   "owner": {
     "name": "Lightcone Research"
   },
@@ -8,8 +8,8 @@
   },
   "plugins": [
     {
-      "name": "asp-analysis",
-      "source": "./agent-plugins/asp-analysis",
+      "name": "asp",
+      "source": "./claude/asp",
       "description": "Work with ASP analyses - create specs, extract insights, validate, manage universes"
     }
   ]
