@@ -10,10 +10,20 @@ from asp.workflow.mapping import (
     extract_decision_values,
     generate_cwl_params,
 )
+from asp.workflow.models import (
+    CWLParameter,
+    ParameterMapping,
+    WorkflowConfig,
+    WorkflowValidationError,
+)
 from asp.workflow.parser import parse_cwl_inputs
 from asp.workflow.validator import validate_cwl_syntax, validate_decision_coverage
 
 __all__ = [
+    "CWLParameter",
+    "ParameterMapping",
+    "WorkflowConfig",
+    "WorkflowValidationError",
     "apply_naming_convention",
     "extract_decision_values",
     "generate_cwl_params",
