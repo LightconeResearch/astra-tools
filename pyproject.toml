@@ -55,11 +55,13 @@ source = "vcs"
 packages = ["src/asp"]
 
 # Automatically bundle spec/draft/ into the package as asp/spec/
+# Bundle claude/asp/ for --local flag support in asp init
 [tool.hatch.build.targets.wheel.force-include]
 "spec/draft" = "asp/spec"
+"claude/asp" = "asp/claude/asp"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/asp", "spec/draft"]
+include = ["src/asp", "spec/draft", "claude/asp"]
 
 [tool.ruff]
 target-version = "py311"
