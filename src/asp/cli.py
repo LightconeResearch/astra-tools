@@ -161,7 +161,7 @@ __pycache__/
     if local:
         console.print("  2. Run [cyan]claude[/cyan] to launch Claude Code (skills are local)")
     else:
-        console.print("  2. Run [cyan]claude[/cyan] to launch Claude Code (ASP plugin auto-installs)")
+        console.print("  2. Run [cyan]claude[/cyan] to launch Claude Code (plugin auto-installs)")
     console.print("  3. Edit [cyan]asp.yaml[/cyan] to define inputs, outputs, and decisions")
     console.print("  4. Run [cyan]asp validate asp.yaml[/cyan] to check your spec")
 
