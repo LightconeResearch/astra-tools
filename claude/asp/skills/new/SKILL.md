@@ -1,16 +1,16 @@
 ---
-name: asp-new
+name: new
 description: Create a new ASP analysis project - scope research question, identify chunks, define the full spec
 allowed-tools: Read, Write(asp.yaml), Write(universes/*), Edit(asp.yaml), Edit(universes/*), Glob, Grep, Bash(asp validate:*), Bash(asp info:*), Bash(asp init:*), Bash(asp universe:*), Bash(mkdir:*), WebFetch, AskUserQuestion
 ---
 
-# /asp-new
+# /asp:new
 
 Create a new ASP analysis project through direct conversation. Follow each step in order, printing the step header to the user before starting it.
 
 ## Setup
 
-1. Read the ASP reference guide: `.claude/skills/asp/SKILL.md`
+1. Read the ASP reference guide: `.claude/skills/reference/SKILL.md`
 2. Read `asp.yaml` if it exists (to avoid overwriting)
 
 ## Step 1: Scope the Research Question
@@ -33,7 +33,7 @@ Techniques:
 
 Don't ask all of these. Pick what matters. Two sharp questions beat five routine ones.
 
-**Ask about substance, not methodology.** Focus on the science — priors, algorithm families, domain constraints, what counts as a good result. Don't ask HOW to implement things (that's `/asp-build`). Good questions: "What model families make sense here — generative, discriminative, or both?" / "Are there known priors or constraints on these parameters?" / "What baseline would you compare against?" Bad questions: "What preprocessing should we use?" / "How should we split the data?"
+**Ask about substance, not methodology.** Focus on the science — priors, algorithm families, domain constraints, what counts as a good result. Don't ask HOW to implement things (that's `/asp:build`). Good questions: "What model families make sense here — generative, discriminative, or both?" / "Are there known priors or constraints on these parameters?" / "What baseline would you compare against?" Bad questions: "What preprocessing should we use?" / "How should we split the data?"
 
 When the user answers a question and it maps to a decision (e.g., they pick an algorithm family or a prior), note it — you'll mark that decision `reviewed: true` when you write the spec.
 
@@ -43,6 +43,7 @@ Keep a mental checklist — don't walk through it out loud:
 - What a "clear answer" looks like (this becomes success criteria)
 - What scientific choices matter (algorithm families, priors, domain constraints — these become decisions)
 - What chunks the analysis needs (even a simple analysis has a `main` chunk)
+- What papers or literature they want to incorporate (note as `type: literature` inputs — actual insight extraction happens later via `/asp:insights`)
 
 You have enough when every item has at least a rough answer.
 
@@ -59,7 +60,7 @@ You have enough when every item has at least a rough answer.
 - Over-splitting — don't create many chunks when one would do. A single chunk is fine
 - Jargon dumping — don't explain ASP concepts unless the user asks
 - One-at-a-time questions — batch them. The user shouldn't need 5 round trips when 2 would do
-- Asking implementation questions — "what preprocessing?" or "what test split?" belongs in `/asp-build`, not here
+- Asking implementation questions — "what preprocessing?" or "what test split?" belongs in `/asp:build`, not here
 
 ## Step 2: Write the Specification
 
@@ -67,7 +68,7 @@ Print: `## Step 2: Write the Specification`
 
 Based on what you learned in Step 1, write `asp.yaml` directly. Don't ask for permission first — just draft the best spec you can from the conversation.
 
-Any decision the user explicitly weighed in on during Step 1 gets `reviewed: true`. Decisions you inferred or filled in with sensible defaults stay unreviewed — `/asp-plan` will surface those later.
+Any decision the user explicitly weighed in on during Step 1 gets `reviewed: true`. Decisions you inferred or filled in with sensible defaults stay unreviewed.
 
 Structure:
 - **analysis**: problem, success_criteria, inputs, outputs
@@ -95,7 +96,7 @@ chunks:
 
 After writing, present a brief summary of what you wrote (problem, inputs, outputs, chunks, key decisions) and ask the user:
 
-"Want to continue to `/asp-build <first_chunk>`? Or tell me what to change."
+"Want to continue to `/asp:build <first_chunk>`? Or tell me what to change."
 
 If the user gives edit instructions, apply them to `asp.yaml`, re-validate, and ask again.
 
@@ -119,4 +120,4 @@ When the user confirms they want to continue, print:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-"Analysis project created with [N] chunk(s)." List the chunks, then: "Run `/asp-build <first_chunk_name>` to start building."
+"Analysis project created with [N] chunk(s)." List the chunks, then: "Run `/asp:build <first_chunk_name>` to start building."

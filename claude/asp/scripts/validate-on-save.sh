@@ -65,8 +65,25 @@ fi
 
 # Prepare response
 if [ $exit_code -eq 0 ]; then
-    # Validation passed
-    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"ASP validation passed for $filename\"}}"
+    # Validation passed - check if we should also run verify for analysis files with insights
+    verify_output=""
+    if [ "$file_type" = "analysis" ]; then
+        # Check if insights section exists in asp.yaml
+        if grep -q "^insights:" asp.yaml 2>/dev/null; then
+            verify_result=$(asp verify asp.yaml 2>&1)
+            verify_code=$?
+            if [ $verify_code -ne 0 ]; then
+                verify_output="\n\nVerification warnings:\n$verify_result"
+            fi
+        fi
+    fi
+
+    if [ -n "$verify_output" ]; then
+        escaped_result=$(echo "ASP validation passed for $filename$verify_output" | jq -Rs .)
+        echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": $escaped_result}}"
+    else
+        echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"ASP validation passed for $filename\"}}"
+    fi
 else
     # Validation failed - provide context to Claude
     # Escape the result for JSON (jq -Rs . adds quotes, so use it directly)

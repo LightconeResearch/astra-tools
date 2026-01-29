@@ -1,0 +1,24 @@
+# Evidence references non-existent insight
+version: "1.0"
+
+analysis:
+  name: "Test"
+  problem: "Test problem"
+  inputs:
+    - id: data
+      type: data
+  outputs:
+    - id: result
+      type: metric
+
+chunks:
+  main:
+    decisions:
+      method:
+        label: "Method"
+        type: method
+        options:
+          a:
+            label: "A"
+            evidence:
+              - insight: nonexistent_insight  # This insight doesn't exist

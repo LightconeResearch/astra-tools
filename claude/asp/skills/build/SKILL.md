@@ -1,23 +1,23 @@
 ---
-name: asp-build
-description: Build an ASP analysis chunk. Usage: /asp-build [chunk] — build and run a specific chunk or all chunks.
+name: build
+description: Build and run an ASP analysis chunk. Usage: /asp:build [chunk] — build and run a specific chunk or all chunks.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, AskUserQuestion
 ---
 
-# /asp-build
+# /asp:build
 
-Build and run an analysis chunk. Decisions have already been reviewed during `/asp-new` — just build.
+Build and run an analysis chunk. Decisions have already been reviewed during `/asp:new` — just build.
 
-`/asp-new` defines WHAT we want. `/asp-build` figures out HOW to do it and executes.
+`/asp:new` defines WHAT we want. `/asp:build` figures out HOW to do it and executes.
 
 **Usage:**
-- `/asp-build` — build all chunks in order
-- `/asp-build <chunk>` — build a specific chunk by name
+- `/asp:build` — build all chunks in order
+- `/asp:build <chunk>` — build a specific chunk by name
 
 ## Setup
 
-1. Read the ASP reference guide: `.claude/skills/asp/SKILL.md`
-2. Read the workflow guide: `.claude/skills/asp/workflow-guide.md`
+1. Read the ASP reference guide: `.claude/skills/reference/SKILL.md`
+2. Read the workflow guide: `.claude/skills/reference/workflow-guide.md`
 3. Read `asp.yaml` to understand the specification
 4. If `<chunk>` was given, confirm it exists in `chunks`
 
@@ -43,5 +43,5 @@ When building a specific chunk, scope all work to that chunk's decisions. Chunk 
 ## Completion
 
 - "Chunk `<name>` built and results ready." Use the actual chunk name.
-- If there are remaining chunks, suggest: "Run `/asp-build <next_chunk>` to continue."
+- If there are remaining chunks, suggest: "Run `/asp:build <next_chunk>` to continue."
 - If all chunks are done: "All chunks built. The analysis is complete."

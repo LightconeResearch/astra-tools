@@ -136,7 +136,7 @@ __pycache__/
 
     # Print success message
     console.print(f"\n[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
-    includes = "asp.yaml, universes/, workflows/, steps/, .claude/"
+    includes = "asp.yaml, universes/, workflows/, steps/"
     if venv_created:
         includes += ", .venv/"
     console.print(f"[dim]  Includes: {includes}[/dim]")
@@ -144,9 +144,9 @@ __pycache__/
     console.print("\n[bold]Next steps:[/bold]")
     console.print(f"  1. [cyan]cd {directory}[/cyan]")
     console.print("  2. Run [cyan]claude[/cyan] to launch Claude Code")
-    console.print(
-        "  3. Run [cyan]/asp:new[/cyan] to scope your research question and define the analysis"
-    )
+    console.print("  3. Use [cyan]/asp:new[/cyan] to scope your research question")
+    console.print()
+    console.print("[dim]Available commands: /asp:new, /asp:build, /asp:insights[/dim]")
 
 
 def _create_boilerplate_asp_yaml(directory: Path) -> None:
@@ -274,7 +274,12 @@ def _get_plugin_source_dir() -> Path | None:
 
 
 def _create_claude_settings(directory: Path) -> None:
-    """Create Claude Code settings with ASP skills and agents."""
+    """Create Claude Code settings with ASP plugin installed locally.
+
+    Copies the full ASP plugin to .claude/plugins/asp/ so skills are
+    invoked as /asp:new, /asp:build, etc. The plugin is auto-discovered
+    by Claude Code when running in the project directory.
+    """
     claude_dir = directory / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
 
@@ -287,34 +292,23 @@ def _create_claude_settings(directory: Path) -> None:
         )
         return
 
-    # Copy scripts
-    scripts_src = plugin_source / "scripts"
-    scripts_dst = claude_dir / "scripts"
-    if scripts_src.exists():
-        if scripts_dst.exists():
-            shutil.rmtree(scripts_dst)
-        shutil.copytree(scripts_src, scripts_dst)
-        # Make scripts executable
+    # Copy entire plugin to .claude/plugins/asp/
+    plugins_dir = claude_dir / "plugins"
+    plugin_dst = plugins_dir / "asp"
+    if plugin_dst.exists():
+        shutil.rmtree(plugin_dst)
+    shutil.copytree(plugin_source, plugin_dst)
+
+    # Make scripts executable
+    scripts_dst = plugin_dst / "scripts"
+    if scripts_dst.exists():
         for script in scripts_dst.glob("*.sh"):
             script.chmod(script.stat().st_mode | 0o111)
 
-    # Copy skills
-    skills_src = plugin_source / "skills"
-    skills_dst = claude_dir / "skills"
-    if skills_src.exists():
-        if skills_dst.exists():
-            shutil.rmtree(skills_dst)
-        shutil.copytree(skills_src, skills_dst)
+    console.print("[green]✓[/green] Installed ASP plugin locally")
 
-    # Copy agents (for sub-agent spawning)
-    agents_src = plugin_source / "agents"
-    agents_dst = claude_dir / "agents"
-    if agents_src.exists():
-        if agents_dst.exists():
-            shutil.rmtree(agents_dst)
-        shutil.copytree(agents_src, agents_dst)
-
-    # Create settings.json with hooks configured directly (no marketplace)
+    # Create settings.json with permissions
+    # The plugin at .claude/plugins/asp/ is auto-discovered by Claude Code
     settings = {
         "permissions": {
             "allow": [
@@ -324,36 +318,6 @@ def _create_claude_settings(directory: Path) -> None:
                 "Edit",
                 "WebSearch",
                 "WebFetch",
-            ],
-        },
-        "hooks": {
-            "SessionStart": [
-                {
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": ".claude/scripts/activate-venv.sh",
-                            "timeout": 5,
-                        },
-                        {
-                            "type": "command",
-                            "command": ".claude/scripts/session-start.sh",
-                            "timeout": 10,
-                        },
-                    ],
-                },
-            ],
-            "PostToolUse": [
-                {
-                    "matcher": "Write|Edit",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": ".claude/scripts/validate-on-save.sh",
-                            "timeout": 15,
-                        },
-                    ],
-                },
             ],
         },
     }
@@ -492,6 +456,126 @@ def validate(file: Path, analysis: Path | None) -> None:
 
     console.print("[green]✓[/green] Semantic validation passed")
     console.print("\n[green]Validation successful![/green]")
+
+
+@main.command()
+@click.argument("analysis", type=click.Path(exists=True, path_type=Path), required=False)
+@click.option("--insight", "-i", help="Verify specific insight by ID")
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    help="Directory to cache downloaded PDFs",
+)
+def verify(analysis: Path | None, insight: str | None, cache_dir: Path | None) -> None:
+    """Verify insight evidence exists in source documents.
+
+    Downloads PDFs (arXiv only) and checks that quoted text exists.
+    Results show whether evidence was verified, not found, or skipped.
+
+    Examples:
+        asp verify                           # Verify all insights
+        asp verify asp.yaml                  # Explicit analysis file
+        asp verify --insight scaling_paper   # Verify specific insight
+    """
+    try:
+        from asp.verification import InsightVerification, VerificationStatus, verify_insight
+    except ImportError:
+        console.print("[red]Error:[/red] Verification requires optional dependencies.")
+        console.print("Install with: [cyan]pip install asp[verify][/cyan]")
+        raise SystemExit(1)
+
+    analysis_path = _require_analysis(analysis)
+    data = load_yaml(analysis_path)
+
+    insights = data.get("insights", {})
+    if not insights:
+        console.print("[yellow]No insights found in analysis.[/yellow]")
+        return
+
+    # Filter to specific insight if requested
+    if insight:
+        if insight not in insights:
+            console.print(f"[red]Error:[/red] Insight '{insight}' not found.")
+            console.print(f"Available insights: {', '.join(insights.keys())}")
+            raise SystemExit(1)
+        insights = {insight: insights[insight]}
+
+    console.print(f"Verifying [cyan]{len(insights)}[/cyan] insight(s)...\n")
+
+    # Verify each insight
+    results: list[InsightVerification] = []
+    for insight_id, insight_data in insights.items():
+        # Add id to insight data if not present (it's stored as the key)
+        if "id" not in insight_data:
+            insight_data["id"] = insight_id
+        result = verify_insight(insight_data, cache_dir=cache_dir)
+        results.append(result)
+
+    # Display results table
+    table = Table(show_header=True)
+    table.add_column("Insight")
+    table.add_column("Source")
+    table.add_column("Status")
+    table.add_column("Details")
+
+    status_colors = {
+        VerificationStatus.VERIFIED: "green",
+        VerificationStatus.NOT_FOUND: "red",
+        VerificationStatus.WRONG_PAGE: "yellow",
+        VerificationStatus.SKIPPED: "dim",
+        VerificationStatus.ERROR: "red",
+    }
+
+    for result in results:
+        color = status_colors.get(result.overall_status, "white")
+        status_text = f"[{color}]{result.overall_status.value}[/{color}]"
+
+        # Build details
+        if result.evidence_results:
+            verified = sum(
+                1 for e in result.evidence_results if e.status == VerificationStatus.VERIFIED
+            )
+            total = len(result.evidence_results)
+            details = f"{verified}/{total} evidence verified"
+        else:
+            details = ""
+
+        table.add_row(result.insight_id, result.source_id, status_text, details)
+
+    console.print(table)
+
+    # Show detailed evidence results if there are issues
+    failed_statuses = (
+        VerificationStatus.NOT_FOUND,
+        VerificationStatus.WRONG_PAGE,
+        VerificationStatus.ERROR,
+    )
+    has_issues = any(r.overall_status in failed_statuses for r in results)
+
+    if has_issues:
+        console.print("\n[bold]Evidence Details:[/bold]")
+        for result in results:
+            if result.overall_status in failed_statuses:
+                console.print(f"\n[cyan]{result.insight_id}[/cyan]:")
+                for ev in result.evidence_results:
+                    if ev.status != VerificationStatus.VERIFIED:
+                        ev_color = status_colors.get(ev.status, "white")
+                        console.print(f"  [{ev_color}]{ev.evidence_id}[/{ev_color}]: {ev.message}")
+
+    # Summary
+    verified_count = sum(1 for r in results if r.overall_status == VerificationStatus.VERIFIED)
+    skipped_count = sum(1 for r in results if r.overall_status == VerificationStatus.SKIPPED)
+    failed_count = len(results) - verified_count - skipped_count
+
+    console.print()
+    if failed_count == 0:
+        console.print(f"[green]✓[/green] {verified_count} verified, {skipped_count} skipped")
+    else:
+        console.print(
+            f"[red]✗[/red] {failed_count} failed, {verified_count} verified, "
+            f"{skipped_count} skipped"
+        )
+        raise SystemExit(1)
 
 
 @main.command()
