@@ -305,10 +305,29 @@ def _create_claude_settings(directory: Path) -> None:
         for script in scripts_dst.glob("*.sh"):
             script.chmod(script.stat().st_mode | 0o111)
 
+    # Create marketplace.json in the plugin's .claude-plugin/ directory
+    # This allows extraKnownMarketplaces to discover the plugin
+    marketplace = {
+        "name": "asp-local",
+        "owner": {
+            "name": "Lightcone Research",
+        },
+        "plugins": [
+            {
+                "name": "asp",
+                "source": "./",
+                "description": "Agentic Science Protocol - declarative scientific analyses",
+            }
+        ],
+    }
+    marketplace_file = plugin_dst / ".claude-plugin" / "marketplace.json"
+    marketplace_file.write_text(json.dumps(marketplace, indent=2) + "\n")
+
     console.print("[green]✓[/green] Installed ASP plugin locally")
 
-    # Create settings.json with permissions
-    # The plugin at .claude/plugins/asp/ is auto-discovered by Claude Code
+    # Create settings.json with local marketplace and permissions
+    # extraKnownMarketplaces tells Claude Code where to find the plugin
+    # enabledPlugins enables it automatically
     settings = {
         "permissions": {
             "allow": [
@@ -319,6 +338,17 @@ def _create_claude_settings(directory: Path) -> None:
                 "WebSearch",
                 "WebFetch",
             ],
+        },
+        "extraKnownMarketplaces": {
+            "asp-local": {
+                "source": {
+                    "source": "directory",
+                    "path": "./.claude/plugins/asp",
+                },
+            },
+        },
+        "enabledPlugins": {
+            "asp@asp-local": True,
         },
     }
 

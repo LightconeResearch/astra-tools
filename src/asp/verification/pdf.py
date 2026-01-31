@@ -24,11 +24,11 @@ except ImportError:
     pass
 
 try:
-    import pdftext as _pdftext  # type: ignore[import-not-found]
+    from pdftext import extraction as pdftext_extraction  # type: ignore[import-not-found]
 
-    pdftext = _pdftext
+    pdftext = pdftext_extraction
 except ImportError:
-    pass
+    pdftext = None
 
 
 def _check_dependencies() -> None:
@@ -254,7 +254,7 @@ def extract_text_from_pdf(pdf_path: Path) -> PDFDocument:
     sha256 = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
 
     # Extract text by page
-    pages = pdftext.extraction.plain_text_output(str(pdf_path), sort=True, hyphens=False)
+    pages = pdftext.paginated_plain_text_output(str(pdf_path), sort=True, hyphens=False)
 
     return PDFDocument(
         path=pdf_path,
