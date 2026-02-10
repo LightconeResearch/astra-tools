@@ -79,7 +79,13 @@ def main() -> None:
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
 @click.option("--no-venv", is_flag=True, help="Don't create Python virtual environment")
-def init(directory: Path, no_git: bool, no_venv: bool) -> None:
+@click.option(
+    "--target",
+    type=str,
+    default=None,
+    help="Remote cluster target (e.g., perlmutter). Creates asp-remote.yaml.",
+)
+def init(directory: Path, no_git: bool, no_venv: bool, target: str | None) -> None:
     """Create a new ASP analysis project.
 
     Creates the project scaffolding for an ASP analysis with Claude Code
@@ -91,6 +97,7 @@ def init(directory: Path, no_git: bool, no_venv: bool) -> None:
         asp init my-analysis
         asp init my-analysis --no-git    # Without git initialization
         asp init my-analysis --no-venv   # Without virtual environment
+        asp init my-analysis --target perlmutter  # With remote cluster support
     """
     # Check if this is already an ASP project
     if (directory / "asp.yaml").exists():
@@ -123,6 +130,7 @@ def init(directory: Path, no_git: bool, no_venv: bool) -> None:
     # Create .gitignore
     gitignore = """# ASP Analysis
 results/
+.asp/
 __pycache__/
 *.py[cod]
 .venv/
@@ -135,10 +143,14 @@ __pycache__/
     _create_boilerplate_asp_yaml(directory)
 
     # Create CLAUDE.md with ASP conventions
-    _create_claude_md(directory)
+    _create_claude_md(directory, target=target)
 
     # Create Claude Code settings with local skills
-    _create_claude_settings(directory)
+    _create_claude_settings(directory, target=target)
+
+    # Create remote config if target specified
+    if target:
+        _create_remote_config(directory, target)
 
     # Create virtual environment
     venv_created = _create_venv(directory, no_venv)
@@ -149,10 +161,19 @@ __pycache__/
     # Print success message
     console.print(f"[green]✓[/green] Created ASP analysis project: [cyan]{directory}[/cyan]")
 
-    console.print(f"\n[bold]cd {directory}[/bold], then either:")
-    console.print("  • [cyan]asp canvas[/cyan] to open the visual canvas")
-    console.print("  • [cyan]claude[/cyan] to work from the command line")
-    console.print("\nThen run [cyan]/asp:new[/cyan] to scope your research question.")
+    if target:
+        console.print(f"\n[bold]Remote target:[/bold] {target}")
+        console.print("\nNext steps:")
+        console.print(f"  1. [bold]cd {directory}[/bold]")
+        console.print("  2. Edit [cyan]asp-remote.yaml[/cyan] with your cluster details")
+        console.print("  3. Run [cyan]sshproxy.sh[/cyan] to get SSH certificate")
+        console.print("  4. Run [cyan]asp remote setup[/cyan] to test SSH connectivity")
+        console.print("  5. Run [cyan]claude[/cyan] and use [cyan]/asp:new[/cyan]")
+    else:
+        console.print(f"\n[bold]cd {directory}[/bold], then either:")
+        console.print("  • [cyan]asp canvas[/cyan] to open the visual canvas")
+        console.print("  • [cyan]claude[/cyan] to work from the command line")
+        console.print("\nThen run [cyan]/asp:new[/cyan] to scope your research question.")
 
 
 @main.command()
@@ -439,11 +460,12 @@ See [ASP documentation](https://github.com/LightconeResearch/ASP) for more infor
     (directory / "README.md").write_text(readme)
 
 
-def _create_claude_md(directory: Path) -> None:
+def _create_claude_md(directory: Path, target: str | None = None) -> None:
     """Create CLAUDE.md from the template in the plugin source.
 
     Copies the template and substitutes {{name}} with the project name.
     The /asp-new skill fills in project-specific sections later.
+    When a remote target is specified, appends a Remote Execution section.
     """
     name = directory.name if directory != Path(".") else "My Analysis"
 
@@ -454,14 +476,19 @@ def _create_claude_md(directory: Path) -> None:
     if template_path and template_path.exists():
         content = template_path.read_text()
         content = content.replace("{{name}}", name)
-        (directory / "CLAUDE.md").write_text(content)
     else:
         # Fallback: minimal CLAUDE.md if template not found
-        (directory / "CLAUDE.md").write_text(
+        content = (
             f"# CLAUDE.md\n\n## Project: {name}\n\n"
             "This is an ASP analysis project. Read `asp.yaml` for the specification.\n\n"
             "Read `.claude/skills/asp/SKILL.md` for how ASP works.\n"
         )
+
+    # Append remote execution section if target is specified
+    if target:
+        content += _generate_remote_claude_section(target)
+
+    (directory / "CLAUDE.md").write_text(content)
 
 
 def _get_plugin_source_dir() -> Path | None:
@@ -489,7 +516,7 @@ def _get_plugin_source_dir() -> Path | None:
     return None
 
 
-def _create_claude_settings(directory: Path) -> None:
+def _create_claude_settings(directory: Path, target: str | None = None) -> None:
     """Create Claude Code settings with ASP skills and agents."""
     claude_dir = directory / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
@@ -531,7 +558,7 @@ def _create_claude_settings(directory: Path) -> None:
         shutil.copytree(agents_src, agents_dst)
 
     # Create settings.json with hooks configured directly (no marketplace)
-    settings = {
+    settings: dict[str, Any] = {
         "permissions": {
             "allow": [
                 "Bash(asp:*)",
@@ -576,6 +603,115 @@ def _create_claude_settings(directory: Path) -> None:
 
     settings_file = claude_dir / "settings.json"
     settings_file.write_text(json.dumps(settings, indent=2) + "\n")
+
+
+def _create_remote_config(directory: Path, target: str) -> None:
+    """Create asp-remote.yaml with cluster configuration template."""
+    # Cluster-specific defaults
+    cluster_defaults: dict[str, dict[str, Any]] = {
+        "perlmutter": {
+            "backend": "ssh",
+            "ssh_host": "perlmutter.nersc.gov",
+            "ssh_user": "FIXME",
+            "account": "FIXME",
+            "workdir": "FIXME",
+            "python": "python3",
+            "modules": ["python"],
+            "slurm": {
+                "qos": "regular",
+                "constraint": "cpu",
+                "time": "00:30:00",
+                "nodes": 1,
+            },
+        },
+    }
+
+    cluster_config = cluster_defaults.get(target, {
+        "backend": "ssh",
+        "ssh_host": "FIXME",
+        "ssh_user": "FIXME",
+        "account": "FIXME",
+        "workdir": "FIXME",
+        "python": "python3",
+        "slurm": {
+            "qos": "regular",
+            "constraint": "cpu",
+            "time": "00:30:00",
+            "nodes": 1,
+        },
+    })
+
+    remote_config = {
+        "target": target,
+        "clusters": {
+            target: cluster_config,
+        },
+    }
+
+    save_yaml(remote_config, directory / "asp-remote.yaml")
+    console.print(f"[green]✓[/green] Created [cyan]asp-remote.yaml[/cyan] for {target}")
+
+
+def _generate_remote_claude_section(target: str) -> str:
+    """Generate the Remote Execution section for CLAUDE.md."""
+    return f"""
+
+---
+
+## Remote Execution
+
+This project targets **{target}** for remote execution via SSH.
+
+### Architecture
+
+- **SSH/SFTP** handles all remote operations: file upload, job submission (sbatch/srun),
+  status queries (sacct), and result download
+- Uses sshproxy certificates for NERSC authentication
+
+### Structured Workflow (ASP CLI)
+
+For formal analysis runs, use the ASP CLI:
+```bash
+asp workflow run universes/baseline.yaml    # Submit job to {target}
+asp jobs list                                # List all tracked jobs
+asp jobs status <job_id>                     # Check job state
+asp jobs fetch <job_id>                      # Download results
+```
+
+### Environment Variable Contract
+
+Batch scripts export these variables for `steps/main.py` to consume:
+- `ASP_DECISION_{{decision_id}}` — selected option value (uppercased)
+- `ASP_INPUT_{{input_id}}` — source path/URL (uppercased)
+- `ASP_RESULTS_DIR` — output directory for results
+
+### Writing steps/main.py for Remote Execution
+
+```python
+import os
+
+# Read decisions from environment
+method = os.environ["ASP_DECISION_METHOD"]
+
+# Read inputs
+data_path = os.environ["ASP_INPUT_PRIMARY_DATA"]
+
+# Write results
+results_dir = os.environ["ASP_RESULTS_DIR"]
+```
+
+### Cluster Management
+
+```bash
+asp remote setup      # Test SSH connectivity and validate config
+asp remote status     # Check SSH connection status
+```
+
+### Configuration
+
+Cluster details are in `asp-remote.yaml`. Edit ssh_user, account, and workdir
+before running `asp remote setup`.
+"""
 
 
 def _init_git_repo(directory: Path, no_git: bool) -> None:
@@ -1318,32 +1454,61 @@ def workflow_show(cwl: Path, analysis: Path | None) -> None:
 
 @workflow.command("run")
 @click.argument("universe_file", type=click.Path(exists=True, path_type=Path))
-@click.option("--cwl", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--cwl", type=click.Path(exists=True, path_type=Path), default=None)
 @click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
 @click.option("-o", "--outdir", type=click.Path(path_type=Path), help="Output directory")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress cwltool progress output")
+@click.option("--local", is_flag=True, help="Force local execution even if asp-remote.yaml exists")
 def workflow_run(
     universe_file: Path,
-    cwl: Path,
+    cwl: Path | None,
     analysis: Path | None,
     outdir: Path | None,
     quiet: bool,
+    local: bool,
 ) -> None:
-    """Run a CWL workflow with parameters from a universe.
+    """Run a workflow with parameters from a universe.
 
-    Generates CWL parameters (including input files) from the universe
-    and executes the workflow using cwltool.
+    If asp-remote.yaml exists, submits to the remote cluster via SSH.
+    Otherwise (or with --local), runs locally using cwltool (requires --cwl).
 
-    Example:
+    Examples:
         asp workflow run universes/baseline.yaml --cwl workflows/main.cwl
+        asp workflow run universes/baseline.yaml            # remote if configured
+        asp workflow run universes/baseline.yaml --local    # force local
     """
-    import tempfile
-
-    from asp.workflow.mapping import resolve_inputs
-
     analysis_path = _require_analysis(analysis, universe_file.parent)
     spec = load_yaml(analysis_path)
     uni = load_yaml(universe_file)
+    project_dir = analysis_path.parent
+
+    # Check for remote config
+    remote_config_path = project_dir / "asp-remote.yaml"
+    if remote_config_path.exists() and not local:
+        _workflow_run_remote(spec, uni, universe_file, analysis_path, project_dir)
+    else:
+        if cwl is None:
+            console.print(
+                "[red]Error:[/red] --cwl is required for local execution. "
+                "Provide a CWL workflow file."
+            )
+            raise SystemExit(1)
+        _workflow_run_local(spec, uni, universe_file, cwl, analysis_path, outdir, quiet)
+
+
+def _workflow_run_local(
+    spec: dict[str, Any],
+    uni: dict[str, Any],
+    universe_file: Path,
+    cwl: Path,
+    analysis_path: Path,
+    outdir: Path | None,
+    quiet: bool,
+) -> None:
+    """Run a CWL workflow locally using cwltool."""
+    import tempfile
+
+    from asp.workflow.mapping import resolve_inputs
 
     # Generate parameters including inputs
     base_path = analysis_path.parent
@@ -1397,6 +1562,125 @@ def workflow_run(
     finally:
         # Clean up temp file
         params_file.unlink(missing_ok=True)
+
+
+def _upload_via_ssh(
+    client: Any,
+    project_dir: Path,
+    remote_job_dir: str,
+    script: str,
+) -> None:
+    """Upload steps/ and batch script to the cluster via the SSH client."""
+    from asp.remote.client import _sftp_makedirs, _sftp_upload_dir
+
+    console.print("[dim]Uploading files via SSH...[/dim]")
+    ssh_client = client._get_client()
+    sftp = ssh_client.open_sftp()
+    try:
+        # Create remote job directory
+        _sftp_makedirs(sftp, remote_job_dir)
+
+        # Upload batch script
+        with sftp.file(f"{remote_job_dir}/job.sh", "w") as f:
+            f.write(script)
+
+        # Upload steps/ directory
+        steps_dir = project_dir / "steps"
+        if steps_dir.exists():
+            _sftp_upload_dir(sftp, steps_dir, f"{remote_job_dir}/steps")
+
+        sftp.close()
+        console.print("[green]✓[/green] Files uploaded")
+    finally:
+        pass
+
+
+def _workflow_run_remote(
+    spec: dict[str, Any],
+    uni: dict[str, Any],
+    universe_file: Path,
+    analysis_path: Path,
+    project_dir: Path,
+) -> None:
+    """Submit a workflow to a remote cluster via SSH."""
+    from asp.remote.client import get_client, load_remote_config
+    from asp.remote.jobs import JobHandle, JobRegistry
+    from asp.remote.script_gen import generate_batch_script
+
+    config = load_remote_config(project_dir)
+    target = config.get("target", "unknown")
+    cluster_config = config.get("clusters", {}).get(target, {})
+    universe_id = uni.get("id", universe_file.stem)
+
+    console.print(f"[dim]Universe:[/dim] {universe_file.name}")
+    console.print(f"[dim]Target:[/dim] {target}")
+    console.print()
+
+    # Generate batch script
+    workdir = cluster_config.get("workdir", "/tmp")
+    remote_job_dir = f"{workdir}/jobs/{universe_id}"
+    script = generate_batch_script(spec, uni, cluster_config, remote_job_dir)
+
+    console.print(f"[dim]Remote workdir:[/dim] {remote_job_dir}")
+
+    # Get SSH client
+    client = get_client(project_dir)
+
+    # Upload steps/ and batch script via SFTP
+    _upload_via_ssh(client, project_dir, remote_job_dir, script)
+
+    # Submit via SSH
+    slurm_config = cluster_config.get("slurm", {})
+    qos = slurm_config.get("qos", "regular")
+
+    if qos == "interactive":
+        # Interactive QOS: use srun (blocks until completion)
+        console.print("[dim]Running job interactively via srun...[/dim]")
+        slurm_args = []
+        if slurm_config.get("qos"):
+            slurm_args += ["--qos", slurm_config["qos"]]
+        if cluster_config.get("account"):
+            slurm_args += ["--account", cluster_config["account"]]
+        if slurm_config.get("constraint"):
+            slurm_args += ["--constraint", slurm_config["constraint"]]
+        if slurm_config.get("time"):
+            slurm_args += ["--time", slurm_config["time"]]
+        if slurm_config.get("nodes"):
+            slurm_args += ["--nodes", str(slurm_config["nodes"])]
+
+        result = client.run_interactive(f"{remote_job_dir}/job.sh", slurm_args)
+        rc = int(result.get("returncode", "1"))
+        if result.get("stdout"):
+            console.print(result["stdout"].rstrip())
+        if result.get("stderr"):
+            console.print(f"[dim]{result['stderr'].rstrip()}[/dim]")
+
+        if rc == 0:
+            console.print(f"\n[green]✓[/green] Job completed successfully")
+        else:
+            console.print(f"\n[red]✗[/red] Job failed (exit code {rc})")
+    else:
+        # Batch QOS: use sbatch (async, track with jobs commands)
+        console.print("[dim]Submitting job...[/dim]")
+        remote_job_id = client.submit_batch(f"{remote_job_dir}/job.sh")
+
+        # Save to registry
+        analysis_name = spec.get("analysis", {}).get("name", "")
+        job = JobHandle.create(
+            cluster=target,
+            universe_id=universe_id,
+            remote_job_id=remote_job_id,
+            workdir=remote_job_dir,
+            analysis_name=analysis_name,
+        )
+
+        registry = JobRegistry(project_dir)
+        registry.add(job)
+
+        console.print()
+        console.print(f"[green]✓[/green] Job submitted: [cyan]{job.job_id}[/cyan]")
+        console.print(f"[dim]Slurm job ID:[/dim] {remote_job_id}")
+        console.print(f"\nTrack with: [cyan]asp jobs status {job.job_id}[/cyan]")
 
 
 # =============================================================================
@@ -2111,6 +2395,244 @@ def navigator(path: Path | None, configure: bool) -> None:
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Error:[/red] Navigator exited with code {e.returncode}")
         raise SystemExit(e.returncode)
+
+
+# =============================================================================
+# Remote cluster commands
+# =============================================================================
+
+
+@main.group()
+def remote() -> None:
+    """Remote cluster management commands."""
+    pass
+
+
+@remote.command("setup")
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+def remote_setup(analysis: Path | None) -> None:
+    """Test SSH connectivity and validate remote cluster config.
+
+    Verifies that asp-remote.yaml is configured correctly and that
+    SSH can connect to the cluster login node.
+
+    Prerequisites:
+        1. Edit asp-remote.yaml with your username, account, and workdir
+        2. Run sshproxy.sh to get a 24-hour SSH certificate
+    """
+    from asp.remote.bootstrap import check_ssh
+    from asp.remote.client import load_remote_config
+
+    analysis_path = _require_analysis(analysis)
+    project_dir = analysis_path.parent
+    config = load_remote_config(project_dir)
+    target = config.get("target", "")
+    cluster_config = config.get("clusters", {}).get(target, {})
+
+    if not cluster_config:
+        console.print(f"[red]Error:[/red] No cluster config for '{target}' in asp-remote.yaml")
+        raise SystemExit(1)
+
+    if cluster_config.get("ssh_user") == "FIXME":
+        console.print("[red]Error:[/red] Edit asp-remote.yaml first — set ssh_user, account, workdir")
+        raise SystemExit(1)
+
+    console.print(f"[bold]Testing SSH connection to {target}...[/bold]")
+    console.print()
+
+    host = cluster_config.get("ssh_host", "")
+    user = cluster_config.get("ssh_user", "")
+    console.print(f"[dim]Host:[/dim] {host}")
+    console.print(f"[dim]User:[/dim] {user}")
+
+    try:
+        ok = check_ssh(cluster_config)
+    except FileNotFoundError as e:
+        console.print(f"\n[red]Error:[/red] {e}")
+        raise SystemExit(1)
+
+    if ok:
+        console.print(f"\n[green]✓[/green] SSH connection to {target} successful")
+        console.print(f"\nYou can now run: [cyan]asp workflow run universes/baseline.yaml[/cyan]")
+    else:
+        console.print(f"\n[red]✗[/red] SSH connection to {target} failed")
+        console.print("\nCheck your SSH key and config in asp-remote.yaml.")
+        raise SystemExit(1)
+
+
+@remote.command("status")
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+def remote_status(analysis: Path | None) -> None:
+    """Check SSH connectivity to the remote cluster."""
+    from asp.remote.bootstrap import check_ssh
+    from asp.remote.client import load_remote_config
+
+    analysis_path = _require_analysis(analysis)
+    project_dir = analysis_path.parent
+    config = load_remote_config(project_dir)
+    target = config.get("target", "")
+    cluster_config = config.get("clusters", {}).get(target, {})
+
+    host = cluster_config.get("ssh_host", "")
+    user = cluster_config.get("ssh_user", "")
+    console.print(f"[dim]Host:[/dim] {host}")
+    console.print(f"[dim]User:[/dim] {user}")
+    console.print(f"[dim]Cluster:[/dim] {target}")
+
+    if check_ssh(cluster_config):
+        console.print("[green]✓[/green] SSH connection is working")
+    else:
+        console.print("[red]✗[/red] SSH connection failed")
+        console.print("\nCheck your SSH key and config in asp-remote.yaml.")
+        raise SystemExit(1)
+
+
+# =============================================================================
+# Jobs commands
+# =============================================================================
+
+
+@main.group()
+def jobs() -> None:
+    """Job tracking commands for remote execution."""
+    pass
+
+
+@jobs.command("list")
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+def jobs_list(analysis: Path | None) -> None:
+    """List all tracked remote jobs."""
+    from asp.remote.jobs import JobRegistry
+
+    analysis_path = _require_analysis(analysis)
+    project_dir = analysis_path.parent
+    registry = JobRegistry(project_dir)
+    all_jobs = registry.list_jobs()
+
+    if not all_jobs:
+        console.print("[dim]No jobs tracked yet[/dim]")
+        return
+
+    table = Table(show_header=True)
+    table.add_column("Job ID", no_wrap=True)
+    table.add_column("Universe", no_wrap=True)
+    table.add_column("Cluster", no_wrap=True)
+    table.add_column("Slurm ID", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Submitted", no_wrap=True)
+
+    for job in all_jobs:
+        status_style = {
+            "PENDING": "[yellow]PENDING[/yellow]",
+            "RUNNING": "[blue]RUNNING[/blue]",
+            "COMPLETED": "[green]COMPLETED[/green]",
+            "FAILED": "[red]FAILED[/red]",
+            "CANCELLED": "[dim]CANCELLED[/dim]",
+        }.get(job.status, job.status)
+
+        submitted = job.submitted_at[:19] if job.submitted_at else "-"
+        table.add_row(
+            job.job_id,
+            job.universe_id,
+            job.cluster,
+            job.remote_job_id,
+            status_style,
+            submitted,
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]{len(all_jobs)} job(s)[/dim]")
+
+
+@jobs.command("status")
+@click.argument("job_id")
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+def jobs_status(job_id: str, analysis: Path | None) -> None:
+    """Check and update the status of a remote job."""
+    from asp.remote.client import get_client
+    from asp.remote.jobs import JobRegistry
+
+    analysis_path = _require_analysis(analysis)
+    project_dir = analysis_path.parent
+    registry = JobRegistry(project_dir)
+    job = registry.get(job_id)
+
+    if not job:
+        console.print(f"[red]Error:[/red] Job not found: {job_id}")
+        raise SystemExit(1)
+
+    console.print(f"[dim]Job:[/dim] {job.job_id}")
+    console.print(f"[dim]Universe:[/dim] {job.universe_id}")
+    console.print(f"[dim]Cluster:[/dim] {job.cluster}")
+    console.print(f"[dim]Slurm ID:[/dim] {job.remote_job_id}")
+    console.print(f"[dim]Workdir:[/dim] {job.workdir}")
+
+    # Query live status from the cluster
+    if job.status not in ("COMPLETED", "FAILED", "CANCELLED"):
+        try:
+            client = get_client(project_dir)
+            state = client.job_status(job.remote_job_id)
+            new_status = str(state)
+            if new_status != job.status:
+                registry.update_status(job.job_id, new_status)
+                job.status = new_status
+        except Exception as e:
+            console.print(f"[yellow]Warning:[/yellow] Could not query live status: {e}")
+
+    status_display = {
+        "PENDING": "[yellow]PENDING[/yellow]",
+        "RUNNING": "[blue]RUNNING[/blue]",
+        "COMPLETED": "[green]COMPLETED[/green]",
+        "FAILED": "[red]FAILED[/red]",
+        "CANCELLED": "[dim]CANCELLED[/dim]",
+    }.get(job.status, job.status)
+
+    console.print(f"\n[bold]Status:[/bold] {status_display}")
+
+    if job.status == "COMPLETED":
+        console.print(f"\nFetch results with: [cyan]asp jobs fetch {job.job_id}[/cyan]")
+
+
+@jobs.command("fetch")
+@click.argument("job_id")
+@click.option("-a", "--analysis", type=click.Path(exists=True, path_type=Path))
+@click.option("-o", "--outdir", type=click.Path(path_type=Path), help="Local output directory")
+def jobs_fetch(job_id: str, analysis: Path | None, outdir: Path | None) -> None:
+    """Download results for a completed remote job."""
+    from asp.remote.client import get_client
+    from asp.remote.jobs import JobRegistry
+
+    analysis_path = _require_analysis(analysis)
+    project_dir = analysis_path.parent
+    registry = JobRegistry(project_dir)
+    job = registry.get(job_id)
+
+    if not job:
+        console.print(f"[red]Error:[/red] Job not found: {job_id}")
+        raise SystemExit(1)
+
+    if job.status not in ("COMPLETED", "RUNNING", "UNKNOWN"):
+        console.print(f"[yellow]Warning:[/yellow] Job status is {job.status}")
+        if not click.confirm("Fetch results anyway?"):
+            return
+
+    # Default output directory
+    if outdir is None:
+        outdir = project_dir / "results" / job.universe_id
+
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    remote_results = f"{job.workdir}/results"
+    console.print(f"[dim]Downloading:[/dim] {remote_results}")
+    console.print(f"[dim]To:[/dim] {outdir}")
+
+    try:
+        client = get_client(project_dir)
+        client.download(remote_results, outdir)
+        console.print(f"\n[green]✓[/green] Results downloaded to [cyan]{outdir}[/cyan]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Download failed: {e}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

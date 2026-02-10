@@ -35,6 +35,9 @@ dependencies = [
 canvas = [
     "asp-canvas>=0.1",
 ]
+remote = [
+    "paramiko>=3.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov",
