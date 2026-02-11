@@ -15,7 +15,7 @@ from asp.remote.client import (
     load_remote_config,
 )
 from asp.remote.jobs import JobHandle, JobRegistry
-from asp.remote.script_gen import generate_batch_script
+from asp.remote.session import RemoteSession
 
 __all__ = [
     "ClusterClient",
@@ -26,5 +26,5 @@ __all__ = [
     "load_remote_config",
     "JobHandle",
     "JobRegistry",
-    "generate_batch_script",
+    "RemoteSession",
 ]

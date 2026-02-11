@@ -105,6 +105,110 @@ Follow these steps:
 3. **Implement** - Write implementation scripts
 4. **Run** - Execute via `asp workflow run` (always use the workflow!)
 
+## Remote Execution
+
+ASP can submit and manage jobs on HPC clusters over SSH. Currently supported:
+
+- **[NERSC Perlmutter](src/asp/remote/clusters/perlmutter/README.md)** — GPU-accelerated supercomputer at NERSC
+
+### One-time setup
+
+Run once per cluster to configure credentials:
+
+```bash
+asp remote setup              # lists available clusters to choose from
+asp remote setup perlmutter   # skip the menu, go straight to perlmutter
+```
+
+This interactively prompts for credentials, installs any required SSH tooling, tests connectivity, and saves the config to `~/.asp/remotes/<cluster>.yaml`. See the [cluster-specific guide](src/asp/remote/clusters/perlmutter/README.md) for details on what's needed.
+
+### Creating a remote project
+
+```bash
+asp init my-analysis --target perlmutter
+cd my-analysis
+asp remote status    # Verify connectivity
+```
+
+The `--target` flag copies your saved config into the project as `remote.yaml`. If you haven't run `asp remote setup` yet, it will tell you to.
+
+### Running jobs
+
+```bash
+# Submit a job to the cluster
+asp workflow run universes/baseline.yaml
+
+# Or use the lower-level remote commands:
+asp remote push                     # Push project files to the cluster
+asp remote exec -- python main.py   # Run a command on the cluster
+asp remote pull                     # Pull results back
+```
+
+### Job tracking
+
+```bash
+asp jobs list                    # List all tracked jobs
+asp jobs status <job_id>         # Check job state (queries sacct)
+asp jobs fetch <job_id>          # Download results for a completed job
+```
+
+### Remote project structure
+
+```
+my-analysis/
+├── asp.yaml          # Analysis specification
+├── remote.yaml       # Cluster config (SSH host, user, workdir, Slurm settings)
+├── universes/        # Decision selections
+├── steps/            # Implementation scripts (pushed to cluster)
+└── results/          # Downloaded results (pulled from cluster)
+```
+
+The `remote.yaml` file contains your cluster connection details and Slurm defaults. It's copied from `~/.asp/remotes/` during `asp init --target` — edit it per-project if you need different Slurm settings (QoS, time limit, nodes, etc.).
+
+### Adding a new cluster
+
+Cluster definitions live in `src/asp/remote/clusters/`. Each cluster is a subdirectory with:
+
+```
+src/asp/remote/clusters/
+  perlmutter/
+    config.yaml       # Cluster configuration (required)
+    README.md          # Setup guide (optional but recommended)
+```
+
+To add a new cluster, create a subdirectory with a `config.yaml`. See [`perlmutter/config.yaml`](src/asp/remote/clusters/perlmutter/config.yaml) for the full format:
+
+```yaml
+# src/asp/remote/clusters/my_cluster/config.yaml
+
+label: "My University Cluster"
+ssh_host: login.cluster.edu
+ssh_key: ~/.ssh/id_rsa           # supports ~ expansion
+default_workdir: "/scratch/{username}/asp"   # {username}, {first_letter} substituted
+python: python3
+modules: [anaconda3]
+
+slurm_defaults:
+  qos: normal
+  time: "01:00:00"
+  nodes: 1
+
+prompts:
+  username: "Cluster username"
+  account: "Slurm account/allocation"
+  workdir: "Remote working directory"
+
+# Optional: sshproxy for certificate-based auth (NERSC-specific).
+# Omit entirely for clusters that use standard SSH keys.
+# sshproxy:
+#   macos_pkg: "https://..."
+#   linux_x86_64: "https://..."
+#   linux_aarch64: "https://..."
+#   download_page: "https://..."
+```
+
+After adding the directory, `asp remote setup my_cluster` and `asp init --target my_cluster` work automatically.
+
 ## Workflow
 
 **ASP is the source of truth. Always follow this order:**
@@ -266,6 +370,7 @@ See [DESIGN.md](DESIGN.md#chunks) for full details.
 # Project setup
 asp init my-analysis                   # Create new analysis project
 asp init my-analysis --no-git          # Create without git initialization
+asp init my-analysis --target perlmutter  # With remote cluster support
 
 # Canvas (visual editor)
 asp canvas                             # Launch Canvas for current project
@@ -294,6 +399,18 @@ asp workflow show --cwl main.cwl       # Show parameter mapping
 asp workflow run universes/x.yaml --cwl main.cwl -o results/  # Run workflow
 asp params universes/baseline.yaml     # Generate CWL parameters from universe
 
+# Remote cluster commands
+asp remote setup                       # One-time interactive setup (global)
+asp remote status                      # Check SSH connectivity (in project)
+asp remote push                        # Push project files to cluster
+asp remote pull                        # Pull results from cluster
+asp remote exec -- <command>           # Run a command on the cluster
+
+# Job tracking
+asp jobs list                          # List tracked remote jobs
+asp jobs status <job_id>               # Check Slurm job state
+asp jobs fetch <job_id>                # Download results
+
 # Schema utilities
 asp schema export                      # Export JSON schemas to schemas/
 asp schema show analysis               # Print analysis schema to stdout
@@ -306,6 +423,7 @@ An ASP project created with `asp init` has this structure:
 ```
 my-analysis/
 ├── asp.yaml              # Analysis specification (SOURCE OF TRUTH)
+├── remote.yaml           # Remote cluster config (if --target used)
 ├── README.md             # Project documentation
 ├── .gitignore            # Git ignore rules
 ├── universes/            # Universe definitions (decision selections)

@@ -1,0 +1,38 @@
+# NERSC Perlmutter cluster configuration
+# Used by `asp remote setup perlmutter` and `asp init --target perlmutter`
+
+label: "NERSC Perlmutter"
+
+# SSH connection
+ssh_host: perlmutter.nersc.gov
+ssh_key: ~/.ssh/nersc
+
+# Working directory template
+# Available variables: {username}, {first_letter}
+default_workdir: "/pscratch/sd/{first_letter}/{username}/asp"
+
+# Remote Python environment
+python: python3
+modules:
+  - python
+
+# Default Slurm settings (can be overridden per-project in remote.yaml)
+slurm_defaults:
+  qos: regular
+  constraint: cpu
+  time: "00:30:00"
+  nodes: 1
+
+# Interactive prompts shown during `asp remote setup`
+prompts:
+  username: "NERSC username"
+  account: "NERSC allocation/account (e.g. m1234)"
+  workdir: "Remote working directory"
+
+# sshproxy tool for SSH certificate generation
+# Omit this section entirely for clusters that use standard SSH keys
+sshproxy:
+  macos_pkg: "https://portal.nersc.gov/cfs/mfa/sshproxy-2.1.2-macos-universal.pkg"
+  linux_x86_64: "https://portal.nersc.gov/cfs/mfa/sshproxy-2.1.2-linux-x86_64.tar.gz"
+  linux_aarch64: "https://portal.nersc.gov/cfs/mfa/sshproxy-2.1.2-linux-aarch64.tar.gz"
+  download_page: "https://portal.nersc.gov/cfs/mfa/"

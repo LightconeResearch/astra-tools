@@ -7,7 +7,10 @@ used by SSHBackend and CLI commands.
 from __future__ import annotations
 
 import logging
+import re
 import shlex
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +18,54 @@ logger = logging.getLogger(__name__)
 
 # Default sshproxy certificate location
 DEFAULT_SSH_KEY = Path.home() / ".ssh" / "nersc"
+
+
+class SSHCertExpiredError(Exception):
+    """Raised when the SSH certificate has expired."""
+
+    def __init__(self, expired_at: datetime, user: str | None = None) -> None:
+        self.expired_at = expired_at
+        now = datetime.now(timezone.utc)
+        delta = now - expired_at
+        hours = int(delta.total_seconds() // 3600)
+        minutes = int((delta.total_seconds() % 3600) // 60)
+        if hours > 0:
+            ago = f"{hours}h {minutes}m ago"
+        else:
+            ago = f"{minutes}m ago"
+        renew_cmd = f"sshproxy -u {user}" if user else "sshproxy"
+        super().__init__(
+            f"NERSC SSH certificate expired {ago} (at {expired_at:%Y-%m-%d %H:%M} UTC). "
+            f"Renew with: {renew_cmd}"
+        )
+
+
+def _check_cert_validity(cert_path: Path) -> datetime | None:
+    """Check the expiry time of an OpenSSH certificate.
+
+    Returns the expiry datetime (UTC), or None if it can't be determined.
+    """
+    try:
+        result = subprocess.run(
+            ["ssh-keygen", "-L", "-f", str(cert_path)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        # Look for "Valid: from YYYY-MM-DDTHH:MM:SS to YYYY-MM-DDTHH:MM:SS"
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("Valid:"):
+                match = re.search(r"to (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", line)
+                if match:
+                    return datetime.strptime(
+                        match.group(1), "%Y-%m-%dT%H:%M:%S"
+                    ).replace(tzinfo=timezone.utc)
+    except Exception:
+        logger.debug("Failed to check cert validity", exc_info=True)
+    return None
 
 
 def _get_ssh_client(
@@ -31,12 +82,16 @@ def _get_ssh_client(
 
     Returns:
         Connected paramiko.SSHClient.
+
+    Raises:
+        SSHCertExpiredError: If the SSH certificate has expired.
+        FileNotFoundError: If the SSH key file doesn't exist.
     """
     try:
         import paramiko
     except ImportError:
         raise ImportError(
-            "paramiko is required for SSH access. Install with: pip install asp[remote]"
+            "paramiko is required for SSH access. Install with: pip install paramiko"
         ) from None
 
     if key_path is None:
@@ -45,17 +100,31 @@ def _get_ssh_client(
     if not key_path.exists():
         raise FileNotFoundError(
             f"SSH key not found at {key_path}. "
-            "Run 'sshproxy' to generate a NERSC SSH certificate."
+            f"Run 'sshproxy -u {user}' to generate a NERSC SSH certificate."
         )
+
+    # Check cert expiry before attempting connection
+    cert_path = key_path.parent / f"{key_path.name}-cert.pub"
+    if cert_path.exists():
+        expires = _check_cert_validity(cert_path)
+        if expires is not None and datetime.now(timezone.utc) > expires:
+            raise SSHCertExpiredError(expires, user=user)
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(
-        hostname=host,
-        username=user,
-        key_filename=str(key_path),
-        look_for_keys=False,
-    )
+    try:
+        client.connect(
+            hostname=host,
+            username=user,
+            key_filename=str(key_path),
+            look_for_keys=False,
+        )
+    except paramiko.AuthenticationException:
+        # Connection failed — might be expired cert that we couldn't parse
+        expires = _check_cert_validity(cert_path) if cert_path.exists() else None
+        if expires is not None and datetime.now(timezone.utc) > expires:
+            raise SSHCertExpiredError(expires, user=user)
+        raise
     return client
 
 
@@ -101,7 +170,7 @@ def check_ssh(config: dict[str, Any]) -> bool:
     """Check SSH connectivity to the cluster.
 
     Args:
-        config: Cluster config dict from asp-remote.yaml.
+        config: Cluster config dict from remote.yaml.
 
     Returns:
         True if SSH connection succeeds, False otherwise.
@@ -112,12 +181,18 @@ def check_ssh(config: dict[str, Any]) -> bool:
     if not host or not user:
         return False
 
+    key_path = config.get("ssh_key")
+
     try:
-        client = _get_ssh_client(host, user)
+        client = _get_ssh_client(
+            host, user, key_path=Path(key_path) if key_path else None
+        )
         # Run a trivial command to verify the connection works
         stdout, _, exit_code = _run_ssh_command(client, "echo ok")
         client.close()
         return exit_code == 0 and "ok" in stdout
+    except SSHCertExpiredError:
+        raise  # Let callers handle this with a clear message
     except Exception:
         logger.debug("SSH check failed for %s@%s", user, host, exc_info=True)
         return False

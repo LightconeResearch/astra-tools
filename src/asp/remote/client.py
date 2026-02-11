@@ -93,8 +93,31 @@ class ClusterClient(ABC):
         ...
 
     @abstractmethod
+    def makedirs(self, remote_path: str) -> None:
+        """Create a directory (and parents) on the remote system."""
+        ...
+
+    @abstractmethod
+    def write_text(self, remote_path: str, content: str) -> None:
+        """Write text content to a file on the remote system.
+
+        Creates parent directories as needed.
+        """
+        ...
+
+    @abstractmethod
+    def exec_command(self, command: str) -> tuple[str, str, int]:
+        """Run a command on the cluster. Returns (stdout, stderr, exit_code)."""
+        ...
+
+    @abstractmethod
     def job_status(self, jobid: str) -> JobState:
         """Check the status of a Slurm job."""
+        ...
+
+    @abstractmethod
+    def close(self) -> None:
+        """Close the connection and release resources."""
         ...
 
 
@@ -130,6 +153,10 @@ class SSHBackend(ClusterClient):
         modules = self.config.get("modules", [])
         return _run_ssh_command(client, command, modules=modules if modules else None)
 
+    def exec_command(self, command: str) -> tuple[str, str, int]:
+        """Run a command over SSH using login shell."""
+        return self._exec(command)
+
     def ls(self, path: str) -> list[RemoteEntry]:
         """List directory via SFTP."""
         client = self._get_client()
@@ -144,6 +171,27 @@ class SSHBackend(ClusterClient):
                     size=attr.st_size,
                 ))
             return entries
+        finally:
+            sftp.close()
+
+    def makedirs(self, remote_path: str) -> None:
+        """Create a directory (and parents) on the remote via SFTP."""
+        client = self._get_client()
+        sftp = client.open_sftp()
+        try:
+            _sftp_makedirs(sftp, remote_path)
+        finally:
+            sftp.close()
+
+    def write_text(self, remote_path: str, content: str) -> None:
+        """Write text content to a remote file via SFTP."""
+        client = self._get_client()
+        sftp = client.open_sftp()
+        try:
+            parent = remote_path.rsplit("/", 1)[0] if "/" in remote_path else "."
+            _sftp_makedirs(sftp, parent)
+            with sftp.file(remote_path, "w") as f:
+                f.write(content)
         finally:
             sftp.close()
 
@@ -220,6 +268,15 @@ class SSHBackend(ClusterClient):
         }
         return JobState(state_map.get(raw, JobState.UNKNOWN), raw=raw)
 
+    def close(self) -> None:
+        """Close the SSH connection."""
+        if self._client is not None:
+            try:
+                self._client.close()
+            except Exception:
+                pass
+            self._client = None
+
 
 # ---------------------------------------------------------------------------
 # SFTP helpers
@@ -270,7 +327,7 @@ def _sftp_download_dir(sftp: Any, remote_dir: str, local_dir: Path) -> None:
 
 
 def load_remote_config(project_dir: Path) -> dict[str, Any]:
-    """Load asp-remote.yaml from the project directory.
+    """Load remote.yaml from the project directory.
 
     Args:
         project_dir: Root of the ASP project (where asp.yaml lives).
@@ -279,16 +336,16 @@ def load_remote_config(project_dir: Path) -> dict[str, Any]:
         The parsed remote config dict.
 
     Raises:
-        FileNotFoundError: If asp-remote.yaml doesn't exist.
+        FileNotFoundError: If remote.yaml doesn't exist.
     """
-    config_path = project_dir / "asp-remote.yaml"
+    config_path = project_dir / "remote.yaml"
     if not config_path.exists():
-        raise FileNotFoundError(f"No asp-remote.yaml found in {project_dir}")
+        raise FileNotFoundError(f"No remote.yaml found in {project_dir}")
     return load_yaml(config_path)
 
 
 def get_client(project_dir: Path) -> ClusterClient:
-    """Factory: reads asp-remote.yaml and returns a configured backend.
+    """Factory: reads remote.yaml and returns a configured backend.
 
     Args:
         project_dir: Root of the ASP project (where asp.yaml lives).
@@ -301,7 +358,7 @@ def get_client(project_dir: Path) -> ClusterClient:
     clusters = config.get("clusters", {})
 
     if target not in clusters:
-        raise ValueError(f"Target cluster '{target}' not found in asp-remote.yaml")
+        raise ValueError(f"Target cluster '{target}' not found in remote.yaml")
 
     cluster_config = clusters[target]
     backend = cluster_config.get("backend", "ssh")
@@ -312,7 +369,7 @@ def get_client(project_dir: Path) -> ClusterClient:
     if backend == "globus":
         raise ValueError(
             "The Globus backend has been removed. "
-            "Update asp-remote.yaml to use 'backend: ssh' instead."
+            "Update remote.yaml to use 'backend: ssh' instead."
         )
 
     raise ValueError(f"Unknown backend: {backend}")

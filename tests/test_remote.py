@@ -8,160 +8,6 @@ import pytest
 
 from asp.remote.client import ClusterClient, JobState, SSHBackend, load_remote_config
 from asp.remote.jobs import JobHandle, JobRegistry
-from asp.remote.script_gen import generate_batch_script
-
-
-# ---------------------------------------------------------------------------
-# script_gen tests
-# ---------------------------------------------------------------------------
-
-
-class TestBatchScriptGeneration:
-    """Test that batch script generation produces correct output."""
-
-    @pytest.fixture()
-    def sample_analysis(self) -> dict:
-        return {
-            "analysis": {
-                "name": "Test Analysis",
-                "inputs": [
-                    {
-                        "id": "primary_data",
-                        "type": "data",
-                        "source": "/path/to/data.csv",
-                    }
-                ],
-                "outputs": [
-                    {"id": "main_result", "type": "metric", "path": "result.json"},
-                ],
-            },
-            "chunks": {
-                "main": {
-                    "decisions": {
-                        "method": {
-                            "label": "Method",
-                            "type": "method",
-                            "default": "linear",
-                            "options": {
-                                "linear": {"label": "Linear", "value": "linear"},
-                                "nonlinear": {"label": "Nonlinear", "value": "nonlinear"},
-                            },
-                        },
-                        "threshold": {
-                            "label": "Threshold",
-                            "type": "parameter",
-                            "default": "high",
-                            "options": {
-                                "high": {"label": "High", "value": 0.9},
-                                "low": {"label": "Low", "value": 0.5},
-                            },
-                        },
-                    }
-                }
-            },
-        }
-
-    @pytest.fixture()
-    def sample_universe(self) -> dict:
-        return {
-            "id": "baseline",
-            "chunks": {
-                "main": {
-                    "method": "linear",
-                    "threshold": "high",
-                }
-            },
-        }
-
-    @pytest.fixture()
-    def sample_cluster_config(self) -> dict:
-        return {
-            "account": "m1234",
-            "workdir": "/pscratch/sd/u/user/asp",
-            "python": "python3",
-            "slurm": {
-                "qos": "regular",
-                "constraint": "cpu",
-                "time": "00:30:00",
-                "nodes": 1,
-            },
-        }
-
-    def test_script_has_shebang(self, sample_analysis, sample_universe, sample_cluster_config):
-        script = generate_batch_script(
-            sample_analysis, sample_universe, sample_cluster_config,
-            "/pscratch/sd/u/user/asp/jobs/baseline",
-        )
-        assert script.startswith("#!/bin/bash")
-
-    def test_script_has_sbatch_directives(self, sample_analysis, sample_universe, sample_cluster_config):
-        script = generate_batch_script(
-            sample_analysis, sample_universe, sample_cluster_config,
-            "/pscratch/sd/u/user/asp/jobs/baseline",
-        )
-        assert "#SBATCH --job-name=asp-baseline" in script
-        assert "#SBATCH --account=m1234" in script
-        assert "#SBATCH --qos=regular" in script
-        assert "#SBATCH --constraint=cpu" in script
-        assert "#SBATCH --time=00:30:00" in script
-        assert "#SBATCH --nodes=1" in script
-
-    def test_script_has_decision_env_vars(self, sample_analysis, sample_universe, sample_cluster_config):
-        script = generate_batch_script(
-            sample_analysis, sample_universe, sample_cluster_config,
-            "/pscratch/sd/u/user/asp/jobs/baseline",
-        )
-        assert "export ASP_DECISION_METHOD=linear" in script
-        assert "export ASP_DECISION_THRESHOLD=0.9" in script
-
-    def test_script_has_input_env_vars(self, sample_analysis, sample_universe, sample_cluster_config):
-        script = generate_batch_script(
-            sample_analysis, sample_universe, sample_cluster_config,
-            "/pscratch/sd/u/user/asp/jobs/baseline",
-        )
-        assert "export ASP_INPUT_PRIMARY_DATA=/path/to/data.csv" in script
-
-    def test_script_has_results_dir(self, sample_analysis, sample_universe, sample_cluster_config):
-        script = generate_batch_script(
-            sample_analysis, sample_universe, sample_cluster_config,
-            "/pscratch/sd/u/user/asp/jobs/baseline",
-        )
-        assert "export ASP_RESULTS_DIR=" in script
-        assert "/pscratch/sd/u/user/asp/jobs/baseline/results" in script
-
-    def test_script_runs_main_py(self, sample_analysis, sample_universe, sample_cluster_config):
-        script = generate_batch_script(
-            sample_analysis, sample_universe, sample_cluster_config,
-            "/pscratch/sd/u/user/asp/jobs/baseline",
-        )
-        assert "python3 steps/main.py" in script
-
-    def test_dict_value_flattening(self, sample_cluster_config):
-        """Test that dict-typed option values are flattened correctly."""
-        analysis = {
-            "analysis": {"name": "Test", "inputs": [], "outputs": []},
-            "chunks": {
-                "main": {
-                    "decisions": {
-                        "grid": {
-                            "label": "Grid",
-                            "type": "parameter",
-                            "default": "coarse",
-                            "options": {
-                                "coarse": {
-                                    "label": "Coarse",
-                                    "value": {"nx": 64, "ny": 64},
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        }
-        universe = {"id": "test", "chunks": {"main": {"grid": "coarse"}}}
-        script = generate_batch_script(analysis, universe, sample_cluster_config, "/tmp/job")
-        assert "export ASP_DECISION_GRID_NX=64" in script
-        assert "export ASP_DECISION_GRID_NY=64" in script
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +152,7 @@ class TestLoadRemoteConfig:
         }
         import yaml
 
-        (tmp_path / "asp-remote.yaml").write_text(yaml.safe_dump(config))
+        (tmp_path / "remote.yaml").write_text(yaml.safe_dump(config))
         loaded = load_remote_config(tmp_path)
         assert loaded["target"] == "perlmutter"
         assert loaded["clusters"]["perlmutter"]["backend"] == "ssh"
@@ -319,7 +165,7 @@ class TestGetClient:
         config = {"target": "unknown", "clusters": {}}
         import yaml
 
-        (tmp_path / "asp-remote.yaml").write_text(yaml.safe_dump(config))
+        (tmp_path / "remote.yaml").write_text(yaml.safe_dump(config))
         with pytest.raises(ValueError, match="not found"):
             get_client(tmp_path)
 
@@ -338,7 +184,7 @@ class TestGetClient:
         }
         import yaml
 
-        (tmp_path / "asp-remote.yaml").write_text(yaml.safe_dump(config))
+        (tmp_path / "remote.yaml").write_text(yaml.safe_dump(config))
         client = get_client(tmp_path)
         assert isinstance(client, SSHBackend)
         assert client.config["ssh_host"] == "perlmutter.nersc.gov"
@@ -357,7 +203,7 @@ class TestGetClient:
         }
         import yaml
 
-        (tmp_path / "asp-remote.yaml").write_text(yaml.safe_dump(config))
+        (tmp_path / "remote.yaml").write_text(yaml.safe_dump(config))
         with pytest.raises(ValueError, match="Globus backend has been removed"):
             get_client(tmp_path)
 
@@ -375,6 +221,6 @@ class TestGetClient:
         }
         import yaml
 
-        (tmp_path / "asp-remote.yaml").write_text(yaml.safe_dump(config))
+        (tmp_path / "remote.yaml").write_text(yaml.safe_dump(config))
         client = get_client(tmp_path)
         assert isinstance(client, SSHBackend)
