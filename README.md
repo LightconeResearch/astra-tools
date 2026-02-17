@@ -1,9 +1,11 @@
 # ASP - Agentic Science Protocol
 
-[![CI](https://github.com/EiffL/ASP/actions/workflows/ci.yml/badge.svg)](https://github.com/EiffL/ASP/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+Part of [Lightcone Research](https://github.com/LightconeResearch/lightcone.dev) — install all tools with:
+```bash
+curl -fsSL https://lightconeresearch.github.io/lightcone.dev/install.sh | bash
+```
+
+---
 
 A declarative specification format for scientific analyses that can be executed by AI agents.
 
@@ -36,19 +38,6 @@ Prism (agent layer) =  Claude Code skills, project scaffolding, remote/HPC confi
 **Evidence-based decisions**: Link decisions to supporting evidence from papers, with quote verification.
 
 **Composability**: Use outputs from one analysis as inputs to another.
-
-## Installation
-
-```bash
-# Core specification package:
-pip install asp
-
-# For development:
-pip install -e ".[dev]"
-
-# Full agentic experience (includes ASP automatically):
-pip install prism
-```
 
 ## Quick Start
 
