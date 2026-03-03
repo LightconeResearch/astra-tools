@@ -1,6 +1,6 @@
 # ASTRA - Agentic Schema for Transparent Research Analysis
 
-[![CI](https://github.com/EiffL/ASTRA/actions/workflows/ci.yml/badge.svg)](https://github.com/EiffL/ASTRA/actions/workflows/ci.yml)
+[![CI](https://github.com/LightconeResearch/ASTRA/actions/workflows/ci.yml/badge.svg)](https://github.com/LightconeResearch/ASTRA/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -60,62 +60,7 @@ For full agentic scaffolding with Claude Code integration, use `prism init` inst
 
 ## Quick Example
 
-```yaml
-version: "1.0"
-name: "Iris Classification Study"
-
-inputs:
-  - id: iris_data
-    type: data
-    source: "sklearn.datasets.load_iris"
-
-outputs:
-  - id: accuracy
-    type: metric
-    description: "Classification accuracy on held-out test set"
-
-  - id: confusion_matrix
-    type: figure
-    description: "Confusion matrix heatmap"
-
-  - id: conclusion
-    type: report
-    description: "Summary of findings"
-
-decisions:
-  scaling:
-    label: "Feature Scaling"
-    type: method
-    default: standard
-    options:
-      none:
-        label: "No Scaling"
-      standard:
-        label: "StandardScaler"
-      minmax:
-        label: "MinMaxScaler"
-        incompatible_with: ["model.svm"]
-
-  model:
-    label: "Classification Model"
-    type: method
-    default: random_forest
-    options:
-      svm:
-        label: "Support Vector Machine"
-        requires: ["scaling.standard"]
-      random_forest:
-        label: "Random Forest"
-      logistic:
-        label: "Logistic Regression"
-
-recipes:
-  train:
-    command: python src/train.py
-    outputs: [accuracy, confusion_matrix, conclusion]
-```
-
-See [examples/iris/](examples/iris/) for a complete working example.
+See [examples/iris/](examples/iris/) for a complete working example (Iris classification with decisions for scaling and model selection).
 
 ## CLI Commands
 

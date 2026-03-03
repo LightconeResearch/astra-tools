@@ -1,4 +1,4 @@
-# ASP Specification v0.0
+# ASTRA Specification v0.0
 
 Released from tag `v0.0.7` on 2026-03-01.
 

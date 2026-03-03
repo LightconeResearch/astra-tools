@@ -81,17 +81,21 @@ A `report` type output is special: it should synthesize findings from the analys
 Decisions live directly on the analysis node. Each decision has:
 
 - **label**: Human-readable name
-- **type**: Category (`data`, `method`, `parameter`)
 - **rationale**: (optional) Why this decision exists
-- **options**: The possible choices (map of option ID to option spec)
+- **tags**: (optional) Tags for grouping and categorizing
+- **when**: (optional) Conditional activation in `decision_id.option_id` format -- this decision only exists when the referenced option is selected
 - **default**: (optional) The default option ID for baseline universes
+- **options**: The possible choices (map of option ID to option spec)
 
 Options can have:
+- **label**: Human-readable name
+- **description**: Detailed description of the option
 - **constraints**: `incompatible_with`, `requires` (scoped to decisions at the same level)
 - **insights**: References to insight IDs that support this choice
-- **description**: Detailed description of the option
+- **excluded**: Boolean flag indicating this option was considered and rejected
+- **excluded_reason**: Why this option was excluded (required when `excluded` is true)
 
-### 5. Constraints
+### 4. Constraints
 
 Options can declare constraints on other options within the same analysis node:
 
@@ -101,13 +105,15 @@ decisions:
     options:
       minmax:
         label: "MinMaxScaler"
-        incompatible_with: ["model.svm"]  # Can't use with SVM
+        incompatible_with:
+          - model.svm               # Can't use with SVM
 
   feature_selection:
     options:
       pca:
         label: "PCA"
-        requires: ["scaling.standard"]  # PCA needs standardized data
+        requires:
+          - scaling.standard        # PCA needs standardized data
 ```
 
 **Constraint types:**
@@ -116,32 +122,36 @@ decisions:
 
 Constraints are scoped within an analysis node and validated when creating universes. Invalid combinations are rejected.
 
-### 6. Recipes
+### 5. Recipes
 
-Recipes are optional build rules that describe how to produce outputs. They provide the execution contract for agents or build systems.
+Recipes are optional inline build rules on outputs that describe how to produce them. They provide the execution contract for agents or build systems.
 
 ```yaml
-recipes:
-  train:
-    command: python src/train.py
-    outputs: [trained_output]
-  evaluate:
-    command: python src/evaluate.py
-    outputs: [accuracy, f1_score, confusion_matrix, conclusion]
-    depends_on: [train]
-    resources:
-      gpus: 1
-      memory: "16GB"
+outputs:
+  - id: trained_model
+    type: data
+    description: "Best performing classifier"
+    recipe:
+      command: python src/train.py
+
+  - id: accuracy
+    type: metric
+    description: "Classification accuracy"
+    recipe:
+      command: python src/evaluate.py
+      inputs: [trained_model]
+      resources:
+        gpus: 1
+        memory: "16GB"
 ```
 
 Each recipe has:
 - **command**: The command to execute
-- **outputs**: Output IDs this recipe produces (must match declared outputs)
-- **container**: (optional) Container image override
-- **depends_on**: (optional) Recipe IDs that must complete first
+- **inputs**: (optional) Output IDs that must be materialized before this recipe runs
+- **container**: (optional) Container image override (string or build spec with `build` key)
 - **resources**: (optional) Compute requirements (cpus, memory, gpus, time_limit)
 
-Recipes within an analysis node form a DAG via `depends_on`. Validation checks for cycles and orphan outputs.
+Outputs with recipes form a DAG via `inputs`. Validation checks for cycles and invalid input references.
 
 ### Universe
 
@@ -165,7 +175,7 @@ The ASTRA format is **self-similar**: every analysis node has the same structure
 
 ### Design Principles
 
-1. **Self-similar nodes.** Every analysis node has the same shape: inputs, outputs, decisions, insights, recipes, and optional sub-analyses. A sub-analysis extracted to its own file is a valid analysis on its own.
+1. **Self-similar nodes.** Every analysis node has the same shape: inputs, outputs (with optional inline recipes), decisions, insights, and optional sub-analyses. A sub-analysis extracted to its own file is a valid analysis on its own.
 
 2. **Flat for simple analyses.** Simple analyses put decisions directly at the top level — no nesting required.
 
@@ -199,7 +209,6 @@ outputs:
 decisions:
   scaling:
     label: "Feature Scaling"
-    type: method
     default: standard
     options:
       none:
@@ -209,12 +218,12 @@ decisions:
 
   model:
     label: "Classification Model"
-    type: method
     default: random_forest
     options:
       svm:
         label: "SVM"
-        requires: ["scaling.standard"]
+        requires:
+          - scaling.standard
       random_forest:
         label: "Random Forest"
 ```
@@ -240,7 +249,7 @@ analyses:
   build_mocks:
     description: "Generate realistic mock catalogs matching survey properties."
     success_criteria:
-      - "Mock catalog matches observed magnitude distribution"
+      - claim: "Mock catalog matches observed magnitude distribution"
     inputs:
       - id: survey_data
         type: data
@@ -248,20 +257,17 @@ analyses:
     outputs:
       - id: mock_catalog
         type: data
+        recipe:
+          command: python src/generate_mocks.py
     decisions:
       noise_model:
         label: "Noise Model"
-        type: method
         default: heteroscedastic
         options:
           homoscedastic:
             label: "Homoscedastic"
           heteroscedastic:
             label: "Heteroscedastic"
-    recipes:
-      generate:
-        command: python src/generate_mocks.py
-        outputs: [mock_catalog]
 
   train_network:
     description: "Train SBI neural network on mock catalog."
@@ -272,23 +278,20 @@ analyses:
     outputs:
       - id: trained_model
         type: data
+        recipe:
+          command: python src/train.py
+          resources:
+            gpus: 1
+            memory: "32GB"
     decisions:
       architecture:
         label: "Network Architecture"
-        type: method
         default: maf
         options:
           maf:
             label: "Masked Autoregressive Flow"
           npe:
             label: "Neural Posterior Estimation"
-    recipes:
-      train:
-        command: python src/train.py
-        outputs: [trained_model]
-        resources:
-          gpus: 1
-          memory: "32GB"
 
   validate:
     description: "Validate trained model against observed data."
@@ -486,12 +489,16 @@ insights:
           type: FragmentSelector
           page: 5                            # 1-indexed page number
     scope: "Transformer architectures"       # Optional: when this applies
-    confidence: 0.9                          # Optional: 0-1 confidence score
+    tags: [transformer, normalization]       # Optional: categorization tags
 ```
 
 ### Evidence Types
 
-Evidence references papers by DOI and must include at least one content selector:
+Evidence can reference two kinds of sources:
+- **Literature** (`doi`): A paper referenced by DOI, with W3C selectors pointing into the PDF
+- **Analysis artifact** (`artifact`): An output produced by this analysis, referenced by output ID
+
+Exactly one of `doi` or `artifact` must be set. At least one content selector is required:
 
 | Selector | Purpose | Required Fields |
 |----------|---------|-----------------|
@@ -588,7 +595,6 @@ insights:
 decisions:
   scaling:
     label: "Feature Scaling"
-    type: method
     default: standard
     options:
       minmax:
@@ -655,29 +661,46 @@ inputs:
     description: "Our previous study on scaling methods"
 
 outputs:
+  - id: trained_output
+    type: data
+    description: "Best performing classifier"
+    recipe:
+      command: python src/train.py
+
   - id: accuracy
     type: metric
     description: "Classification accuracy on held-out test set"
+    recipe:
+      command: python src/evaluate.py
+      inputs: [trained_output]
 
   - id: f1_score
     type: metric
     description: "Macro-averaged F1 score"
+    recipe:
+      command: python src/evaluate.py
+      inputs: [trained_output]
 
   - id: confusion_matrix
     type: figure
     description: "Confusion matrix heatmap"
+    recipe:
+      command: python src/evaluate.py
+      inputs: [trained_output]
 
   - id: model_comparison
     type: table
     description: "Accuracy by model and preprocessing combination"
-
-  - id: trained_output
-    type: data
-    description: "Best performing classifier"
+    recipe:
+      command: python src/evaluate.py
+      inputs: [trained_output]
 
   - id: conclusion
     type: report
     description: "Summary of classifier performance and suitability for the application"
+    recipe:
+      command: python src/evaluate.py
+      inputs: [trained_output]
 
 insights:
   minmax_tree_improvement:
@@ -698,7 +721,6 @@ insights:
 decisions:
   scaling:
     label: "Feature Scaling"
-    type: method
     rationale: "Scaling affects distance-based algorithms like SVM"
     default: standard
     options:
@@ -713,18 +735,19 @@ decisions:
         description: "Scale to [0, 1] range"
         insights:
           - minmax_tree_improvement
-        incompatible_with: ["model.svm"]
+        incompatible_with:
+          - model.svm
 
   model:
     label: "Classification Model"
-    type: method
     rationale: "Core algorithmic choice affecting accuracy and interpretability"
     default: random_forest
     options:
       svm:
         label: "Support Vector Machine"
         description: "Maximum margin classifier"
-        requires: ["scaling.standard"]
+        requires:
+          - scaling.standard
       random_forest:
         label: "Random Forest"
         description: "Ensemble of decision trees"
@@ -734,7 +757,6 @@ decisions:
 
   test_size:
     label: "Test Set Proportion"
-    type: parameter
     rationale: "Trade-off between training data and evaluation reliability"
     default: small
     options:
@@ -745,7 +767,6 @@ decisions:
 
   random_seed:
     label: "Random Seed"
-    type: parameter
     rationale: "For reproducibility and stability testing"
     default: seed_42
     options:
@@ -753,15 +774,6 @@ decisions:
         label: "42"
       seed_123:
         label: "123"
-
-recipes:
-  train:
-    command: python src/train.py
-    outputs: [trained_output]
-  evaluate:
-    command: python src/evaluate.py
-    outputs: [accuracy, f1_score, confusion_matrix, model_comparison, conclusion]
-    depends_on: [train]
 ```
 
 ## Execution Model
@@ -916,6 +928,8 @@ astra validate astra.yaml --verify-evidence  # Verify evidence quotes
 # Exploration
 astra info                           # Show analysis summary
 astra info --decisions               # Show decision details
+astra info --inputs                  # Show input details
+astra info --outputs                 # Show output details
 astra viz                            # Visualize decision space (ASCII)
 astra viz --format mermaid           # Mermaid diagram
 
@@ -928,14 +942,16 @@ astra schema export                  # Export JSON schemas
 astra schema show analysis           # Print schema to stdout
 
 # Paper management
-astra paper add <doi>                # Cache a paper
+astra paper add <doi>                # Download and cache a paper
+astra paper add <doi> --pdf local.pdf  # Cache from local PDF
 astra paper list                     # List cached papers
+astra paper show <doi>               # Show paper details
+astra paper path <doi>               # Print PDF path (for piping)
+astra paper remove <doi>             # Remove a paper from cache
+astra paper fetch-metadata <doi>     # Fetch metadata from DOI.org
+astra paper fetch-metadata --all     # Fetch metadata for all cached papers
 astra paper verify-quote <doi> -q "text"  # Verify a quote
 astra paper verify-quotes <doi>      # Verify multiple quotes (JSON stdin)
-astra paper show <doi>               # Show paper metadata
-astra paper path <doi>               # Print path to cached PDF
-astra paper remove <doi>             # Remove cached paper
-astra paper fetch-metadata <doi>     # Fetch/update paper metadata
 ```
 
 For full agentic scaffolding (Claude Code config, HPC targets, visual editors), use Prism: `prism init`.
@@ -945,7 +961,7 @@ For full agentic scaffolding (Claude Code config, HPC targets, visual editors), 
 ### Analysis Schema (astra.yaml)
 
 ```yaml
-$schema: "https://astra-spec.org/v1/schema.json"
+$schema: "https://astra-spec.org/v1/analysis.schema.json"
 version: "1.0"                    # Required: ASTRA spec version (major.minor)
 
 name: string                      # Required (root): Human-readable name
@@ -953,7 +969,10 @@ description: string               # Optional: Detailed description
 authors: [string]                 # Optional: List of authors
 tags: [string]                    # Optional: Tags for categorization
 
-success_criteria: [string]        # Optional: Criteria for success
+success_criteria:                 # Optional: Structured criteria for success
+  - claim: string                 # Human-readable statement of the criterion
+    output: string                # Optional: output ID to check against
+    condition: string             # Optional: condition (e.g., "value > 0.95")
 
 inputs:                           # Required (root): List of inputs
   - id: string                    # Unique identifier (pattern: ^[a-z][a-z0-9_]*$)
@@ -976,12 +995,22 @@ outputs:                          # Required (root): List of outputs
     type: metric|figure|table|data|report
     description: string           # Optional
     from: string                  # Optional: which sub-analysis produces this
+    recipe:                       # Optional: inline build rule
+      command: string             # Required: command to execute
+      inputs: [string]            # Optional: output IDs that must be materialized first
+      container: string|{build}   # Optional: container image or build spec
+      resources:                  # Optional: compute requirements
+        cpus: int                 # >= 1
+        memory: string            # e.g., "8GB"
+        gpus: int                 # >= 1
+        time_limit: string        # e.g., "2h"
 
 decisions:                        # Optional: Map of decisions
   decision_id:
     label: string                 # Required: Human-readable name
-    type: data|method|parameter   # Required: Category
     rationale: string             # Optional: Why this decision exists
+    tags: [string]                # Optional: Tags for grouping
+    when: string                  # Optional: "decision_id.option_id" condition
     default: option_id            # Optional: Default for baseline universes
     options:                      # Required: Map of option ID to option spec
       option_id:
@@ -990,6 +1019,8 @@ decisions:                        # Optional: Map of decisions
         insights: [string]        # Optional: insight IDs supporting this option
         incompatible_with: [string]  # Optional: "decision.option" pairs
         requires: [string]        # Optional: "decision.option" pairs
+        excluded: bool            # Optional: was considered and rejected
+        excluded_reason: string   # Required when excluded is true
 
 insights:                         # Optional: Map of insights
   insight_id:
@@ -998,9 +1029,17 @@ insights:                         # Optional: Map of insights
     created_at: datetime          # ISO 8601 timestamp
     evidence:                     # Required: list of evidence items
       - id: string                # Evidence ID
+        # Source: exactly one of doi or artifact
         doi: string               # Paper DOI (e.g., "10.48550/arXiv.1706.03762")
-        version: int              # Optional: paper version (for arXiv)
-        quote:                    # At least one of: quote, figure, table
+        artifact: string          # OR: output ID referencing a declared output
+        version: int              # Optional: paper version (for arXiv, doi only)
+        checksum:                 # Optional: artifact integrity (artifact only)
+          algorithm: sha256|sha512|md5
+          value: string
+        snapshot: string          # Optional: path to immutable copy (artifact only)
+        source_commit: string     # Optional: git commit (artifact only)
+        # Content selectors (at least one required)
+        quote:
           type: TextQuoteSelector
           exact: string           # Exact quoted text
           prefix: string          # Optional: context before
@@ -1017,34 +1056,22 @@ insights:                         # Optional: Map of insights
         location:                 # Optional: PDF location hint
           type: FragmentSelector
           page: int               # 1-indexed page number
-    confidence: float             # Optional: 0-1 confidence score
     derived: bool                 # Optional: true if synthesized/inferred
     scope: string                 # Optional: applicability conditions
     tags: [string]                # Optional: categorization tags
     notes: string                 # Optional: reasoning notes
 
-container: string                 # Optional: default container image for recipes
-
-recipes:                          # Optional: Map of build rules
-  recipe_id:
-    command: string               # Required: command to execute
-    outputs: [string]             # Required: output IDs this produces
-    container: string             # Optional: container image override
-    depends_on: [string]          # Optional: recipe IDs that must complete first
-    resources:                    # Optional: compute requirements
-      cpus: int                   # >= 1
-      memory: string              # e.g., "8GB"
-      gpus: int                   # >= 1
-      time_limit: string          # e.g., "2h"
+container: string|{build}        # Optional: default container image for recipes
 
 analyses:                         # Optional: Map of sub-analyses
   analysis_id:                    # Each sub-analysis has the same structure
     description: string
+    parent_decisions: [string]    # Optional: parent decision IDs for constraint scoping
+                                  # (handled by semantic validation, not in JSON schema)
     inputs: [...]
     outputs: [...]
     decisions: {...}
     insights: {...}
-    recipes: {...}
     analyses: {...}               # Can nest further
 ```
 
