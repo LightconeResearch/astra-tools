@@ -1,10 +1,10 @@
-"""Paper management for ASP.
+"""Paper management for ASTRA.
 
 Provides DOI-based paper acquisition and caching for evidence verification.
 """
 
-from asp.papers.cache import PaperCache, PaperMetadata
-from asp.papers.download import download_paper, resolve_doi
+from astra.papers.cache import PaperCache, PaperMetadata
+from astra.papers.download import download_paper, resolve_doi
 
 __all__ = [
     "PaperCache",

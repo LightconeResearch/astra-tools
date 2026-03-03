@@ -1,4 +1,4 @@
-"""Pydantic models for ASP analysis specifications."""
+"""Pydantic models for ASTRA analysis specifications."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class Input(BaseModel):
 
     Two kinds of inputs:
     - ``type: data`` — a dataset, file, or external resource (specify ``source``)
-    - ``type: analysis`` — outputs from another ASP analysis (specify ``ref``)
+    - ``type: analysis`` — outputs from another ASTRA analysis (specify ``ref``)
 
     Sub-analysis inputs can also use ``from`` to reference a parent input
     or a sibling's output (e.g., ``from: sibling_id.output_id``).
@@ -46,7 +46,7 @@ class Input(BaseModel):
 
     # Analysis inputs
     ref: str | None = Field(
-        default=None, description="Reference to another ASP analysis"
+        default=None, description="Reference to another ASTRA analysis"
     )
     ref_version: str | None = Field(
         default=None, description="Version of the referenced analysis"
@@ -238,8 +238,8 @@ class Analysis(BaseModel):
         extra="forbid",
         json_schema_extra={
             "$schema": "http://json-schema.org/draft-07/schema#",
-            "$id": "https://asp-spec.org/v1/analysis.schema.json",
-            "title": "ASP Analysis Specification",
+            "$id": "https://astra-spec.org/v1/analysis.schema.json",
+            "title": "ASTRA Analysis Specification",
         },
     )
 
@@ -248,7 +248,7 @@ class Analysis(BaseModel):
     version: str | None = Field(
         default=None,
         pattern=r"^\d+\.\d+(\.\d+)?$",
-        description="ASP specification version",
+        description="ASTRA specification version",
     )
 
     # Analysis identity

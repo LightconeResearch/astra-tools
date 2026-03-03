@@ -1,4 +1,4 @@
-$schema: "https://asp-spec.org/v1/schema.json"
+$schema: "https://astra-spec.org/v1/schema.json"
 version: "1.0"
 name: "Full Analysis"
 description: "A comprehensive test analysis with all features"

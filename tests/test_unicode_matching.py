@@ -10,7 +10,7 @@ The tests should FAIL with the current implementation to demonstrate the issues,
 then PASS after the fix is applied.
 """
 
-from asp.verification.pdf import PDFDocument, normalize_text
+from astra.verification.pdf import PDFDocument, normalize_text
 
 
 class TestNormalizeText:

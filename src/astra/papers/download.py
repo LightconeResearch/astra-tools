@@ -1,4 +1,4 @@
-"""DOI resolution and paper downloading for ASP.
+"""DOI resolution and paper downloading for ASTRA.
 
 Downloads papers by DOI, with special handling for arXiv papers.
 """
@@ -24,7 +24,7 @@ def _check_httpx() -> None:
     """Raise ImportError if httpx is not installed."""
     if httpx is None:
         raise ImportError(
-            "httpx is required for paper downloading. Install with: pip install asp[verify]"
+            "httpx is required for paper downloading. Install with: pip install astra[verify]"
         )
 
 
@@ -215,8 +215,8 @@ def _try_unpaywall(doi: str) -> PaperDownloadResult:
     _check_httpx()
 
     # Unpaywall requires an email for polite use
-    # Using a generic ASP email - users should configure their own
-    email = "asp-tool@example.org"
+    # Using a generic ASTRA email - users should configure their own
+    email = "astra-tool@example.org"
     url = f"https://api.unpaywall.org/v2/{doi}?email={email}"
 
     try:
@@ -334,13 +334,13 @@ def download_paper_to_cache(
 
     Args:
         doi: DOI of the paper.
-        cache_dir: Cache directory. Defaults to ~/.cache/asp/papers.
+        cache_dir: Cache directory. Defaults to ~/.cache/astra/papers.
         version: Paper version (for arXiv).
 
     Returns:
         Tuple of (PDF path, download result).
     """
-    from asp.papers.cache import PaperCache
+    from astra.papers.cache import PaperCache
 
     cache = PaperCache(cache_dir)
 

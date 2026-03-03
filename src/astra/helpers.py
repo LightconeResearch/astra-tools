@@ -1,4 +1,4 @@
-"""Dict-based helper utilities for ASP.
+"""Dict-based helper utilities for ASTRA.
 
 These utilities work with raw dict data structures loaded from YAML files,
 avoiding the need for Pydantic model imports in the validation path.

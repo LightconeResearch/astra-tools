@@ -1,6 +1,6 @@
-# ASP - Agentic Science Protocol
+# ASTRA - Agentic Schema for Transparent Research Analysis
 
-[![CI](https://github.com/EiffL/ASP/actions/workflows/ci.yml/badge.svg)](https://github.com/EiffL/ASP/actions/workflows/ci.yml)
+[![CI](https://github.com/EiffL/ASTRA/actions/workflows/ci.yml/badge.svg)](https://github.com/EiffL/ASTRA/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -14,9 +14,9 @@ curl -fsSL https://lightconeresearch.github.io/lightcone.dev/install.sh | bash
 
 A declarative specification format for scientific analyses that can be executed by AI agents.
 
-## What is ASP?
+## What is ASTRA?
 
-ASP is the **core specification** for describing scientific analyses. It separates **what** you want to learn from **how** to compute it:
+ASTRA is the **core specification** for describing scientific analyses. It separates **what** you want to learn from **how** to compute it:
 
 - **Inputs** - Data, previous analyses
 - **Outputs** - Metrics, figures, tables, data, reports
@@ -25,10 +25,10 @@ ASP is the **core specification** for describing scientific analyses. It separat
 - **Constraints** - Relationships between decision options
 - **Recipes** - Optional build rules for producing outputs
 
-ASP makes no prescription about execution frameworks. The specification defines *what* to compute; execution is handled by the agentic layer.
+ASTRA makes no prescription about execution frameworks. The specification defines *what* to compute; execution is handled by the agentic layer.
 
 ```
-ASP (this package)  =  Schema, validation, insights, evidence verification, CLI
+ASTRA (this package)  =  Schema, validation, insights, evidence verification, CLI
 Prism (agent layer) =  Claude Code skills, project scaffolding, remote/HPC config
 ```
 
@@ -48,12 +48,12 @@ Prism (agent layer) =  Claude Code skills, project scaffolding, remote/HPC confi
 
 ```bash
 # Create a minimal analysis scaffold
-asp init my-analysis
+astra init my-analysis
 cd my-analysis
 
-# Edit asp.yaml to define your analysis
+# Edit astra.yaml to define your analysis
 # Then validate it
-asp validate asp.yaml
+astra validate astra.yaml
 ```
 
 For full agentic scaffolding with Claude Code integration, use `prism init` instead.
@@ -121,50 +121,50 @@ See [examples/iris/](examples/iris/) for a complete working example.
 
 ```bash
 # Project setup
-asp init my-analysis               # Create minimal scaffold
-asp init my-analysis --no-git      # Skip git initialization
+astra init my-analysis               # Create minimal scaffold
+astra init my-analysis --no-git      # Skip git initialization
 
 # Validation
-asp validate asp.yaml              # Validate analysis specification
-asp validate universes/baseline.yaml  # Validate universe against spec
-asp validate asp.yaml --verify-evidence  # Verify evidence quotes
+astra validate astra.yaml              # Validate analysis specification
+astra validate universes/baseline.yaml  # Validate universe against spec
+astra validate astra.yaml --verify-evidence  # Verify evidence quotes
 
 # Exploration
-asp info                           # Show analysis summary
-asp info --decisions               # Show decision details
-asp info --inputs                  # Show input details
-asp info --outputs                 # Show output details
-asp viz                            # Visualize decision space (ASCII)
-asp viz --format mermaid           # Mermaid diagram
+astra info                           # Show analysis summary
+astra info --decisions               # Show decision details
+astra info --inputs                  # Show input details
+astra info --outputs                 # Show output details
+astra viz                            # Visualize decision space (ASCII)
+astra viz --format mermaid           # Mermaid diagram
 
 # Universe management
-asp universe generate --name baseline  # Generate universe from defaults
-asp universe check universes/foo.yaml  # Check universe constraints
+astra universe generate --name baseline  # Generate universe from defaults
+astra universe check universes/foo.yaml  # Check universe constraints
 
 # Schema utilities
-asp schema export                  # Export JSON schemas
-asp schema show analysis           # Print schema to stdout
+astra schema export                  # Export JSON schemas
+astra schema show analysis           # Print schema to stdout
 
 # Paper management
-asp paper add <doi>                # Download and cache a paper
-asp paper add <doi> --pdf local.pdf  # Cache from local PDF
-asp paper list                     # List cached papers
-asp paper show <doi>               # Show paper details
-asp paper path <doi>               # Print PDF path (for piping)
-asp paper remove <doi>             # Remove a paper from cache
-asp paper fetch-metadata <doi>     # Fetch metadata from DOI.org
-asp paper fetch-metadata --all     # Fetch metadata for all cached papers
-asp paper verify-quote <doi> -q "text"  # Verify a quote
-asp paper verify-quotes <doi>      # Verify multiple quotes (JSON stdin)
+astra paper add <doi>                # Download and cache a paper
+astra paper add <doi> --pdf local.pdf  # Cache from local PDF
+astra paper list                     # List cached papers
+astra paper show <doi>               # Show paper details
+astra paper path <doi>               # Print PDF path (for piping)
+astra paper remove <doi>             # Remove a paper from cache
+astra paper fetch-metadata <doi>     # Fetch metadata from DOI.org
+astra paper fetch-metadata --all     # Fetch metadata for all cached papers
+astra paper verify-quote <doi> -q "text"  # Verify a quote
+astra paper verify-quotes <doi>      # Verify multiple quotes (JSON stdin)
 ```
 
 ## Project Structure
 
-An ASP project created with `asp init` has this minimal structure:
+An ASTRA project created with `astra init` has this minimal structure:
 
 ```
 my-analysis/
-├── asp.yaml              # Analysis specification (source of truth)
+├── astra.yaml              # Analysis specification (source of truth)
 ├── .gitignore            # Git ignore rules
 ├── src/                  # Analysis code
 ├── outputs/              # Analysis outputs
@@ -177,7 +177,7 @@ Use `prism init` for full agentic scaffolding (Claude Code config, scripts, HPC 
 ## Design Principles
 
 1. **Declarative** - Spec says WHAT, not HOW
-2. **ASP is source of truth** - Implementations are derived from ASP
+2. **ASTRA is source of truth** - Implementations are derived from ASTRA
 3. **Self-similar** - Every level has the same structure; sub-analyses are valid analyses
 4. **Transparent** - All decisions and alternatives documented
 5. **Composable** - Analyses build on each other

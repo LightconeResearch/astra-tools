@@ -1,11 +1,11 @@
-$schema: "https://asp-spec.org/v1/schema.json"
+$schema: "https://astra-spec.org/v1/schema.json"
 version: "1.0"
 name: "Iris Classification Study"
 description: |
   A demonstration analysis that builds a classifier for the classic
   Iris dataset, exploring different preprocessing and model choices.
 authors:
-  - "ASP Examples"
+  - "ASTRA Examples"
 tags:
   - classification
   - sklearn

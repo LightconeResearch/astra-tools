@@ -1,4 +1,4 @@
-"""Pydantic models for ASP universe specifications."""
+"""Pydantic models for ASTRA universe specifications."""
 
 from __future__ import annotations
 
@@ -38,8 +38,8 @@ class Universe(BaseModel):
         extra="forbid",
         json_schema_extra={
             "$schema": "http://json-schema.org/draft-07/schema#",
-            "$id": "https://asp-spec.org/v1/universe.schema.json",
-            "title": "ASP Universe Specification",
+            "$id": "https://astra-spec.org/v1/universe.schema.json",
+            "title": "ASTRA Universe Specification",
         },
     )
 

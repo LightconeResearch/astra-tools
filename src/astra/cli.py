@@ -1,4 +1,4 @@
-"""Command-line interface for ASP."""
+"""Command-line interface for ASTRA."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
-from asp.helpers import (
+from astra.helpers import (
     _collect_node_decisions,
     create_universe_from_defaults,
     get_analysis_decisions,
@@ -23,29 +23,29 @@ from asp.helpers import (
     load_yaml,
     save_yaml,
 )
-from asp.validation.schema import (
+from astra.validation.schema import (
     get_analysis_schema,
     get_insights_schema,
     get_universe_schema,
     validate_analysis_schema,
     validate_universe_schema,
 )
-from asp.validation.semantic import validate_analysis_file, validate_universe_file
+from astra.validation.semantic import validate_analysis_file, validate_universe_file
 
 console = Console()
 
 
 def find_analysis_file(start_path: Path | None = None) -> Path | None:
-    """Find the asp.yaml file in the current or parent directories."""
+    """Find the astra.yaml file in the current or parent directories."""
     if start_path is None:
         start_path = Path.cwd()
 
     # Resolve to absolute path to ensure parent traversal works correctly
     current = start_path.resolve()
     while current != current.parent:
-        asp_file = current / "asp.yaml"
-        if asp_file.exists():
-            return asp_file
+        astra_file = current / "astra.yaml"
+        if astra_file.exists():
+            return astra_file
         current = current.parent
 
     return None
@@ -57,7 +57,7 @@ def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> 
         return analysis
     found = find_analysis_file(start_path)
     if found is None:
-        console.print("[red]Error:[/red] No asp.yaml found.")
+        console.print("[red]Error:[/red] No astra.yaml found.")
         raise SystemExit(1)
     return found
 
@@ -65,7 +65,7 @@ def _require_analysis(analysis: Path | None, start_path: Path | None = None) -> 
 @click.group()
 @click.version_option()
 def main() -> None:
-    """ASP - Agentic Science Protocol CLI."""
+    """ASTRA - Agentic Schema for Transparent Research Analysis CLI."""
     pass
 
 
@@ -73,9 +73,9 @@ def main() -> None:
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
 def init(directory: Path, no_git: bool) -> None:
-    """Create a minimal ASP analysis scaffold.
+    """Create a minimal ASTRA analysis scaffold.
 
-    Creates asp.yaml, universes/baseline.yaml, and .gitignore.
+    Creates astra.yaml, universes/baseline.yaml, and .gitignore.
 
     DIRECTORY is the project folder to create (default: current directory).
 
@@ -83,16 +83,16 @@ def init(directory: Path, no_git: bool) -> None:
     use 'prism init' instead.
 
     Examples:
-        asp init my-analysis
-        asp init my-analysis --no-git
+        astra init my-analysis
+        astra init my-analysis --no-git
     """
-    # Check if this is already an ASP project
-    if (directory / "asp.yaml").exists():
+    # Check if this is already an ASTRA project
+    if (directory / "astra.yaml").exists():
         console.print(
-            f"[red]Error:[/red] [cyan]{directory}[/cyan] is already an ASP project "
-            f"(asp.yaml exists)."
+            f"[red]Error:[/red] [cyan]{directory}[/cyan] is already an ASTRA project "
+            f"(astra.yaml exists)."
         )
-        console.print("Use [cyan]asp validate[/cyan] to check it, or delete asp.yaml to re-init.")
+        console.print("Use [cyan]astra validate[/cyan] to check it, or delete astra.yaml to re-init.")
         raise SystemExit(1)
 
     # Create project directory
@@ -110,7 +110,7 @@ def init(directory: Path, no_git: bool) -> None:
     (directory / "src").mkdir(parents=True, exist_ok=True)
 
     # Create .gitignore
-    gitignore = """# ASP Analysis
+    gitignore = """# ASTRA Analysis
 outputs/
 __pycache__/
 *.py[cod]
@@ -120,23 +120,23 @@ __pycache__/
 """
     (directory / ".gitignore").write_text(gitignore)
 
-    # Create boilerplate asp.yaml
-    _create_boilerplate_asp_yaml(directory)
+    # Create boilerplate astra.yaml
+    _create_boilerplate_astra_yaml(directory)
 
     # Initialize git repository
     _init_git_repo(directory, no_git)
 
     # Print success message
-    console.print(f"[green]✓[/green] Created ASP analysis scaffold: [cyan]{directory}[/cyan]")
+    console.print(f"[green]✓[/green] Created ASTRA analysis scaffold: [cyan]{directory}[/cyan]")
     console.print("\nFor full agentic scaffolding, use [cyan]prism init[/cyan] instead.")
 
 
-def _create_boilerplate_asp_yaml(directory: Path) -> None:
-    """Create boilerplate asp.yaml with TODOs."""
+def _create_boilerplate_astra_yaml(directory: Path) -> None:
+    """Create boilerplate astra.yaml with TODOs."""
     name = directory.name if directory != Path(".") else "My Analysis"
 
-    asp_yaml = f"""# ASP Analysis Specification
-# Documentation: https://github.com/LightconeResearch/ASP
+    astra_yaml = f"""# ASTRA Analysis Specification
+# Documentation: https://github.com/LightconeResearch/ASTRA
 
 version: "1.0"
 name: "{name}"
@@ -175,7 +175,7 @@ decisions:
         label: "Option B"
         description: "TODO: Describe option B"
 """
-    (directory / "asp.yaml").write_text(asp_yaml)
+    (directory / "astra.yaml").write_text(astra_yaml)
 
     # Create baseline universe
     baseline_universe = """# Baseline Universe
@@ -207,7 +207,7 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
         try:
             subprocess.run(["git", "add", "."], cwd=directory, capture_output=True, check=True)
             subprocess.run(
-                ["git", "commit", "-m", "Initial ASP analysis structure"],
+                ["git", "commit", "-m", "Initial ASTRA analysis structure"],
                 cwd=directory,
                 capture_output=True,
                 check=True,
@@ -238,14 +238,14 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
     help="Skip evidence verification even if insights are present",
 )
 def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evidence: bool) -> None:
-    """Validate an ASP specification file.
+    """Validate an ASTRA specification file.
 
-    FILE can be an analysis (asp.yaml) or universe file.
+    FILE can be an analysis (astra.yaml) or universe file.
     For universe files, use --analysis to specify the analysis file.
 
     Evidence verification (--verify-evidence) checks that quotes in insights
     actually exist in the source papers. Papers must be cached first using
-    'asp paper add'.
+    'astra paper add'.
     """
     # Determine file type
     is_universe = "universe" in file.stem.lower() or file.parent.name == "universes"
@@ -317,9 +317,9 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
 def _verify_insights_evidence(insights: dict[str, Any]) -> None:
     """Verify evidence for all insights."""
-    from asp.papers.cache import PaperCache
-    from asp.verification.cache import VerificationCache
-    from asp.verification.core import VerificationStatus, verify_all_insights
+    from astra.papers.cache import PaperCache
+    from astra.verification.cache import VerificationCache
+    from astra.verification.core import VerificationStatus, verify_all_insights
 
     paper_cache = PaperCache()
     verification_cache = VerificationCache()
@@ -369,7 +369,7 @@ def _verify_insights_evidence(insights: dict[str, Any]) -> None:
         console.print("\nTo fix:")
         console.print("  1. Check that quotes are exact copies from the paper")
         console.print("  2. Verify the DOI and version are correct")
-        console.print("  3. Ensure the paper is cached: asp paper add <doi>")
+        console.print("  3. Ensure the paper is cached: astra paper add <doi>")
         raise SystemExit(1)
 
 
@@ -378,7 +378,7 @@ def _verify_insights_evidence(insights: dict[str, Any]) -> None:
     "--file",
     "-f",
     type=click.Path(exists=True, path_type=Path),
-    help="Analysis file (default: asp.yaml in current/parent dir)",
+    help="Analysis file (default: astra.yaml in current/parent dir)",
 )
 @click.option("--decisions", "-d", is_flag=True, help="Show decision details")
 @click.option("--inputs", "-i", is_flag=True, help="Show input details")
@@ -765,12 +765,12 @@ def paper_add(doi: str, version: int | None, pdf: Path | None) -> None:
     10.48550/arXiv.1706.03762
 
     Examples:
-        asp paper add 10.48550/arXiv.1706.03762 --version 7
-        asp paper add 10.1038/s41586-023-06221-2
-        asp paper add 10.1234/example --pdf ./local_paper.pdf
+        astra paper add 10.48550/arXiv.1706.03762 --version 7
+        astra paper add 10.1038/s41586-023-06221-2
+        astra paper add 10.1234/example --pdf ./local_paper.pdf
     """
-    from asp.papers.cache import PaperCache
-    from asp.papers.download import download_paper
+    from astra.papers.cache import PaperCache
+    from astra.papers.download import download_paper
 
     cache = PaperCache()
 
@@ -831,7 +831,7 @@ def paper_add(doi: str, version: int | None, pdf: Path | None) -> None:
 @paper.command("list")
 def paper_list() -> None:
     """List all cached papers."""
-    from asp.papers.cache import PaperCache
+    from astra.papers.cache import PaperCache
 
     cache = PaperCache()
     papers = cache.list_papers()
@@ -862,7 +862,7 @@ def paper_list() -> None:
 @click.option("--version", "-v", type=int, help="Paper version (for arXiv papers)")
 def paper_show(doi: str, version: int | None) -> None:
     """Show details of a cached paper."""
-    from asp.papers.cache import PaperCache
+    from astra.papers.cache import PaperCache
 
     cache = PaperCache()
     paper = cache.get(doi, version)
@@ -871,7 +871,7 @@ def paper_show(doi: str, version: int | None) -> None:
         console.print(f"[red]Error:[/red] Paper not found in cache: {doi}")
         if version:
             console.print(f"  (version {version})")
-        console.print("\nUse [cyan]asp paper add[/cyan] to download the paper first.")
+        console.print("\nUse [cyan]astra paper add[/cyan] to download the paper first.")
         raise SystemExit(1)
 
     meta = paper.metadata
@@ -897,7 +897,7 @@ def paper_path(doi: str, version: int | None) -> None:
 
     Useful for piping to other tools or agents that need to read the PDF.
     """
-    from asp.papers.cache import PaperCache
+    from astra.papers.cache import PaperCache
 
     cache = PaperCache()
     path = cache.get_path(doi, version)
@@ -916,7 +916,7 @@ def paper_path(doi: str, version: int | None) -> None:
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
 def paper_remove(doi: str, version: int | None, yes: bool) -> None:
     """Remove a paper from the cache."""
-    from asp.papers.cache import PaperCache
+    from astra.papers.cache import PaperCache
 
     cache = PaperCache()
 
@@ -944,12 +944,12 @@ def paper_fetch_metadata(doi: str | None, version: int | None, fetch_all: bool) 
 
     Examples:
 
-        asp paper fetch-metadata 10.48550/arXiv.1706.03762
+        astra paper fetch-metadata 10.48550/arXiv.1706.03762
 
-        asp paper fetch-metadata --all
+        astra paper fetch-metadata --all
     """
-    from asp.papers.cache import PaperCache
-    from asp.papers.download import fetch_doi_metadata
+    from astra.papers.cache import PaperCache
+    from astra.papers.download import fetch_doi_metadata
 
     cache = PaperCache()
 
@@ -1027,9 +1027,9 @@ def paper_verify_quotes(doi: str, version: int | None) -> None:
       1 - Some quotes not found
       2 - Error (paper not cached, invalid input, etc.)
     """
-    from asp.papers.cache import PaperCache
-    from asp.verification.core import VerificationStatus, verify_quote_in_pdf
-    from asp.verification.pdf import extract_text_from_pdf
+    from astra.papers.cache import PaperCache
+    from astra.verification.core import VerificationStatus, verify_quote_in_pdf
+    from astra.verification.pdf import extract_text_from_pdf
 
     # Read JSON input from stdin
     try:
@@ -1181,9 +1181,9 @@ def paper_verify_quote(
       1 - Quote not found
       2 - Error (paper not cached, etc.)
     """
-    from asp.papers.cache import PaperCache
-    from asp.verification.core import VerificationStatus, verify_quote_in_pdf
-    from asp.verification.pdf import extract_text_from_pdf
+    from astra.papers.cache import PaperCache
+    from astra.verification.core import VerificationStatus, verify_quote_in_pdf
+    from astra.verification.pdf import extract_text_from_pdf
 
     cache = PaperCache()
     cached_paper = cache.get(doi, version)
@@ -1202,7 +1202,7 @@ def paper_verify_quote(
             )
         else:
             console.print(f"[red]Error:[/red] Paper not in cache: {doi}")
-            console.print("Use [cyan]asp paper add[/cyan] first.")
+            console.print("Use [cyan]astra paper add[/cyan] first.")
         raise SystemExit(2)
 
     try:

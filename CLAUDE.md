@@ -4,19 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ASP (Agentic Science Protocol) is the **core specification** for scientific analyses. It provides schema, validation, insights, evidence verification, and a minimal CLI.
+ASTRA (Agentic Schema for Transparent Research Analysis) is the **core specification** for scientific analyses. It provides schema, validation, insights, evidence verification, and a minimal CLI.
 
 **Key principle**: The specification says WHAT, not HOW. AI agents read the spec and generate the implementation.
 
 **Architecture**:
-- **ASP** (this repo) = pure specification: schema, validation, insights, verification, helpers, minimal CLI
+- **ASTRA** (this repo) = pure specification: schema, validation, insights, verification, helpers, minimal CLI
 - **Prism** (separate repo) = agentic layer: Claude Code skills, project scaffolding, remote/HPC config
 - **Spectrum** (future) = UI layer
 
 ## Repository Structure
 
 ```
-ASP/
+ASTRA/
 ├── spec/                          # THE SPECIFICATION (versioned)
 │   └── draft/                     # Working version (becomes 1.0/ at release)
 │       ├── analysis.schema.json
@@ -31,10 +31,10 @@ ASP/
 │
 ├── examples/                      # Example projects
 │   └── iris/                      # Full example analysis
-│       ├── asp.yaml
+│       ├── astra.yaml
 │       └── universes/
 │
-├── src/asp/                       # Python SDK/CLI (installed package)
+├── src/astra/                       # Python SDK/CLI (installed package)
 │   ├── __init__.py                # Public API exports
 │   ├── cli.py                     # Click-based CLI (spec operations only)
 │   ├── helpers.py                 # Dict-based utilities
@@ -60,12 +60,12 @@ ASP/
 2. **Pydantic models are the source** - `models/` generates schemas, NOT installed
 3. **Schemas not in source tree** - `spec/draft/` bundled at build time, loaded directly in dev
 4. **Validation is dict-based** - No Pydantic models in validation path
-5. **No execution framework** - ASP defines what, not how. Execution is handled by Prism.
+5. **No execution framework** - ASTRA defines what, not how. Execution is handled by Prism.
 
 ### Core Components
 
 1. **Specification** (`spec/`)
-   - Versioned JSON schemas defining the ASP format
+   - Versioned JSON schemas defining the ASTRA format
    - `spec/v1/` is immutable once released
    - `spec/draft/` is the working version
 
@@ -74,22 +74,22 @@ ASP/
    - **Dev only** - not installed as part of the package
    - Run `python tools/generate_schemas.py` after changes
 
-3. **Validation** (`src/asp/validation/`)
+3. **Validation** (`src/astra/validation/`)
    - `schema.py`: JSON schema validation (loads bundled schemas)
    - `semantic.py`: Semantic validation (dict-based)
    - Two-stage validation: schema first, then semantic checks
 
-4. **CLI** (`src/asp/cli.py`)
+4. **CLI** (`src/astra/cli.py`)
    - Built with Click and Rich for terminal UI
    - Commands: init, validate, info, universe, viz, schema, paper
-   - Uses `find_analysis_file()` to locate `asp.yaml`
-   - `init` creates a minimal scaffold (asp.yaml, universes/, src/, .gitignore)
+   - Uses `find_analysis_file()` to locate `astra.yaml`
+   - `init` creates a minimal scaffold (astra.yaml, universes/, src/, .gitignore)
 
-5. **Helpers** (`src/asp/helpers.py`)
+5. **Helpers** (`src/astra/helpers.py`)
    - Dict-based utilities: `load_yaml`, `get_decision`, `get_default_universe`
    - No Pydantic model dependencies
 
-6. **Papers & Verification** (`src/asp/papers/`, `src/asp/verification/`)
+6. **Papers & Verification** (`src/astra/papers/`, `src/astra/verification/`)
    - Paper downloading and caching by DOI
    - PDF text extraction and evidence quote verification
 
@@ -118,10 +118,10 @@ pip install -e ".[dev]"
 pytest
 
 # Run with coverage
-pytest --cov=asp tests/
+pytest --cov=astra tests/
 
 # Validate an example
-asp validate examples/iris/asp.yaml
+astra validate examples/iris/astra.yaml
 ```
 
 ### Schema Management
@@ -130,10 +130,10 @@ asp validate examples/iris/asp.yaml
 python tools/generate_schemas.py
 
 # Export bundled schemas to files
-asp schema export
+astra schema export
 
 # View a schema
-asp schema show analysis
+astra schema show analysis
 ```
 
 ### Linting and Type Checking
@@ -143,13 +143,13 @@ ruff format src/ tests/
 mypy src/
 ```
 
-## Project Structure Created by `asp init`
+## Project Structure Created by `astra init`
 
-When users create a new analysis with `asp init my-analysis`:
+When users create a new analysis with `astra init my-analysis`:
 
 ```
 my-analysis/
-├── asp.yaml              # Analysis specification (edit this)
+├── astra.yaml              # Analysis specification (edit this)
 ├── .gitignore
 ├── src/                  # Analysis code
 ├── outputs/              # Analysis outputs
@@ -174,7 +174,7 @@ python tools/generate_schemas.py
 
 ### 2. Two-Stage Validation
 ```python
-from asp.validation import validate_analysis_schema, validate_analysis_file
+from astra.validation import validate_analysis_schema, validate_analysis_file
 
 # Stage 1: Schema validation (structure, types)
 schema_errors = validate_analysis_schema(file)
@@ -185,10 +185,10 @@ semantic_errors = validate_analysis_file(file)
 
 ### 3. Dict-Based API
 ```python
-from asp.helpers import load_yaml, get_decision, get_default_universe
+from astra.helpers import load_yaml, get_decision, get_default_universe
 
 # Load and work with dicts directly
-data = load_yaml("asp.yaml")
+data = load_yaml("astra.yaml")
 decision = get_decision(data, "preprocessing")
 defaults = get_default_universe(data)
 ```
@@ -251,13 +251,13 @@ Universe files mirror this structure with `decisions` and `analyses` keys.
 
 ### Adding a New Validation Rule
 1. For schema validation: Add Pydantic validator to model in `models/`
-2. For semantic validation: Add check to `src/asp/validation/semantic.py`
+2. For semantic validation: Add check to `src/astra/validation/semantic.py`
 3. Create test fixture in `tests/fixtures/invalid/`
 4. Add test case in `tests/test_validation.py`
 
 ### Releasing a New Schema Version
 
-ASP uses **semver** (Major.Minor.Patch) versioning for the specification:
+ASTRA uses **semver** (Major.Minor.Patch) versioning for the specification:
 - **Major bump (1.x -> 2.0)**: Breaking changes - old files won't validate
 - **Minor bump (1.0 -> 1.1)**: New optional fields only - old files still valid
 - **Patch bump (1.0.0 -> 1.0.1)**: Bug fixes to schemas (no field changes)
@@ -270,7 +270,7 @@ Release process:
 4. Tag the release (e.g., `git tag v1.0.0`)
 5. The X.Y.Z schemas are **immutable** after release
 
-The `version` field in asp.yaml must match a released spec version:
+The `version` field in astra.yaml must match a released spec version:
 ```yaml
 version: "1.0.0"  # Must match a spec/X.Y.Z/ directory
 ```
@@ -298,5 +298,5 @@ version: "1.0.0"  # Must match a spec/X.Y.Z/ directory
 
 ## Design Documents
 
-- **DESIGN.md**: Complete specification of the ASP format
+- **DESIGN.md**: Complete specification of the ASTRA format
 - **README.md**: User-facing documentation and quick start

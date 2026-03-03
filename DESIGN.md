@@ -1,8 +1,8 @@
-# ASP - Agentic Science Protocol
+# ASTRA - Agentic Schema for Transparent Research Analysis
 
 ## Overview
 
-**ASP (Agentic Science Protocol)** is a declarative specification format for scientific analyses that can be executed by AI agents. It describes:
+**ASTRA (Agentic Schema for Transparent Research Analysis)** is a declarative specification format for scientific analyses that can be executed by AI agents. It describes:
 
 - What we have to work with (inputs)
 - What we want to produce (outputs)
@@ -12,7 +12,7 @@ Crucially, an analysis does **not** specify how to execute the computation. That
 
 ```
 ┌─────────────────┐      ┌─────────────┐      ┌──────────────┐      ┌─────────┐
-│ ASP Analysis    │ ───▶ │ Agent       │ ───▶ │ Implementation│ ───▶ │ Results │
+│ ASTRA Analysis    │ ───▶ │ Agent       │ ───▶ │ Implementation│ ───▶ │ Results │
 │ (what we want)  │      │ (executes)  │      │ (generated)  │      │         │
 │                 │      │             │      │              │      │         │
 │ - inputs        │      │             │      │ scripts/     │      │ metrics │
@@ -58,9 +58,9 @@ What the analysis has to work with:
 | Input Type | Description | Example |
 |------------|-------------|---------|
 | `data` | Raw data files | CSV, FITS, Parquet files |
-| `analysis` | Results from previous analyses | Reference to another ASP analysis |
+| `analysis` | Results from previous analyses | Reference to another ASTRA analysis |
 
-Inputs of type `analysis` can reference specific outputs from another ASP analysis via `ref` and `use_outputs`.
+Inputs of type `analysis` can reference specific outputs from another ASTRA analysis via `ref` and `use_outputs`.
 
 ### 2. Outputs
 
@@ -161,7 +161,7 @@ decisions:
 
 ## Self-Similar Structure
 
-The ASP format is **self-similar**: every analysis node has the same structure, and analyses can be nested arbitrarily deep via the `analyses` key.
+The ASTRA format is **self-similar**: every analysis node has the same structure, and analyses can be nested arbitrarily deep via the `analyses` key.
 
 ### Design Principles
 
@@ -332,7 +332,7 @@ The analysis spec is declarative. It says WHAT we want, not HOW to compute it. T
 3. Generates appropriate code/workflow
 4. Executes and collects outputs
 
-The generated workflow should be versioned (in git) but is not part of the ASP spec.
+The generated workflow should be versioned (in git) but is not part of the ASTRA spec.
 
 ## Insights
 
@@ -361,8 +361,8 @@ The following diagram shows the complete workflow for extracting insights from l
 │                              (CLI)                                       │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  asp paper add 10.48550/arXiv.1706.03762 --version 7                     │
-│  asp paper add 10.1038/s41586-023-06221-2                                │
+│  astra paper add 10.48550/arXiv.1706.03762 --version 7                     │
+│  astra paper add 10.1038/s41586-023-06221-2                                │
 │         │                                                                │
 │         ▼                                                                │
 │  • Resolve DOI to PDF URL (doi.org → publisher)                          │
@@ -371,7 +371,7 @@ The following diagram shows the complete workflow for extracting insights from l
 │  • Store metadata (title, authors, retrieved_at)                         │
 │         │                                                                │
 │         ▼                                                                │
-│  Cache: ~/.cache/asp/papers/                                             │
+│  Cache: ~/.cache/astra/papers/                                             │
 │         └── 10.48550_arXiv.1706.03762_v7/                                │
 │             ├── paper.pdf                                                │
 │             └── meta.json  (sha256, title, doi, version, retrieved_at)   │
@@ -390,7 +390,7 @@ The following diagram shows the complete workflow for extracting insights from l
 │                                                                          │
 │  2. Agent identifies relevant quotes, figures, tables                    │
 │                                                                          │
-│  3. Agent writes insight to asp.yaml:                                    │
+│  3. Agent writes insight to astra.yaml:                                    │
 │                                                                          │
 │     insights:                                                            │
 │       layer_norm_insight:                                                │
@@ -432,7 +432,7 @@ The following diagram shows the complete workflow for extracting insights from l
 │                         (CLI - Gatekeeper)                               │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  asp validate asp.yaml --verify-evidence                                 │
+│  astra validate astra.yaml --verify-evidence                                 │
 │         │                                                                │
 │         ▼                                                                │
 │  Stage 1: Schema Validation                                              │
@@ -463,7 +463,7 @@ The following diagram shows the complete workflow for extracting insights from l
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight**: The agent can write whatever evidence it wants, but `asp validate --verify-evidence` will **fail** if quotes don't exist in the PDF. No fabricated evidence can make it through the workflow.
+**Key insight**: The agent can write whatever evidence it wants, but `astra validate --verify-evidence` will **fail** if quotes don't exist in the PDF. No fabricated evidence can make it through the workflow.
 
 ### Insight Structure
 
@@ -554,11 +554,11 @@ evidence:
 The CLI can verify that quotes exist in source PDFs:
 
 ```bash
-asp validate asp.yaml --verify-evidence
+astra validate astra.yaml --verify-evidence
 ```
 
 This:
-1. Checks that each paper is in the local cache (`asp paper add <doi>`)
+1. Checks that each paper is in the local cache (`astra paper add <doi>`)
 2. Searches for exact quotes in the PDF text
 3. Verifies page numbers if provided
 4. Caches verification results for efficiency
@@ -639,7 +639,7 @@ analyses:
 ## Example Analysis Specification
 
 ```yaml
-$schema: "https://asp-spec.org/v1/schema.json"
+$schema: "https://astra-spec.org/v1/schema.json"
 version: "1.0"
 name: "Iris Classification Study"
 
@@ -789,7 +789,7 @@ If the user wants to check robustness or explore alternatives:
 
 ## Execution
 
-ASP makes no prescription about execution frameworks. The specification defines *what* to compute; execution is handled by the agentic layer (e.g., Prism).
+ASTRA makes no prescription about execution frameworks. The specification defines *what* to compute; execution is handled by the agentic layer (e.g., Prism).
 
 
 ## Versioning and Lifecycle
@@ -848,7 +848,7 @@ Git worktrees allow multiple branches to be checked out simultaneously, each in 
 ```bash
 # Main analysis
 my-analysis/                    # main branch
-├── asp.yaml
+├── astra.yaml
 ├── universes/
 │   └── baseline.yaml
 └── outputs/
@@ -892,7 +892,7 @@ A common scenario: while running an analysis, you realize there's a decision you
 **Workflow:**
 1. You're running the baseline universe
 2. You notice: "Wait, should we handle class imbalance? That's a decision!"
-3. Add the new decision to `asp.yaml`
+3. Add the new decision to `astra.yaml`
 4. Commit: "Add class_imbalance decision point"
 5. Update universe files to include the new decision
 6. Continue execution
@@ -901,52 +901,52 @@ The analysis definition evolves as you learn. This is expected and tracked natur
 
 ## CLI Commands
 
-The ASP CLI provides tools for working with specifications:
+The ASTRA CLI provides tools for working with specifications:
 
 ```bash
 # Project setup
-asp init my-analysis               # Create minimal scaffold
-asp init my-analysis --no-git      # Skip git initialization
+astra init my-analysis               # Create minimal scaffold
+astra init my-analysis --no-git      # Skip git initialization
 
 # Validation
-asp validate asp.yaml              # Validate analysis specification
-asp validate universes/baseline.yaml  # Validate universe against spec
-asp validate asp.yaml --verify-evidence  # Verify evidence quotes
+astra validate astra.yaml              # Validate analysis specification
+astra validate universes/baseline.yaml  # Validate universe against spec
+astra validate astra.yaml --verify-evidence  # Verify evidence quotes
 
 # Exploration
-asp info                           # Show analysis summary
-asp info --decisions               # Show decision details
-asp viz                            # Visualize decision space (ASCII)
-asp viz --format mermaid           # Mermaid diagram
+astra info                           # Show analysis summary
+astra info --decisions               # Show decision details
+astra viz                            # Visualize decision space (ASCII)
+astra viz --format mermaid           # Mermaid diagram
 
 # Universe management
-asp universe generate --name baseline  # Generate universe from defaults
-asp universe check universes/foo.yaml  # Check universe constraints
+astra universe generate --name baseline  # Generate universe from defaults
+astra universe check universes/foo.yaml  # Check universe constraints
 
 # Schema utilities
-asp schema export                  # Export JSON schemas
-asp schema show analysis           # Print schema to stdout
+astra schema export                  # Export JSON schemas
+astra schema show analysis           # Print schema to stdout
 
 # Paper management
-asp paper add <doi>                # Cache a paper
-asp paper list                     # List cached papers
-asp paper verify-quote <doi> -q "text"  # Verify a quote
-asp paper verify-quotes <doi>      # Verify multiple quotes (JSON stdin)
-asp paper show <doi>               # Show paper metadata
-asp paper path <doi>               # Print path to cached PDF
-asp paper remove <doi>             # Remove cached paper
-asp paper fetch-metadata <doi>     # Fetch/update paper metadata
+astra paper add <doi>                # Cache a paper
+astra paper list                     # List cached papers
+astra paper verify-quote <doi> -q "text"  # Verify a quote
+astra paper verify-quotes <doi>      # Verify multiple quotes (JSON stdin)
+astra paper show <doi>               # Show paper metadata
+astra paper path <doi>               # Print path to cached PDF
+astra paper remove <doi>             # Remove cached paper
+astra paper fetch-metadata <doi>     # Fetch/update paper metadata
 ```
 
 For full agentic scaffolding (Claude Code config, HPC targets, visual editors), use Prism: `prism init`.
 
 ## Schema Reference
 
-### Analysis Schema (asp.yaml)
+### Analysis Schema (astra.yaml)
 
 ```yaml
-$schema: "https://asp-spec.org/v1/schema.json"
-version: "1.0"                    # Required: ASP spec version (major.minor)
+$schema: "https://astra-spec.org/v1/schema.json"
+version: "1.0"                    # Required: ASTRA spec version (major.minor)
 
 name: string                      # Required (root): Human-readable name
 description: string               # Optional: Detailed description
@@ -1051,7 +1051,7 @@ analyses:                         # Optional: Map of sub-analyses
 ### Universe Schema (universes/*.yaml)
 
 ```yaml
-$schema: "https://asp-spec.org/v1/universe.schema.json"
+$schema: "https://astra-spec.org/v1/universe.schema.json"
 
 id: string                        # Unique identifier (pattern: ^[a-z][a-z0-9_-]*$)
 description: string               # What this universe represents

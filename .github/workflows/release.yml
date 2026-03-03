@@ -94,7 +94,7 @@ jobs:
         run: |
           SPEC_DIR="spec/${{ steps.version.outputs.spec_version }}"
           cp -r spec/draft/ "$SPEC_DIR"
-          echo "# ASP Specification v${{ steps.version.outputs.spec_version }}" > "$SPEC_DIR/README.md"
+          echo "# ASTRA Specification v${{ steps.version.outputs.spec_version }}" > "$SPEC_DIR/README.md"
           echo "" >> "$SPEC_DIR/README.md"
           echo "Released from tag \`${{ github.ref_name }}\` on $(date -u +%Y-%m-%d)." >> "$SPEC_DIR/README.md"
           echo "" >> "$SPEC_DIR/README.md"

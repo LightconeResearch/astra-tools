@@ -1,4 +1,4 @@
-"""Core verification logic for ASP insights.
+"""Core verification logic for ASTRA insights.
 
 Verifies that evidence (quotes, figures, tables) exists in source documents.
 Now uses DOI-based paper cache instead of arXiv sources.
@@ -10,9 +10,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from asp.papers.cache import PaperCache
-from asp.verification.cache import VerificationCache
-from asp.verification.pdf import PDFDocument, extract_text_from_pdf
+from astra.papers.cache import PaperCache
+from astra.verification.cache import VerificationCache
+from astra.verification.pdf import PDFDocument, extract_text_from_pdf
 
 
 class VerificationStatus(StrEnum):
@@ -284,7 +284,7 @@ def verify_insight(
                     doi=doi,
                     version=version,
                     status=VerificationStatus.ERROR,
-                    message=f"Paper not in cache: {doi} (use 'asp paper add' first)",
+                    message=f"Paper not in cache: {doi} (use 'astra paper add' first)",
                 )
             )
             continue

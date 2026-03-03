@@ -1,7 +1,7 @@
 [project]
-name = "asp"
+name = "astra"
 dynamic = ["version"]
-description = "Agentic Science Protocol - A declarative specification format for scientific analyses"
+description = "Agentic Schema for Transparent Research Analysis - A declarative specification format for scientific analyses"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -41,7 +41,7 @@ dev = [
 ]
 
 [project.scripts]
-asp = "asp.cli:main"
+astra = "astra.cli:main"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
@@ -51,14 +51,14 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/asp"]
+packages = ["src/astra"]
 
-# Automatically bundle spec/draft/ into the package as asp/spec/
+# Automatically bundle spec/draft/ into the package as astra/spec/
 [tool.hatch.build.targets.wheel.force-include]
-"spec/draft" = "asp/spec"
+"spec/draft" = "astra/spec"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/asp", "spec/draft"]
+include = ["src/astra", "spec/draft"]
 
 [tool.ruff]
 target-version = "py311"

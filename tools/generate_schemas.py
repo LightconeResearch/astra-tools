@@ -3,7 +3,7 @@
 
 This script reads the Pydantic models from the top-level models/ directory
 and generates JSON schemas in spec/draft/. These schemas are then bundled
-into the asp package at build time.
+into the astra package at build time.
 
 Usage:
     python tools/generate_schemas.py

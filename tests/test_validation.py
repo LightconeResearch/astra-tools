@@ -2,14 +2,14 @@
 
 from pathlib import Path
 
-from asp.helpers import load_yaml
-from asp.validation.schema import (
+from astra.helpers import load_yaml
+from astra.validation.schema import (
     is_valid_analysis,
     is_valid_universe,
     validate_analysis_schema,
     validate_universe_schema,
 )
-from asp.validation.semantic import (
+from astra.validation.semantic import (
     SemanticError,
     validate_analysis,
     validate_analysis_file,
@@ -261,7 +261,7 @@ class TestRecipeHelpers:
 
     def test_get_output_dependencies(self):
         """get_output_dependencies should return output-to-output DAG."""
-        from asp.helpers import get_output_dependencies
+        from astra.helpers import get_output_dependencies
 
         data = {
             "outputs": [
@@ -290,7 +290,7 @@ class TestRecipeHelpers:
 
     def test_get_outputs_with_recipes(self):
         """get_outputs_with_recipes should return only outputs that have recipes."""
-        from asp.helpers import get_outputs_with_recipes
+        from astra.helpers import get_outputs_with_recipes
 
         data = {
             "outputs": [

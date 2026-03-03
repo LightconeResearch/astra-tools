@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from asp.validation.schema import get_analysis_schema, get_insights_schema, get_universe_schema
+from astra.validation.schema import get_analysis_schema, get_insights_schema, get_universe_schema
 
 
 class TestSchemaGeneration:
@@ -100,14 +100,14 @@ class TestSchemaGeneration:
         schema = get_analysis_schema()
         # Check that schema metadata from json_schema_extra is present
         assert schema.get("$schema") == "http://json-schema.org/draft-07/schema#"
-        assert schema.get("$id") == "https://asp-spec.org/v1/analysis.schema.json"
-        assert schema.get("title") == "ASP Analysis Specification"
+        assert schema.get("$id") == "https://astra-spec.org/v1/analysis.schema.json"
+        assert schema.get("title") == "ASTRA Analysis Specification"
 
     def test_universe_schema_metadata(self):
         schema = get_universe_schema()
         assert schema.get("$schema") == "http://json-schema.org/draft-07/schema#"
-        assert schema.get("$id") == "https://asp-spec.org/v1/universe.schema.json"
-        assert schema.get("title") == "ASP Universe Specification"
+        assert schema.get("$id") == "https://astra-spec.org/v1/universe.schema.json"
+        assert schema.get("title") == "ASTRA Universe Specification"
 
     def test_schema_has_descriptions(self):
         schema = get_analysis_schema()

@@ -272,8 +272,8 @@ class InsightCollection(BaseModel):
         populate_by_name=True,
         json_schema_extra={
             "$schema": "http://json-schema.org/draft-07/schema#",
-            "$id": "https://asp-spec.org/v1/insights.schema.json",
-            "title": "ASP Insights Collection",
+            "$id": "https://astra-spec.org/v1/insights.schema.json",
+            "title": "ASTRA Insights Collection",
         },
     )
 

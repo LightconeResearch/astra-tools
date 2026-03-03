@@ -1,9 +1,9 @@
-"""Evidence verification cache for ASP.
+"""Evidence verification cache for ASTRA.
 
 Caches verification results to avoid re-verifying unchanged evidence.
 
 Cache structure:
-    ~/.cache/asp/verification/
+    ~/.cache/astra/verification/
     └── evidence.json  # {cache_key: {verified_at, pdf_sha256, status}}
 
 Cache key: (doi, version, sha256(quote.exact))
@@ -91,10 +91,10 @@ class VerificationCache:
         """Initialize the verification cache.
 
         Args:
-            cache_dir: Directory for cache. Defaults to ~/.cache/asp/verification.
+            cache_dir: Directory for cache. Defaults to ~/.cache/astra/verification.
         """
         if cache_dir is None:
-            cache_dir = Path.home() / ".cache" / "asp" / "verification"
+            cache_dir = Path.home() / ".cache" / "astra" / "verification"
         self.cache_dir = cache_dir
         self.cache_file = cache_dir / "evidence.json"
         self._cache: dict[str, VerificationCacheEntry] | None = None

@@ -1,13 +1,13 @@
-"""Evidence verification for ASP insights.
+"""Evidence verification for ASTRA insights.
 
 Provides functionality to verify that evidence (quotes, figures, tables)
 actually exists in the referenced source documents.
 
-Requires optional dependencies: pip install asp[verify]
+Requires optional dependencies: pip install astra[verify]
 """
 
-from asp.verification.cache import VerificationCache, VerificationCacheEntry
-from asp.verification.core import (
+from astra.verification.cache import VerificationCache, VerificationCacheEntry
+from astra.verification.core import (
     EvidenceVerification,
     InsightVerification,
     VerificationStatus,
@@ -15,7 +15,7 @@ from asp.verification.core import (
     verify_evidence,
     verify_insight,
 )
-from asp.verification.pdf import (
+from astra.verification.pdf import (
     PDFDocument,
     extract_text_from_pdf,
     normalize_text,

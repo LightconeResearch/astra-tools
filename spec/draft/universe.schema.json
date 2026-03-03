@@ -33,7 +33,7 @@
       "type": "object"
     }
   },
-  "$id": "https://asp-spec.org/v1/universe.schema.json",
+  "$id": "https://astra-spec.org/v1/universe.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "description": "A universe specification - a complete set of decisions across the analysis tree.",
@@ -98,6 +98,6 @@
   "required": [
     "id"
   ],
-  "title": "ASP Universe Specification",
+  "title": "ASTRA Universe Specification",
   "type": "object"
 }

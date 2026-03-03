@@ -1,11 +1,11 @@
-"""ASP - Agentic Science Protocol.
+"""ASTRA - Agentic Schema for Transparent Research Analysis.
 
 A declarative specification format for scientific analyses.
 """
 
 from importlib.metadata import PackageNotFoundError, version
 
-from asp.helpers import (
+from astra.helpers import (
     create_universe_from_defaults,
     get_analysis_decisions,
     get_decision,
@@ -22,7 +22,7 @@ from asp.helpers import (
     load_yaml,
     save_yaml,
 )
-from asp.validation import (
+from astra.validation import (
     get_analysis_schema,
     get_insights_schema,
     get_universe_schema,
@@ -35,7 +35,7 @@ from asp.validation import (
 )
 
 try:
-    __version__ = version("asp")
+    __version__ = version("astra")
 except PackageNotFoundError:
     __version__ = "0.0.0.dev"
 

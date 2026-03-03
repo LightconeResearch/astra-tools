@@ -48,7 +48,7 @@ FAKE_QUOTE = (
 @pytest.fixture(scope="module")
 def temp_cache_dir():
     """Create a temporary cache directory for tests."""
-    cache_dir = Path(tempfile.mkdtemp(prefix="asp_test_cache_"))
+    cache_dir = Path(tempfile.mkdtemp(prefix="astra_test_cache_"))
     yield cache_dir
     # Cleanup after all tests in module
     shutil.rmtree(cache_dir, ignore_errors=True)
@@ -57,7 +57,7 @@ def temp_cache_dir():
 @pytest.fixture(scope="module")
 def paper_cache(temp_cache_dir):
     """Create a paper cache using temp directory."""
-    from asp.papers.cache import PaperCache
+    from astra.papers.cache import PaperCache
 
     return PaperCache(cache_dir=temp_cache_dir / "papers")
 
@@ -65,7 +65,7 @@ def paper_cache(temp_cache_dir):
 @pytest.fixture(scope="module")
 def verification_cache(temp_cache_dir):
     """Create a verification cache using temp directory."""
-    from asp.verification.cache import VerificationCache
+    from astra.verification.cache import VerificationCache
 
     return VerificationCache(cache_dir=temp_cache_dir / "verification")
 
@@ -73,7 +73,7 @@ def verification_cache(temp_cache_dir):
 @pytest.fixture(scope="module")
 def downloaded_paper(paper_cache):
     """Download the test paper once for all tests."""
-    from asp.papers.download import download_paper
+    from astra.papers.download import download_paper
 
     # Check if already in cache
     if paper_cache.has(DOI, VERSION):
@@ -124,7 +124,7 @@ class TestPDFExtraction:
 
     def test_extract_text_from_pdf(self, downloaded_paper):
         """Test that we can extract text from the PDF."""
-        from asp.verification.pdf import extract_text_from_pdf
+        from astra.verification.pdf import extract_text_from_pdf
 
         pdf = extract_text_from_pdf(downloaded_paper.pdf_path)
         assert pdf.num_pages > 0
@@ -133,7 +133,7 @@ class TestPDFExtraction:
 
     def test_find_valid_quote(self, downloaded_paper):
         """Test that we can find a real quote in the paper."""
-        from asp.verification.pdf import extract_text_from_pdf
+        from astra.verification.pdf import extract_text_from_pdf
 
         pdf = extract_text_from_pdf(downloaded_paper.pdf_path)
         found_pages = pdf.find_quote(VALID_QUOTE)
@@ -141,7 +141,7 @@ class TestPDFExtraction:
 
     def test_fake_quote_not_found(self, downloaded_paper):
         """Test that a fake quote is not found."""
-        from asp.verification.pdf import extract_text_from_pdf
+        from astra.verification.pdf import extract_text_from_pdf
 
         pdf = extract_text_from_pdf(downloaded_paper.pdf_path)
         found_pages = pdf.find_quote(FAKE_QUOTE)
@@ -153,7 +153,7 @@ class TestEvidenceVerification:
 
     def test_verify_valid_evidence(self, paper_cache, verification_cache):
         """Test verification of valid evidence succeeds."""
-        from asp.verification.core import VerificationStatus, verify_insight
+        from astra.verification.core import VerificationStatus, verify_insight
 
         insight = {
             "id": "test_insight",
@@ -185,7 +185,7 @@ class TestEvidenceVerification:
 
     def test_verify_fake_evidence_fails(self, paper_cache, verification_cache):
         """Test verification of fake evidence fails."""
-        from asp.verification.core import VerificationStatus, verify_insight
+        from astra.verification.core import VerificationStatus, verify_insight
 
         insight = {
             "id": "fake_insight",
@@ -210,7 +210,7 @@ class TestEvidenceVerification:
 
     def test_verification_caching(self, paper_cache, verification_cache):
         """Test that verification results are cached."""
-        from asp.verification.core import verify_insight
+        from astra.verification.core import verify_insight
 
         insight = {
             "id": "cached_insight",
@@ -239,8 +239,8 @@ class TestEvidenceVerification:
 
     def test_missing_paper_error(self, verification_cache, temp_cache_dir):
         """Test error when paper is not in cache."""
-        from asp.papers.cache import PaperCache
-        from asp.verification.core import VerificationStatus, verify_insight
+        from astra.papers.cache import PaperCache
+        from astra.verification.core import VerificationStatus, verify_insight
 
         # Use empty cache
         empty_cache = PaperCache(cache_dir=temp_cache_dir / "empty_papers")
@@ -268,11 +268,11 @@ class TestFullValidationWorkflow:
 
     def test_validate_analysis_with_insights(self, paper_cache, temp_cache_dir):
         """Test validating an analysis file with insights and evidence."""
-        from asp.helpers import load_yaml, save_yaml
-        from asp.validation.schema import validate_analysis_schema
-        from asp.validation.semantic import validate_analysis
-        from asp.verification.cache import VerificationCache
-        from asp.verification.core import verify_all_insights
+        from astra.helpers import load_yaml, save_yaml
+        from astra.validation.schema import validate_analysis_schema
+        from astra.validation.semantic import validate_analysis
+        from astra.verification.cache import VerificationCache
+        from astra.verification.core import verify_all_insights
 
         # Create a test analysis file
         analysis = {
@@ -342,7 +342,7 @@ class TestRapidFuzzMatching:
 
     def test_exact_match(self):
         """Test that exact matches are found."""
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.pdf import PDFDocument
 
         pdf = PDFDocument(
             path=None,  # type: ignore
@@ -355,7 +355,7 @@ class TestRapidFuzzMatching:
 
     def test_case_insensitive_match(self):
         """Test that matching is case-insensitive."""
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.pdf import PDFDocument
 
         pdf = PDFDocument(
             path=None,  # type: ignore
@@ -368,7 +368,7 @@ class TestRapidFuzzMatching:
 
     def test_fuzzy_match_with_typos(self):
         """Test that fuzzy matching handles minor typos/OCR errors."""
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.pdf import PDFDocument
 
         pdf = PDFDocument(
             path=None,  # type: ignore
@@ -381,7 +381,7 @@ class TestRapidFuzzMatching:
 
     def test_fuzzy_match_with_inline_citations(self):
         """Test that fuzzy matching handles inline citations in PDF text."""
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.pdf import PDFDocument
 
         # PDF has citations that user's quote doesn't include
         pdf = PDFDocument(
@@ -395,7 +395,7 @@ class TestRapidFuzzMatching:
 
     def test_fuzzy_match_unicode_variations(self):
         """Test that fuzzy matching handles Unicode character variations."""
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.pdf import PDFDocument
 
         # PDF has different Unicode characters
         pdf = PDFDocument(
@@ -410,7 +410,7 @@ class TestRapidFuzzMatching:
 
     def test_quote_not_found(self):
         """Test that non-existent quotes are not found."""
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.pdf import PDFDocument
 
         pdf = PDFDocument(
             path=None,  # type: ignore
@@ -435,7 +435,7 @@ class TestPrefixSuffixContext:
         In practice, prefix/suffix provide unique context like section headers,
         figure references, or distinctive surrounding text.
         """
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.pdf import PDFDocument
 
         # Same quote appears twice with very different context
         pdf = PDFDocument(
@@ -464,7 +464,7 @@ class TestPrefixSuffixContext:
 
     def test_suffix_context(self):
         """Test that suffix helps narrow down matches."""
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.pdf import PDFDocument
 
         pdf = PDFDocument(
             path=None,  # type: ignore
@@ -490,8 +490,8 @@ class TestPageHint:
 
     def test_page_hint_optimizes_search(self):
         """Test that page hint is used to optimize search order."""
-        from asp.verification.core import VerificationStatus, verify_quote_in_pdf
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.core import VerificationStatus, verify_quote_in_pdf
+        from astra.verification.pdf import PDFDocument
 
         # Create a mock PDF with 10 pages
         pdf = PDFDocument(
@@ -514,8 +514,8 @@ class TestPageHint:
 
     def test_no_page_hint(self):
         """Test verification works without page hint."""
-        from asp.verification.core import VerificationStatus, verify_quote_in_pdf
-        from asp.verification.pdf import PDFDocument
+        from astra.verification.core import VerificationStatus, verify_quote_in_pdf
+        from astra.verification.pdf import PDFDocument
 
         pdf = PDFDocument(
             path=None,  # type: ignore

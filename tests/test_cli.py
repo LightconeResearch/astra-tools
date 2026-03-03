@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from asp.cli import main
+from astra.cli import main
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ class TestValidateCommand:
     def test_validate_universe_without_analysis(
         self, runner: CliRunner, baseline_universe_path: Path, tmp_path: Path
     ):
-        # Copy universe to temp dir where there's no asp.yaml
+        # Copy universe to temp dir where there's no astra.yaml
         temp_universe = tmp_path / "universes" / "test.yaml"
         temp_universe.parent.mkdir(parents=True)
         shutil.copy(baseline_universe_path, temp_universe)
@@ -95,10 +95,10 @@ class TestInfoCommand:
         assert "accuracy" in result.output
 
     def test_info_no_file(self, runner: CliRunner, tmp_path: Path):
-        # Run in a directory without asp.yaml
+        # Run in a directory without astra.yaml
         result = runner.invoke(main, ["info"], catch_exceptions=False)
         assert result.exit_code == 1
-        assert "No asp.yaml found" in result.output
+        assert "No astra.yaml found" in result.output
 
 
 class TestUniverseCommands:
@@ -127,7 +127,7 @@ class TestUniverseCommands:
         self, runner: CliRunner, full_analysis_path: Path, tmp_path: Path
     ):
         # Copy analysis to temp dir
-        temp_analysis = tmp_path / "asp.yaml"
+        temp_analysis = tmp_path / "astra.yaml"
         shutil.copy(full_analysis_path, temp_analysis)
 
         result = runner.invoke(
@@ -219,7 +219,7 @@ class TestHelpOption:
     def test_help(self, runner: CliRunner):
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
-        assert "ASP - Agentic Science Protocol CLI" in result.output
+        assert "ASTRA - Agentic Schema for Transparent Research Analysis CLI" in result.output
 
     def test_validate_help(self, runner: CliRunner):
         result = runner.invoke(main, ["validate", "--help"])
@@ -242,17 +242,17 @@ class TestInitCommand:
     """Tests for the init command."""
 
     def test_init_creates_project_structure(self, runner: CliRunner, tmp_path: Path):
-        """Test that basic init creates the minimal ASP scaffold."""
+        """Test that basic init creates the minimal ASTRA scaffold."""
         project_dir = tmp_path / "my-analysis"
         result = runner.invoke(
             main,
             ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 0
-        assert "Created ASP analysis scaffold" in result.output
+        assert "Created ASTRA analysis scaffold" in result.output
 
         # Check directory structure (minimal scaffold)
-        assert (project_dir / "asp.yaml").exists()
+        assert (project_dir / "astra.yaml").exists()
         assert (project_dir / ".gitignore").exists()
         assert (project_dir / "universes").is_dir()
         assert (project_dir / "universes" / "baseline.yaml").exists()
@@ -266,18 +266,18 @@ class TestInitCommand:
         assert not (project_dir / "steps").exists()
         assert not (project_dir / "scripts").exists()
 
-    def test_init_asp_yaml_content(self, runner: CliRunner, tmp_path: Path):
-        """Test that the generated asp.yaml has the expected content."""
+    def test_init_astra_yaml_content(self, runner: CliRunner, tmp_path: Path):
+        """Test that the generated astra.yaml has the expected content."""
         project_dir = tmp_path / "content-test"
         result = runner.invoke(
             main,
             ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 0
-        assert (project_dir / "asp.yaml").exists()
+        assert (project_dir / "astra.yaml").exists()
 
         # Verify the file content
-        content = (project_dir / "asp.yaml").read_text()
+        content = (project_dir / "astra.yaml").read_text()
         assert "content-test" in content  # Directory name used as analysis name
         assert "version:" in content
         assert "decisions:" in content
@@ -308,11 +308,11 @@ class TestInitCommand:
             input="n\n",  # Decline to continue
         )
         assert result.exit_code == 0
-        # asp.yaml should NOT have been created
-        assert not (project_dir / "asp.yaml").exists()
+        # astra.yaml should NOT have been created
+        assert not (project_dir / "astra.yaml").exists()
 
-    def test_init_refuses_if_asp_yaml_exists(self, runner: CliRunner, tmp_path: Path):
-        """Test that init refuses to run in an existing ASP project."""
+    def test_init_refuses_if_astra_yaml_exists(self, runner: CliRunner, tmp_path: Path):
+        """Test that init refuses to run in an existing ASTRA project."""
         project_dir = tmp_path / "already-init"
         # First init should succeed
         result = runner.invoke(
@@ -320,7 +320,7 @@ class TestInitCommand:
             ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 0
-        assert (project_dir / "asp.yaml").exists()
+        assert (project_dir / "astra.yaml").exists()
 
         # Second init should fail
         result = runner.invoke(
@@ -328,10 +328,10 @@ class TestInitCommand:
             ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 1
-        assert "already an ASP project" in result.output
+        assert "already an ASTRA project" in result.output
 
-    def test_init_refuses_if_asp_yaml_exists_current_dir(self, runner: CliRunner, tmp_path: Path):
-        """Test that init refuses to run in current dir if asp.yaml exists."""
+    def test_init_refuses_if_astra_yaml_exists_current_dir(self, runner: CliRunner, tmp_path: Path):
+        """Test that init refuses to run in current dir if astra.yaml exists."""
         old_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
@@ -342,7 +342,7 @@ class TestInitCommand:
             # Second init should fail
             result = runner.invoke(main, ["init", "--no-git"])
             assert result.exit_code == 1
-            assert "already an ASP project" in result.output
+            assert "already an ASTRA project" in result.output
         finally:
             os.chdir(old_cwd)
 
@@ -358,7 +358,7 @@ class TestInitCommand:
             input="y\n",  # Confirm to continue
         )
         assert result.exit_code == 0
-        assert (project_dir / "asp.yaml").exists()
+        assert (project_dir / "astra.yaml").exists()
         # Original file should still exist
         assert (project_dir / "some_file.txt").exists()
 
@@ -372,7 +372,7 @@ class TestInitCommand:
                 ["init", "--no-git"],
             )
             assert result.exit_code == 0
-            assert (tmp_path / "asp.yaml").exists()
+            assert (tmp_path / "astra.yaml").exists()
         finally:
             os.chdir(old_cwd)
 
@@ -384,8 +384,8 @@ class TestInitCommand:
             ["init", str(project_dir), "--no-git"],
         )
 
-        # Validate the generated asp.yaml
-        result = runner.invoke(main, ["validate", str(project_dir / "asp.yaml")])
+        # Validate the generated astra.yaml
+        result = runner.invoke(main, ["validate", str(project_dir / "astra.yaml")])
         assert result.exit_code == 0
         assert "Validation successful" in result.output
 
@@ -396,7 +396,7 @@ class TestInitCommand:
                 "validate",
                 str(project_dir / "universes" / "baseline.yaml"),
                 "-a",
-                str(project_dir / "asp.yaml"),
+                str(project_dir / "astra.yaml"),
             ],
         )
         assert result.exit_code == 0
@@ -428,7 +428,7 @@ class TestInitCommand:
 
 
 class TestBatchQuoteVerification:
-    """Tests for the batch quote verification command (asp paper verify-quotes)."""
+    """Tests for the batch quote verification command (astra paper verify-quotes)."""
 
     def test_verify_quotes_no_input(self, runner: CliRunner):
         """Test error handling when no input is provided on stdin."""

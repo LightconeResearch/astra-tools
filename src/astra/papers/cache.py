@@ -1,9 +1,9 @@
-"""Paper cache management for ASP.
+"""Paper cache management for ASTRA.
 
 Papers are cached by DOI with optional version for arXiv papers.
 
 Cache structure:
-    ~/.cache/asp/papers/
+    ~/.cache/astra/papers/
     ├── 10.48550_arXiv.1706.03762_v7/
     │   ├── paper.pdf
     │   └── meta.json
@@ -110,10 +110,10 @@ class PaperCache:
         """Initialize the paper cache.
 
         Args:
-            cache_dir: Directory for paper cache. Defaults to ~/.cache/asp/papers.
+            cache_dir: Directory for paper cache. Defaults to ~/.cache/astra/papers.
         """
         if cache_dir is None:
-            cache_dir = Path.home() / ".cache" / "asp" / "papers"
+            cache_dir = Path.home() / ".cache" / "astra" / "papers"
         self.cache_dir = cache_dir
 
     def _paper_dir(self, doi: str, version: int | None = None) -> Path:

@@ -1,7 +1,7 @@
-"""JSON Schema validation for ASP specifications.
+"""JSON Schema validation for ASTRA specifications.
 
-This module validates ASP YAML files against bundled JSON schemas.
-Schemas are loaded from the asp.spec package (populated from spec/draft/
+This module validates ASTRA YAML files against bundled JSON schemas.
+Schemas are loaded from the astra.spec package (populated from spec/draft/
 at build time), or directly from spec/draft/ during development.
 """
 
@@ -14,7 +14,7 @@ from typing import Any
 
 import jsonschema
 
-from asp.helpers import load_yaml
+from astra.helpers import load_yaml
 
 
 class ValidationError(Exception):
@@ -47,7 +47,7 @@ def _load_bundled_schema(name: str) -> dict[str, Any]:
     """
     # Try bundled schemas first (installed package)
     try:
-        schema_text = files("asp.spec").joinpath(name).read_text()
+        schema_text = files("astra.spec").joinpath(name).read_text()
         schema: dict[str, Any] = json.loads(schema_text)
         return schema
     except (FileNotFoundError, TypeError, ModuleNotFoundError):

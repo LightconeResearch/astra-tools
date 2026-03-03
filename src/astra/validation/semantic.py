@@ -1,4 +1,4 @@
-"""Semantic validation for ASP specifications.
+"""Semantic validation for ASTRA specifications.
 
 This module performs semantic validation (cross-references, constraints)
 using dict-based data structures loaded from YAML files.
@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from asp.helpers import _collect_node_decisions, load_yaml
+from astra.helpers import _collect_node_decisions, load_yaml
 
 
 class SemanticError:

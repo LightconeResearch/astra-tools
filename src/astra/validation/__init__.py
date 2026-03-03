@@ -1,6 +1,6 @@
-"""Validation utilities for ASP specifications."""
+"""Validation utilities for ASTRA specifications."""
 
-from asp.validation.schema import (
+from astra.validation.schema import (
     get_analysis_schema,
     get_insights_schema,
     get_universe_schema,
@@ -9,7 +9,7 @@ from asp.validation.schema import (
     validate_analysis_schema,
     validate_universe_schema,
 )
-from asp.validation.semantic import (
+from astra.validation.semantic import (
     SemanticError,
     validate_analysis,
     validate_analysis_file,

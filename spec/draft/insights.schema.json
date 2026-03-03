@@ -456,7 +456,7 @@
       "type": "object"
     }
   },
-  "$id": "https://asp-spec.org/v1/insights.schema.json",
+  "$id": "https://astra-spec.org/v1/insights.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "description": "Collection of insights, usable standalone or embedded in an analysis.",
@@ -481,6 +481,6 @@
       "type": "object"
     }
   },
-  "title": "ASP Insights Collection",
+  "title": "ASTRA Insights Collection",
   "type": "object"
 }

@@ -1,5 +1,5 @@
 {
-  "$id": "https://asp-spec.org/v1/analysis.schema.json",
+  "$id": "https://astra-spec.org/v1/analysis.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "description": "A self-similar analysis specification.\n\nEvery level has the same structure: metadata, inputs, outputs,\ndecisions, insights, and optional sub-analyses. A sub-analysis extracted\nto its own file is a valid Analysis on its own.\n\nAt the root level, ``version``, ``name``, ``inputs``, and\n``outputs`` are required. In sub-analyses they are optional.",
@@ -28,7 +28,7 @@
         }
       ],
       "default": null,
-      "description": "ASP specification version",
+      "description": "ASTRA specification version",
       "title": "Version"
     },
     "name": {
@@ -186,11 +186,11 @@
       "title": "Analyses"
     }
   },
-  "title": "ASP Analysis Specification",
+  "title": "ASTRA Analysis Specification",
   "type": "object",
   "$defs": {
     "Analysis": {
-      "$id": "https://asp-spec.org/v1/analysis.schema.json",
+      "$id": "https://astra-spec.org/v1/analysis.schema.json",
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
       "description": "A self-similar analysis specification.\n\nEvery level has the same structure: metadata, inputs, outputs,\ndecisions, insights, and optional sub-analyses. A sub-analysis extracted\nto its own file is a valid Analysis on its own.\n\nAt the root level, ``version``, ``name``, ``inputs``, and\n``outputs`` are required. In sub-analyses they are optional.",
@@ -219,7 +219,7 @@
             }
           ],
           "default": null,
-          "description": "ASP specification version",
+          "description": "ASTRA specification version",
           "title": "Version"
         },
         "name": {
@@ -377,7 +377,7 @@
           "title": "Analyses"
         }
       },
-      "title": "ASP Analysis Specification",
+      "title": "ASTRA Analysis Specification",
       "type": "object"
     },
     "Checksum": {
@@ -784,7 +784,7 @@
     },
     "Input": {
       "additionalProperties": false,
-      "description": "An input to the analysis.\n\nTwo kinds of inputs:\n- ``type: data`` \u2014 a dataset, file, or external resource (specify ``source``)\n- ``type: analysis`` \u2014 outputs from another ASP analysis (specify ``ref``)\n\nSub-analysis inputs can also use ``from`` to reference a parent input\nor a sibling's output (e.g., ``from: sibling_id.output_id``).",
+      "description": "An input to the analysis.\n\nTwo kinds of inputs:\n- ``type: data`` \u2014 a dataset, file, or external resource (specify ``source``)\n- ``type: analysis`` \u2014 outputs from another ASTRA analysis (specify ``ref``)\n\nSub-analysis inputs can also use ``from`` to reference a parent input\nor a sibling's output (e.g., ``from: sibling_id.output_id``).",
       "properties": {
         "id": {
           "description": "Unique identifier for the input",
@@ -849,7 +849,7 @@
             }
           ],
           "default": null,
-          "description": "Reference to another ASP analysis",
+          "description": "Reference to another ASTRA analysis",
           "title": "Ref"
         },
         "ref_version": {
