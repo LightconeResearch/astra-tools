@@ -162,6 +162,8 @@ For full agentic scaffolding (Claude Code config, skills, scripts, venv, HPC tar
 ## Important Design Patterns
 
 ### 1. Schema Generation Workflow
+**IMPORTANT**: After any changes to `models/`, you must also verify that `models/README.md` still accurately reflects the schema. Update it if any fields, types, constraints, or relationships have changed.
+
 ```bash
 # 1. Modify Pydantic models in models/
 # 2. Generate JSON schemas

@@ -1,0 +1,695 @@
+# ASTRA Format Specification
+
+> **Version**: draft \
+> **Status**: Active Development
+
+## Abstract
+
+**ASTRA** (Agentic Schema for Transparent Research Analysis) is a declarative YAML format for specifying scientific analyses. An ASTRA file describes *what* an analysis needs (inputs), *what* it should produce (outputs), and *what* choices are involved (decisions) — without prescribing *how* to execute the computation.
+
+AI agents read the specification and generate implementations. The format captures the full decision space (the **multiverse**) so that every analytical choice is transparent, traceable, and reproducible.
+
+```
+Analysis (YAML)  ─────▶  Agent  ─────▶  Implementation  ─────▶  Results
+  inputs                                   scripts/               metrics
+  outputs                                  pipelines/             figures
+  decisions                                                       tables
+      ▲                                                              │
+      └──────────────── previous analyses (as inputs) ───────────────┘
+
+Universe (decision selections)  ─────▶  Execution Parameters
+```
+
+## Goals
+
+1. **Declarative** — Specify what, not how. Execution is the agent's job.
+2. **Self-similar** — Every node in the analysis tree has the same structure: inputs, outputs, decisions, insights, and optional sub-analyses.
+3. **Transparent** — All analytical choices are documented, including alternatives not taken.
+4. **Evidence-linked** — Decisions can reference literature-backed insights with verifiable quotes.
+5. **Composable** — Analyses can use other analyses as inputs, enabling formal research chains.
+
+## Non-Goals
+
+- **Workflow execution** — ASTRA does not define execution order, scheduling, or runtime behavior. That is the domain of agents (e.g., [Prism](https://github.com/your-org/prism)).
+- **Code generation** — The specification does not contain or generate implementation code.
+- **Data storage** — ASTRA references data sources but does not store data.
+- **Visualization** — Rendering and display are handled by separate tools (e.g., [Prism-UI](https://github.com/your-org/prism-ui)).
+
+## Terminology
+
+| Term | Definition |
+|------|-----------|
+| **Analysis** | A self-similar node with inputs, outputs, decisions, insights, and optional sub-analyses |
+| **Decision** | A choice point with multiple options (e.g., "which scaling method?") |
+| **Option** | One possible choice for a decision |
+| **Universe** | One complete set of decisions — one option selected per decision point |
+| **Multiverse** | The space of all valid decision combinations |
+| **Insight** | A scientific claim backed by verifiable evidence from literature |
+| **Evidence** | A reference to a specific quote, figure, or table in a paper or analysis artifact |
+| **Recipe** | An inline build rule on an output declaring how to produce it |
+| **Constraint** | A rule between options: `incompatible_with` or `requires` |
+
+---
+
+## Core Specification
+
+### File Format
+
+ASTRA analyses are written in YAML. The top-level file is typically named `astra.yaml`.
+
+### Minimal Example
+
+```yaml
+version: "1.0"
+name: "Iris Classification"
+
+inputs:
+  - id: iris_data
+    type: data
+    source: "sklearn.datasets.load_iris"
+
+outputs:
+  - id: accuracy
+    type: metric
+
+decisions:
+  scaling:
+    label: "Feature Scaling"
+    default: standard
+    options:
+      none:
+        label: "No Scaling"
+      standard:
+        label: "StandardScaler"
+```
+
+### Full Example
+
+```yaml
+$schema: "https://astra-spec.org/v1/schema.json"
+version: "1.0"
+name: "Iris Classification Study"
+description: |
+  A demonstration analysis that builds a classifier for the classic
+  Iris dataset, exploring different preprocessing and model choices.
+authors:
+  - "ASTRA Examples"
+tags:
+  - classification
+  - sklearn
+
+inputs:
+  - id: iris_data
+    type: data
+    source: "sklearn.datasets.load_iris"
+    description: "Fisher's classic 150-sample, 3-class dataset"
+
+  - id: preprocessing_study
+    type: analysis
+    ref: "analyses/scaling_comparison_2024"
+    description: "Our previous study on scaling methods"
+
+outputs:
+  - id: trained_output
+    type: data
+    description: "Best performing classifier"
+    recipe:
+      command: python src/train.py
+
+  - id: accuracy
+    type: metric
+    description: "Classification accuracy on held-out test set"
+    recipe:
+      command: python src/evaluate.py
+      inputs: [trained_output]
+
+  - id: confusion_matrix
+    type: figure
+    description: "Confusion matrix heatmap"
+    recipe:
+      command: python src/evaluate.py
+      inputs: [trained_output]
+
+decisions:
+  scaling:
+    label: "Feature Scaling"
+    rationale: "Scaling affects distance-based algorithms like SVM"
+    default: standard
+    options:
+      none:
+        label: "No Scaling"
+        description: "Use raw feature values"
+      standard:
+        label: "StandardScaler"
+        description: "Z-score normalization (mean=0, std=1)"
+      minmax:
+        label: "MinMaxScaler"
+        description: "Scale to [0, 1] range"
+        incompatible_with:
+          - model.svm
+
+  model:
+    label: "Classification Model"
+    rationale: "Core algorithmic choice affecting accuracy and interpretability"
+    default: random_forest
+    options:
+      svm:
+        label: "Support Vector Machine"
+        description: "Maximum margin classifier"
+        requires:
+          - scaling.standard
+      random_forest:
+        label: "Random Forest"
+        description: "Ensemble of decision trees"
+      logistic:
+        label: "Logistic Regression"
+        description: "Linear classifier with probabilistic output"
+```
+
+---
+
+## Analysis Schema
+
+The `Analysis` is the root type. Every field marked *optional* can be omitted.
+
+### Document Metadata
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `$schema` | `string` | No | JSON Schema reference URL |
+| `version` | `string` | No | ASTRA spec version (semver: `"1.0"`, `"1.0.0"`) |
+| `name` | `string` | No | Human-readable name |
+| `authors` | `string[]` | No | List of authors |
+| `tags` | `string[]` | No | Tags for categorization |
+| `description` | `string` | No | Detailed description |
+
+**Version format**: `^\d+\.\d+(\.\d+)?$`
+
+### Inputs
+
+Each input declares a data source or a reference to another analysis.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `string` | **Yes** | Unique identifier |
+| `type` | `"data"` \| `"analysis"` | **Yes** | Kind of input |
+| `description` | `string` | No | What this input is |
+| `source` | `string` | No | URI or path (for `type: data`) |
+| `checksum` | `Checksum` | No | Data integrity hash |
+| `ref` | `string` | No | Reference to another ASTRA analysis (for `type: analysis`) |
+| `ref_version` | `string` | No | Version of referenced analysis |
+| `use_outputs` | `string[]` | No | Specific outputs to use from referenced analysis |
+| `from` | `string` | No | Parent input or sibling output reference (for sub-analyses) |
+
+**ID pattern**: `^[a-z][a-z0-9_]*$` (lowercase, underscores, starts with letter)
+
+**Input wiring in sub-analyses**: The `from` field references either a parent input by ID (`from: parent_input_id`) or a sibling's output (`from: sibling_id.output_id`).
+
+### Outputs
+
+Each output declares an expected result from the analysis.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `string` | **Yes** | Unique identifier |
+| `type` | `"metric"` \| `"figure"` \| `"table"` \| `"data"` \| `"report"` | **Yes** | Kind of output |
+| `description` | `string` | No | What this output is |
+| `from` | `string` | No | Sub-analysis output that produces this (e.g., `"sub.output_id"`) |
+| `recipe` | `Recipe` | No | Inline build rule |
+
+**Output types**:
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `metric` | Numeric or categorical value | Accuracy, p-value, AUC |
+| `figure` | Visualization | Confusion matrix, ROC curve |
+| `table` | Structured tabular data | Feature importances |
+| `data` | Processed data files | Predictions, models |
+| `report` | Text/document output | Summary, conclusion |
+
+### Recipes
+
+A `Recipe` is an inline build rule on an output. Outputs with recipes form a DAG via their `inputs` field.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `command` | `string` | **Yes** | Command to execute |
+| `inputs` | `string[]` | No | Output IDs that must be produced first |
+| `container` | `string` \| `ContainerBuildSpec` | No | Container image override |
+| `resources` | `Resources` | No | Compute requirements |
+
+**Resources**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cpus` | `integer` | Number of CPUs (min: 1) |
+| `memory` | `string` | Memory requirement (e.g., `"8GB"`) |
+| `gpus` | `integer` | Number of GPUs (min: 1) |
+| `time_limit` | `string` | Wall time limit (e.g., `"2h"`) |
+
+**Container build spec**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `build` | `string` | **Yes** | Path to Containerfile |
+| `context` | `string` | No | Build context directory |
+| `args` | `map[string, string]` | No | Build arguments |
+
+A node-level `container` field sets the default container for all recipes in that analysis node. Individual recipes can override it.
+
+### Decisions
+
+Decisions are the core of the multiverse. Each decision is a named choice point with multiple options.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | `string` | **Yes** | Human-readable name |
+| `rationale` | `string` | No | Why this decision exists |
+| `tags` | `string[]` | No | Grouping/categorization tags |
+| `when` | `string` | No | Conditional activation (`"decision_id.option_id"`) |
+| `default` | `string` | No | Default option ID for baseline universes |
+| `options` | `map[string, Option]` | **Yes** | Available choices |
+
+**Conditional decisions**: The `when` field makes a decision conditional — it only exists when the referenced option is selected. Pattern: `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`
+
+### Options
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | `string` | **Yes** | Human-readable name |
+| `description` | `string` | No | Detailed description |
+| `insights` | `string[]` | No | Insight IDs supporting this choice |
+| `incompatible_with` | `string[]` | No | Options that conflict (format: `"decision.option"`) |
+| `requires` | `string[]` | No | Options that must coexist (format: `"decision.option"`) |
+| `excluded` | `boolean` | No | Whether this option was considered and rejected (default: `false`) |
+| `excluded_reason` | `string` | No | Why this option was excluded |
+
+**Constraint reference format**: `"decision_id.option_id"` — constraints are scoped within the same analysis node.
+
+### Success Criteria
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `claim` | `string` | **Yes** | Human-readable statement |
+| `output` | `string` | No | Output ID to check |
+| `condition` | `string` | No | Condition to evaluate (requires `output`) |
+
+### Sub-Analyses
+
+The `analyses` field contains a map of sub-analysis IDs to nested `Analysis` objects. Each sub-analysis has the exact same structure as the root — the format is fully self-similar.
+
+```yaml
+analyses:
+  preprocessing:
+    description: "Data preprocessing stage"
+    inputs:
+      - id: raw_data
+        type: data
+        from: survey_catalog           # Parent input
+    outputs:
+      - id: scaled_data
+        type: data
+        recipe:
+          command: python src/scale.py
+    decisions:
+      scaling:
+        label: "Scaling Method"
+        default: standard
+        options:
+          standard:
+            label: "StandardScaler"
+          minmax:
+            label: "MinMaxScaler"
+
+  training:
+    description: "Model training stage"
+    inputs:
+      - id: train_data
+        type: data
+        from: preprocessing.scaled_data  # Sibling output
+    outputs:
+      - id: model
+        type: data
+        recipe:
+          command: python src/train.py
+          resources:
+            gpus: 1
+            memory: "32GB"
+    decisions:
+      architecture:
+        label: "Model Architecture"
+        default: maf
+        options:
+          maf:
+            label: "Masked Autoregressive Flow"
+          npe:
+            label: "Neural Posterior Estimation"
+```
+
+---
+
+## Universe Schema
+
+A **universe** is one complete set of decisions — one option selected per decision point. It mirrors the analysis tree structure.
+
+### Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `$schema` | `string` | No | JSON Schema reference URL |
+| `id` | `string` | **Yes** | Unique identifier |
+| `description` | `string` | No | What this universe represents |
+| `decisions` | `map[string, string]` | No | Decision ID → selected option ID (root level) |
+| `analyses` | `map[string, UniverseNode]` | No | Sub-analysis selections |
+
+**Universe ID pattern**: `^[a-z][a-z0-9_-]*$` (also allows hyphens)
+
+A `UniverseNode` has the same shape: `decisions` and `analyses`, recursively mirroring the analysis tree.
+
+### Flat Universe
+
+```yaml
+id: baseline
+description: "Default configuration using standard practices"
+
+decisions:
+  scaling: standard
+  model: random_forest
+  test_size: small
+  random_seed: seed_42
+```
+
+### Nested Universe
+
+```yaml
+id: baseline
+description: "Standard pipeline configuration"
+
+analyses:
+  preprocessing:
+    decisions:
+      scaling: standard
+  training:
+    decisions:
+      architecture: maf
+```
+
+---
+
+## Insights Schema
+
+Insights represent scientific knowledge extracted from literature, with full traceability to source material.
+
+### Insight
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `string` | **Yes** | Unique identifier |
+| `claim` | `string` | **Yes** | What we learned (1-2 sentences) |
+| `created_at` | `datetime` | **Yes** | ISO 8601 timestamp |
+| `evidence` | `Evidence[]` | **Yes** | Supporting evidence (at least one) |
+| `derived` | `boolean` | No | Whether synthesized/inferred (default: `false`) |
+| `scope` | `string` | No | Applicability conditions |
+| `tags` | `string[]` | No | Categorization tags |
+| `notes` | `string` | No | Reasoning notes |
+
+### Evidence
+
+Each evidence item references either a paper (by DOI) or an analysis artifact (by output ID). Exactly one source type must be set.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `string` | **Yes** | Evidence ID |
+| `doi` | `string` | **Exactly one of `doi` or `artifact`** | DOI of source paper |
+| `artifact` | `string` | **Exactly one of `doi` or `artifact`** | Output ID in this analysis |
+| `version` | `integer` | No | Paper version (arXiv; literature only) |
+| `checksum` | `Checksum` | No | Artifact integrity hash (artifact only) |
+| `snapshot` | `string` | No | Path to immutable artifact copy (artifact only) |
+| `source_commit` | `string` | No | Git commit that produced artifact (artifact only) |
+| `quote` | `TextQuoteSelector` | **At least one selector** | Text quote anchor |
+| `figure` | `FigureSelector` | **At least one selector** | Figure reference |
+| `table` | `TableSelector` | **At least one selector** | Table reference |
+| `location` | `FragmentSelector` | No | Location hint (page number) |
+
+**DOI pattern**: `^10\.\d{4,}/.*$`
+
+### W3C Selectors
+
+Evidence uses [W3C Web Annotation](https://www.w3.org/TR/annotation-model/) compliant selectors for precise references.
+
+**TextQuoteSelector** — Locates a text passage in a document:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"TextQuoteSelector"` | Yes | Selector type |
+| `exact` | `string` | **Yes** | Exact quoted text (1-3 sentences) |
+| `prefix` | `string` | No | ~20-100 chars before the quote |
+| `suffix` | `string` | No | ~20-100 chars after the quote |
+
+**FigureSelector** — References a figure:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"FigureSelector"` | Yes | Selector type |
+| `label` | `string` | **Yes** | Figure label (e.g., `"Figure 3a"`) |
+| `caption` | `string` | No | Caption text for verification |
+
+**TableSelector** — References a table:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"TableSelector"` | Yes | Selector type |
+| `label` | `string` | **Yes** | Table label (e.g., `"Table 1"`) |
+| `caption` | `string` | No | Header text for verification |
+| `region` | `string` | No | Specific region (e.g., `"row 3"`) |
+
+**FragmentSelector** — PDF location hint:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"FragmentSelector"` | Yes | Selector type |
+| `conformsTo` | `string` | Yes | `"http://tools.ietf.org/rfc/rfc3778"` |
+| `value` | `string` | No | Fragment (e.g., `"page=6"`) |
+| `page` | `integer` | No | 1-indexed page number |
+
+### Insight Example
+
+```yaml
+insights:
+  compute_scaling:
+    id: compute_scaling
+    claim: "Standard scaling outperforms min-max for SVM classifiers on tabular data."
+    created_at: "2024-06-15T14:30:00Z"
+    evidence:
+      - id: ev1
+        doi: "10.48550/arXiv.1706.03762"
+        version: 7
+        quote:
+          type: TextQuoteSelector
+          exact: "We found that z-score normalization yielded consistently higher accuracy."
+          prefix: "In our ablation studies, "
+        location:
+          type: FragmentSelector
+          page: 5
+    scope: "Tabular classification with SVMs"
+    tags: [preprocessing, scaling]
+
+decisions:
+  scaling:
+    label: "Feature Scaling"
+    options:
+      standard:
+        label: "StandardScaler"
+        insights:
+          - compute_scaling        # Links decision to evidence
+```
+
+The chain **decision option** → **insight** → **evidence** → **paper (DOI)** provides end-to-end traceability from analytical choice to published literature.
+
+---
+
+## Constraints
+
+Options can declare two kinds of constraints, scoped within the same analysis node:
+
+### `incompatible_with`
+
+Options that cannot coexist in the same universe:
+
+```yaml
+decisions:
+  scaling:
+    options:
+      minmax:
+        label: "MinMaxScaler"
+        incompatible_with:
+          - model.svm          # MinMax and SVM cannot be selected together
+```
+
+### `requires`
+
+Options that must coexist in the same universe:
+
+```yaml
+decisions:
+  model:
+    options:
+      svm:
+        label: "SVM"
+        requires:
+          - scaling.standard   # SVM requires standard scaling
+```
+
+Constraint references use the format `decision_id.option_id`. Universe validation rejects any selection that violates these constraints.
+
+---
+
+## Composability
+
+Analyses can reference other analyses as inputs, enabling formal research chains:
+
+```yaml
+inputs:
+  - id: prior_study
+    type: analysis
+    ref: "analyses/preprocessing_comparison"
+    ref_version: "v1.2"
+    use_outputs: [best_method, performance_table]
+```
+
+Within a nested analysis, sub-analyses wire inputs from the parent or from siblings:
+
+```yaml
+analyses:
+  stage_a:
+    inputs:
+      - id: raw
+        type: data
+        from: survey_catalog          # Parent input
+    outputs:
+      - id: processed
+        type: data
+
+  stage_b:
+    inputs:
+      - id: data
+        type: data
+        from: stage_a.processed       # Sibling output
+```
+
+---
+
+## Validation
+
+ASTRA provides two-stage validation:
+
+### Stage 1: Schema Validation
+
+Checks that the YAML file conforms to the JSON schema — correct structure, types, required fields, and format patterns.
+
+### Stage 2: Semantic Validation
+
+Checks logical correctness:
+
+- No duplicate IDs within a node
+- Default options exist in their decision's option map
+- Constraint references (`incompatible_with`, `requires`) resolve to valid `decision.option` pairs
+- Input `from` references resolve to parent inputs or sibling outputs
+- Output `from` references resolve to sub-analysis outputs
+- Recipe input dependencies reference valid output IDs
+- Universe selections match analysis decisions
+- Universe selections respect all constraints
+
+### Evidence Verification
+
+Optionally, evidence quotes can be verified against source PDFs:
+
+```bash
+astra validate astra.yaml --verify-evidence
+```
+
+This downloads papers by DOI, extracts text from PDFs, and uses fuzzy matching to locate quoted text. Fabricated quotes fail verification. Results are cached by PDF hash.
+
+---
+
+## Extensibility
+
+### Checksum
+
+Data integrity verification is supported on inputs and artifact evidence:
+
+```yaml
+checksum:
+  algorithm: sha256       # sha256 | sha512 | md5
+  value: "a1b2c3..."
+```
+
+### Excluded Options
+
+Options can be marked as considered-and-rejected:
+
+```yaml
+options:
+  bayesian:
+    label: "Bayesian Approach"
+    excluded: true
+    excluded_reason: "Computationally prohibitive for dataset size > 1M rows"
+```
+
+### Conditional Decisions
+
+Decisions can be conditional on another option being selected:
+
+```yaml
+decisions:
+  model:
+    label: "Model"
+    options:
+      neural_net:
+        label: "Neural Network"
+      svm:
+        label: "SVM"
+
+  optimizer:
+    label: "Optimizer"
+    when: model.neural_net      # Only exists when neural_net is selected
+    options:
+      adam:
+        label: "Adam"
+      sgd:
+        label: "SGD"
+```
+
+---
+
+## ID Conventions
+
+| Context | Pattern | Example |
+|---------|---------|---------|
+| Input, output, decision, sub-analysis IDs | `^[a-z][a-z0-9_]*$` | `iris_data`, `scaling` |
+| Universe IDs | `^[a-z][a-z0-9_-]*$` | `baseline`, `svm-focused` |
+| Constraint references | `decision_id.option_id` | `scaling.standard` |
+| Version | `^\d+\.\d+(\.\d+)?$` | `"1.0"`, `"1.0.0"` |
+| DOI | `^10\.\d{4,}/.*$` | `"10.48550/arXiv.1706.03762"` |
+
+---
+
+## Schema Generation
+
+The Pydantic models in this directory (`models/`) are the **source of truth** for the ASTRA JSON schemas. They are used for schema generation only and are **not installed** as part of the `astra` package.
+
+```bash
+# Generate JSON schemas from models
+python tools/generate_schemas.py
+
+# Schemas are written to spec/draft/
+# Released versions are copied to spec/X.Y.Z/ and are immutable
+```
+
+### Model Files
+
+| File | Exports | Description |
+|------|---------|-------------|
+| `analysis.py` | `Analysis`, `Input`, `Output`, `Decision`, `Option`, `Recipe`, `Resources`, `ContainerBuildSpec`, `Checksum`, `SuccessCriterion` | Core analysis specification |
+| `universe.py` | `Universe`, `UniverseNode` | Universe (decision selections) |
+| `insight.py` | `Insight`, `Evidence`, `InsightCollection`, `TextQuoteSelector`, `FigureSelector`, `TableSelector`, `FragmentSelector` | Insights and W3C selectors |
