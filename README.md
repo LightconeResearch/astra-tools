@@ -124,7 +124,8 @@ Use `prism init` for full agentic scaffolding (Claude Code config, scripts, HPC 
 
 ## Documentation
 
-See [DESIGN.md](DESIGN.md) for the complete specification.
+- [Format Specification](models/README.md) - Detailed reference for the ASTRA format (field tables, YAML examples, constraints, selectors)
+- [Design Document](DESIGN.md) - Architecture, rationale, and design decisions
 
 ## License
 
