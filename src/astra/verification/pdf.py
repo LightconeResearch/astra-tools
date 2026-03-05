@@ -6,6 +6,7 @@ Extracts text from PDFs for quote verification using RapidFuzz for robust matchi
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -237,6 +238,12 @@ class PDFDocument:
     pages: list[str] = field(default_factory=list)
     num_pages: int = 0
     sha256: str = ""
+    _normalized_pages: list[str] = field(default_factory=list, repr=False)
+
+    def __post_init__(self) -> None:
+        """Pre-normalize all page texts for efficient fuzzy matching."""
+        if self.pages and not self._normalized_pages:
+            self._normalized_pages = [_normalize_processor(p) for p in self.pages]
 
     def get_page_text(self, page: int) -> str | None:
         """Get text for a specific page (1-indexed as per FragmentSelector).
@@ -281,6 +288,18 @@ class PDFDocument:
             List of 1-indexed page numbers where quote was found.
         """
         found_pages = []
+        norm_quote = _normalize_processor(quote)
+
+        # Pre-normalize context if prefix/suffix provided
+        norm_context = None
+        if prefix or suffix:
+            context_parts = []
+            if prefix:
+                context_parts.append(prefix.strip())
+            context_parts.append(quote.strip())
+            if suffix:
+                context_parts.append(suffix.strip())
+            norm_context = _normalize_processor(" ".join(context_parts))
 
         # Search pages (prioritize hint page if provided)
         pages_to_search = list(range(self.num_pages))
@@ -290,53 +309,31 @@ class PDFDocument:
             pages_to_search.insert(0, page - 1)
 
         for page_idx in pages_to_search:
-            page_text = self.pages[page_idx]
+            norm_page = self._normalized_pages[page_idx]
 
-            # Use partial_ratio which finds the best matching substring
-            # _normalize_processor handles Greek letters, math symbols, and lowercasing
-            score = fuzz.partial_ratio(quote, page_text, processor=_normalize_processor)
+            # Use partial_ratio with processor=None since texts are pre-normalized
+            score = fuzz.partial_ratio(norm_quote, norm_page, processor=None)
 
             if score >= min_score:
                 # If prefix/suffix provided, verify context matches too
-                if prefix or suffix:
-                    if not self._verify_context(page_text, quote, prefix, suffix):
+                if norm_context is not None:
+                    ctx_score = fuzz.partial_ratio(norm_context, norm_page, processor=None)
+                    if ctx_score < 80.0:
                         continue
                 found_pages.append(page_idx + 1)
+                # Early return: for verification we only need to confirm the quote exists
+                # on at least one page. Searching all remaining pages is unnecessary.
+                return found_pages
 
         return found_pages
-
-    def _verify_context(
-        self,
-        page_text: str,
-        quote: str,
-        prefix: str | None,
-        suffix: str | None,
-    ) -> bool:
-        """Verify that prefix/suffix context matches around the quote.
-
-        Uses fuzzy matching to find if the context appears in the expected order.
-        The full context (prefix + quote + suffix) must appear as a sequence.
-        """
-        # Build a context pattern: prefix + quote + suffix
-        context_parts = []
-        if prefix:
-            context_parts.append(prefix.strip())
-        context_parts.append(quote.strip())
-        if suffix:
-            context_parts.append(suffix.strip())
-
-        # Join with flexible whitespace matching
-        context = " ".join(context_parts)
-
-        # Check if this context appears in the page with high confidence
-        # Use a higher threshold since we want the full context to match
-        # _normalize_processor handles Greek letters, math symbols, and lowercasing
-        score = fuzz.partial_ratio(context, page_text, processor=_normalize_processor)
-        return score >= 80.0
 
 
 def extract_text_from_pdf(pdf_path: Path) -> PDFDocument:
     """Extract text from a PDF file.
+
+    Uses a disk cache (_text_cache.json) alongside the PDF to avoid re-extracting
+    text on subsequent runs. pypdf text extraction can be very slow on large PDFs
+    (e.g., 2+ minutes for a 23MB paper), so caching is critical for performance.
 
     Args:
         pdf_path: Path to the PDF file.
@@ -353,9 +350,36 @@ def extract_text_from_pdf(pdf_path: Path) -> PDFDocument:
     pdf_bytes = pdf_path.read_bytes()
     sha256 = hashlib.sha256(pdf_bytes).hexdigest()
 
+    # Check for cached extracted text (stored in user's cache dir to avoid
+    # permission issues when papers are in another user's directory)
+    text_cache_dir = Path.home() / ".cache" / "astra" / "text_cache"
+    cache_path = text_cache_dir / f"{sha256}.json"
+    if cache_path.exists():
+        try:
+            with open(cache_path) as f:
+                cached = json.load(f)
+            if cached.get("pdf_sha256") == sha256:
+                pages = cached["pages"]
+                return PDFDocument(
+                    path=pdf_path,
+                    pages=pages,
+                    num_pages=len(pages),
+                    sha256=sha256,
+                )
+        except (json.JSONDecodeError, KeyError):
+            pass
+
     # Extract text by page using pypdf
     reader = PdfReader(pdf_path)
     pages = [page.extract_text() or "" for page in reader.pages]
+
+    # Cache extracted text for future runs
+    try:
+        text_cache_dir.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, "w") as f:
+            json.dump({"pdf_sha256": sha256, "pages": pages}, f)
+    except OSError:
+        pass  # Non-fatal: caching is an optimization
 
     return PDFDocument(
         path=pdf_path,

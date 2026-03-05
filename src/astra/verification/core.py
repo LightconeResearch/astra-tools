@@ -338,8 +338,90 @@ def verify_all_insights(
     if verification_cache is None:
         verification_cache = VerificationCache()
 
+    # Pre-extract PDFs once per unique (DOI, version) to avoid redundant parsing.
+    # This is critical for performance: a single 23MB PDF can take seconds to parse,
+    # and without caching it would be re-parsed for every evidence item that references it.
+    pdf_cache: dict[tuple[str, int | None], PDFDocument | None] = {}
+
+    # Collect all unique (DOI, version) pairs across all insights
+    for insight in insights.values():
+        for ev in _get_attr(insight, "evidence", []):
+            doi = _get_attr(ev, "doi", "")
+            version = _get_attr(ev, "version")
+            key = (doi, version)
+            if key not in pdf_cache:
+                cached_paper = paper_cache.get(doi, version)
+                if cached_paper is None:
+                    pdf_cache[key] = None
+                else:
+                    try:
+                        pdf_cache[key] = extract_text_from_pdf(cached_paper.pdf_path)
+                    except Exception:
+                        pdf_cache[key] = None
+
     results = {}
     for insight_id, insight in insights.items():
-        results[insight_id] = verify_insight(insight, paper_cache, verification_cache)
+        results[insight_id] = _verify_insight_with_pdf_cache(
+            insight, paper_cache, verification_cache, pdf_cache
+        )
 
     return results
+
+
+def _verify_insight_with_pdf_cache(
+    insight: Any,
+    paper_cache: PaperCache,
+    verification_cache: VerificationCache,
+    pdf_cache: dict[tuple[str, int | None], PDFDocument | None],
+) -> InsightVerification:
+    """Verify all evidence for an insight using pre-extracted PDFs.
+
+    Args:
+        insight: The insight to verify (dict or Insight object).
+        paper_cache: Cache for downloaded papers.
+        verification_cache: Cache for verification results.
+        pdf_cache: Pre-extracted PDF documents keyed by (DOI, version).
+
+    Returns:
+        InsightVerification with results for all evidence.
+    """
+    insight_id = _get_attr(insight, "id", "unknown")
+    evidence_list = _get_attr(insight, "evidence", [])
+
+    evidence_results: list[EvidenceVerification] = []
+
+    for ev in evidence_list:
+        evidence_id = _get_attr(ev, "id", "unknown")
+        doi = _get_attr(ev, "doi", "")
+        version = _get_attr(ev, "version")
+        key = (doi, version)
+
+        pdf = pdf_cache.get(key)
+        if pdf is None:
+            # Check if paper exists but failed to parse vs not in cache
+            cached_paper = paper_cache.get(doi, version)
+            if not cached_paper:
+                msg = f"Paper not in cache: {doi} (use 'astra paper add' first)"
+            else:
+                msg = f"Failed to extract text from PDF: {doi}"
+            evidence_results.append(
+                EvidenceVerification(
+                    evidence_id=evidence_id,
+                    doi=doi,
+                    version=version,
+                    status=VerificationStatus.ERROR,
+                    message=msg,
+                )
+            )
+            continue
+
+        result = verify_evidence(ev, pdf, verification_cache)
+        evidence_results.append(result)
+
+    overall = _determine_overall_status(evidence_results)
+
+    return InsightVerification(
+        insight_id=insight_id,
+        evidence_results=evidence_results,
+        overall_status=overall,
+    )
