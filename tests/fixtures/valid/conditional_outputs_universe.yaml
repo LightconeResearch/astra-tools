@@ -1,0 +1,6 @@
+# Universe for conditional outputs analysis
+id: baseline
+description: "Baseline universe with combined sample and RF"
+decisions:
+  training_sample: combined
+  model: rf

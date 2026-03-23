@@ -1,0 +1,40 @@
+# Analysis with a decision that has a list-valued when condition
+version: "1.0"
+name: "Decision List When"
+description: "Tests list-valued when on decisions"
+inputs:
+  - id: data
+    type: data
+outputs:
+  - id: result
+    type: metric
+decisions:
+  mode:
+    label: "Mode"
+    default: advanced
+    options:
+      basic:
+        label: "Basic"
+      advanced:
+        label: "Advanced"
+
+  backend:
+    label: "Backend"
+    default: gpu
+    options:
+      cpu:
+        label: "CPU"
+      gpu:
+        label: "GPU"
+
+  gpu_optimization:
+    label: "GPU Optimization"
+    when:
+      - mode.advanced
+      - backend.gpu
+    default: tensor_cores
+    options:
+      tensor_cores:
+        label: "Tensor Cores"
+      standard:
+        label: "Standard"

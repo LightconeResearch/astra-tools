@@ -1,0 +1,7 @@
+# Universe where list when condition is NOT met (basic mode)
+# gpu_optimization should not be present
+id: cpu_basic
+description: "Basic mode with CPU - gpu_optimization is inactive"
+decisions:
+  mode: basic
+  backend: cpu

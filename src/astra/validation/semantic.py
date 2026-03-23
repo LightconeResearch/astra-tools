@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from astra.helpers import _collect_node_decisions, load_yaml
+from astra.helpers import _collect_node_decisions, is_condition_met, load_yaml
 
 
 class SemanticError:
@@ -99,6 +99,9 @@ def validate_analysis(data: dict[str, Any]) -> list[SemanticError]:
 
     # Validate output recipes
     errors.extend(_validate_output_recipes(outputs, ""))
+
+    # Validate output when conditions
+    errors.extend(_validate_output_when(outputs, root_decisions, ""))
 
     # Validate sub-analyses recursively
     sub_analyses = data.get("analyses") or {}
@@ -204,6 +207,9 @@ def _validate_analysis_node(
     node_outputs = node.get("outputs") or []
     errors.extend(_validate_output_recipes(node_outputs, node_path))
 
+    # Validate output when conditions
+    errors.extend(_validate_output_when(node_outputs, constraint_scope, node_path))
+
     # Recurse into sub-analyses
     sub_analyses = node.get("analyses") or {}
     for sub_id, sub_node in sub_analyses.items():
@@ -298,40 +304,45 @@ def _validate_decisions(
         # Check `when` condition references a valid decision.option
         when = decision.get("when")
         if when:
-            when_parts = when.split(".")
-            if len(when_parts) == 2:
-                when_decision_id, when_option_id = when_parts
-                scope = constraint_scope or {}
-                if when_decision_id not in decisions and when_decision_id not in scope:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_WHEN_REF",
-                            f"'when' references non-existent decision '{when_decision_id}'",
-                            decision_path,
-                        )
-                    )
-                else:
-                    ref_decision = decisions.get(when_decision_id) or (constraint_scope or {}).get(
-                        when_decision_id
-                    )
-                    if ref_decision and when_option_id not in ref_decision.get("options", {}):
+            conditions = [when] if isinstance(when, str) else when
+            for cond in conditions:
+                ref = cond.lstrip("~")
+                when_parts = ref.split(".")
+                if len(when_parts) == 2:
+                    when_decision_id, when_option_id = when_parts
+                    scope = constraint_scope or {}
+                    if when_decision_id not in decisions and when_decision_id not in scope:
                         errors.append(
                             SemanticError(
                                 "INVALID_WHEN_REF",
-                                f"'when' references non-existent option '{when_option_id}' "
-                                f"in decision '{when_decision_id}'",
+                                f"'when' references non-existent decision '{when_decision_id}'",
                                 decision_path,
                             )
                         )
-                # Check no self-reference
-                if when_decision_id == decision_id:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_WHEN_REF",
-                            "'when' cannot reference own decision",
-                            decision_path,
+                    else:
+                        ref_decision = decisions.get(when_decision_id) or (
+                            constraint_scope or {}
+                        ).get(when_decision_id)
+                        if ref_decision and when_option_id not in ref_decision.get(
+                            "options", {}
+                        ):
+                            errors.append(
+                                SemanticError(
+                                    "INVALID_WHEN_REF",
+                                    f"'when' references non-existent option '{when_option_id}' "
+                                    f"in decision '{when_decision_id}'",
+                                    decision_path,
+                                )
+                            )
+                    # Check no self-reference
+                    if when_decision_id == decision_id:
+                        errors.append(
+                            SemanticError(
+                                "INVALID_WHEN_REF",
+                                "'when' cannot reference own decision",
+                                decision_path,
+                            )
                         )
-                    )
 
         # Validate options
         for option_id, option in options.items():
@@ -390,6 +401,65 @@ def _validate_decisions(
                         decision_path,
                     )
                 )
+
+    return errors
+
+
+def _validate_output_when(
+    outputs: list[dict[str, Any]],
+    decisions: dict[str, Any],
+    path_prefix: str,
+) -> list[SemanticError]:
+    """Validate ``when`` conditions on outputs.
+
+    Checks that each referenced decision.option exists in the available decisions.
+    """
+    errors: list[SemanticError] = []
+    outputs_prefix = f"{path_prefix}.outputs" if path_prefix else "outputs"
+
+    for out in outputs:
+        out_id = out.get("id")
+        if not out_id:
+            continue
+        when = out.get("when")
+        if not when:
+            continue
+
+        conditions = [when] if isinstance(when, str) else when
+        output_path = f"{outputs_prefix}.{out_id}"
+
+        for cond in conditions:
+            ref = cond.lstrip("~")
+            parts = ref.split(".")
+            if len(parts) != 2:
+                errors.append(
+                    SemanticError(
+                        "INVALID_WHEN_REF",
+                        f"Output 'when' condition '{cond}' has invalid format",
+                        output_path,
+                    )
+                )
+                continue
+            decision_id, option_id = parts
+            if decision_id not in decisions:
+                errors.append(
+                    SemanticError(
+                        "INVALID_WHEN_REF",
+                        f"Output 'when' references non-existent decision '{decision_id}'",
+                        output_path,
+                    )
+                )
+            else:
+                ref_decision = decisions[decision_id]
+                if option_id not in ref_decision.get("options", {}):
+                    errors.append(
+                        SemanticError(
+                            "INVALID_WHEN_REF",
+                            f"Output 'when' references non-existent option '{option_id}' "
+                            f"in decision '{decision_id}'",
+                            output_path,
+                        )
+                    )
 
     return errors
 
@@ -642,6 +712,10 @@ def _validate_universe_node(
                     )
                 )
 
+    # Merge current and parent universe decisions for condition evaluation
+    all_universe_decisions = dict(parent_universe_decisions)
+    all_universe_decisions.update(universe_decisions)
+
     # Check all analysis decisions are covered (respecting conditional decisions)
     for decision_id in analysis_decisions:
         decision = analysis_decisions[decision_id]
@@ -649,25 +723,18 @@ def _validate_universe_node(
 
         # If conditional, check if the condition is met
         if when:
-            when_parts = when.split(".")
-            if len(when_parts) == 2:
-                when_decision_id, when_option_id = when_parts
-                # Look in current universe decisions and parent decisions
-                selected = universe_decisions.get(when_decision_id)
-                if selected is None:
-                    selected = parent_universe_decisions.get(when_decision_id)
-                if selected != when_option_id:
-                    # Condition not met — this decision should NOT be in the universe
-                    if decision_id in universe_decisions:
-                        errors.append(
-                            SemanticError(
-                                "INACTIVE_DECISION",
-                                f"Universe specifies decision '{decision_id}' but its condition "
-                                f"'{when}' is not met ('{when_decision_id}' = '{selected}')",
-                                f"{decisions_path}.{decision_id}",
-                            )
+            if not is_condition_met(when, all_universe_decisions):
+                # Condition not met -- this decision should NOT be in the universe
+                if decision_id in universe_decisions:
+                    errors.append(
+                        SemanticError(
+                            "INACTIVE_DECISION",
+                            f"Universe specifies decision '{decision_id}' but its condition "
+                            f"'{when}' is not met",
+                            f"{decisions_path}.{decision_id}",
                         )
-                    continue  # Skip the missing check
+                    )
+                continue  # Skip the missing check
 
         if decision_id not in universe_decisions:
             errors.append(

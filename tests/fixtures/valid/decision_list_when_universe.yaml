@@ -1,0 +1,7 @@
+# Universe where list when condition is met
+id: gpu_advanced
+description: "Advanced mode with GPU"
+decisions:
+  mode: advanced
+  backend: gpu
+  gpu_optimization: tensor_cores

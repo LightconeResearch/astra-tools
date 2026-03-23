@@ -1,0 +1,17 @@
+# Output with when referencing a non-existent decision
+version: "1.0"
+name: "Invalid Output When"
+inputs:
+  - id: data
+    type: data
+outputs:
+  - id: result
+    type: metric
+    when: nonexistent_decision.option_a
+decisions:
+  model:
+    label: "Model"
+    default: a
+    options:
+      a:
+        label: "A"

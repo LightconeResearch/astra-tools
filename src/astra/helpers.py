@@ -15,6 +15,37 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
+def is_condition_met(
+    when: str | list[str] | None,
+    universe_decisions: dict[str, str],
+) -> bool:
+    """Check if a when condition is met given universe decisions.
+
+    Args:
+        when: A string, list of strings, or None. Each string is
+            ``decision_id.option_id`` or ``~decision_id.option_id`` (negation).
+            Multiple items are AND'd together.
+        universe_decisions: Dict mapping decision_id to selected option_id.
+
+    Returns:
+        True if the condition is met (or when is None), False otherwise.
+    """
+    if when is None:
+        return True
+    conditions = [when] if isinstance(when, str) else when
+    for cond in conditions:
+        negate = cond.startswith("~")
+        ref = cond.lstrip("~")
+        decision_id, option_id = ref.split(".")
+        selected = universe_decisions.get(decision_id)
+        match = selected == option_id
+        if negate:
+            match = not match
+        if not match:
+            return False  # AND logic: all must be true
+    return True
+
+
 def _collect_node_decisions(node: dict[str, Any]) -> dict[str, Any]:
     """Collect decisions from a node."""
     decisions: dict[str, Any] = dict(node.get("decisions") or {})
@@ -185,13 +216,10 @@ def _get_node_defaults(node: dict[str, Any]) -> dict[str, Any]:
         when = decision.get("when")
         if not when:
             continue
-        when_parts = when.split(".")
-        if len(when_parts) == 2:
-            when_decision_id, when_option_id = when_parts
-            if decisions.get(when_decision_id) == when_option_id:
-                default = decision.get("default")
-                if default is not None:
-                    decisions[decision_id] = default
+        if is_condition_met(when, decisions):
+            default = decision.get("default")
+            if default is not None:
+                decisions[decision_id] = default
 
     if decisions:
         result["decisions"] = decisions
