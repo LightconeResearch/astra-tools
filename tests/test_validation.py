@@ -497,9 +497,7 @@ class TestConditionalOutputs:
             },
         }
         errors = validate_analysis(data)
-        assert any(
-            e.code == "INVALID_WHEN_REF" and "nonexistent" in e.message for e in errors
-        )
+        assert any(e.code == "INVALID_WHEN_REF" and "nonexistent" in e.message for e in errors)
 
     def test_decision_when_list(self, valid_dir: Path):
         """Decision with list-valued when should pass validation."""
@@ -557,9 +555,7 @@ class TestConditionalOutputsUniverse:
     def test_decision_list_when_inactive(self, valid_dir: Path):
         """Universe where list when condition is NOT met should skip the decision."""
         analysis_data = load_yaml(valid_dir / "decision_list_when.yaml")
-        universe_data = load_yaml(
-            valid_dir / "decision_list_when_universe_inactive.yaml"
-        )
+        universe_data = load_yaml(valid_dir / "decision_list_when_universe_inactive.yaml")
         errors = validate_universe(universe_data, analysis_data)
         assert errors == []
 

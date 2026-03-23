@@ -323,9 +323,7 @@ def _validate_decisions(
                         ref_decision = decisions.get(when_decision_id) or (
                             constraint_scope or {}
                         ).get(when_decision_id)
-                        if ref_decision and when_option_id not in ref_decision.get(
-                            "options", {}
-                        ):
+                        if ref_decision and when_option_id not in ref_decision.get("options", {}):
                             errors.append(
                                 SemanticError(
                                     "INVALID_WHEN_REF",
