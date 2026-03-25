@@ -113,14 +113,21 @@ def validate_analysis(
     # Validate all decisions
     errors.extend(_validate_decisions(root_decisions, insights, ""))
 
+    # Collect qualified sub-analysis output IDs so root recipes can
+    # reference them (e.g. ``inputs: [hod_fitting.galaxy_mesh]``).
+    sub_analyses = data.get("analyses") or {}
+    sub_output_ids: set[str] = set()
+    for analysis_id, analysis_node in sub_analyses.items():
+        for out in (analysis_node.get("outputs") or []):
+            out_id = out.get("id")
+            if out_id:
+                sub_output_ids.add(f"{analysis_id}.{out_id}")
+
     # Validate output recipes
-    errors.extend(_validate_output_recipes(outputs, ""))
+    errors.extend(_validate_output_recipes(outputs, "", extra_valid_ids=sub_output_ids))
 
     # Validate output when conditions
     errors.extend(_validate_output_when(outputs, root_decisions, ""))
-
-    # Validate sub-analyses recursively
-    sub_analyses = data.get("analyses") or {}
     for analysis_id, analysis_node in sub_analyses.items():
         errors.extend(
             _validate_analysis_node(
@@ -492,11 +499,13 @@ def _validate_output_when(
 def _validate_output_recipes(
     outputs: list[dict[str, Any]],
     path_prefix: str,
+    extra_valid_ids: set[str] | None = None,
 ) -> list[SemanticError]:
     """Validate inline recipes on outputs.
 
     Checks:
-    - Recipe inputs reference declared output IDs
+    - Recipe inputs reference declared output IDs (or *extra_valid_ids*
+      such as qualified sub-analysis outputs like ``hod_fitting.galaxy_mesh``)
     - No cycles in the output dependency graph
     """
     errors: list[SemanticError] = []
@@ -504,6 +513,9 @@ def _validate_output_recipes(
 
     # Collect all output IDs at this level
     output_ids = {out.get("id") for out in outputs if out.get("id")}
+
+    # Combine with extra valid IDs (e.g. sub-analysis outputs)
+    valid_ids = output_ids | (extra_valid_ids or set())
 
     # Build dependency graph and validate inputs
     dep_graph: dict[str, list[str]] = {}
@@ -518,7 +530,7 @@ def _validate_output_recipes(
         inputs = recipe.get("inputs") or []
         dep_graph[out_id] = inputs
         for inp_id in inputs:
-            if inp_id not in output_ids:
+            if inp_id not in valid_ids:
                 errors.append(
                     SemanticError(
                         "INVALID_RECIPE_INPUT",
