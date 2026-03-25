@@ -1,6 +1,6 @@
 version: "1.0"
-name: "Test invalid parent_decisions"
-description: "Sub-analysis references non-existent parent decision"
+name: "Test invalid decision from reference"
+description: "Sub-analysis references non-existent parent decision via from:"
 inputs:
   - id: data
     type: data
@@ -10,7 +10,6 @@ outputs:
 
 analyses:
   sub:
-    parent_decisions: [nonexistent_decision]
     inputs:
       - id: sub_data
         type: data
@@ -18,3 +17,6 @@ analyses:
     outputs:
       - id: sub_result
         type: metric
+    decisions:
+      bad_ref:
+        from: ../nonexistent_decision

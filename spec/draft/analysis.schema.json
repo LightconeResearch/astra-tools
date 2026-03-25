@@ -169,6 +169,19 @@
       "description": "Default container image for recipes in this node. Can be a string (pre-built image) or a build spec with 'build' key.",
       "title": "Container"
     },
+    "path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Path to a directory containing its own astra.yaml. When set, the sub-analysis content is loaded from <path>/astra.yaml. Mutually exclusive with inline content fields (inputs, outputs, decisions, etc.).",
+      "title": "Path"
+    },
     "analyses": {
       "anyOf": [
         {
@@ -360,6 +373,19 @@
           "description": "Default container image for recipes in this node. Can be a string (pre-built image) or a build spec with 'build' key.",
           "title": "Container"
         },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Path to a directory containing its own astra.yaml. When set, the sub-analysis content is loaded from <path>/astra.yaml. Mutually exclusive with inline content fields (inputs, outputs, decisions, etc.).",
+          "title": "Path"
+        },
         "analyses": {
           "anyOf": [
             {
@@ -454,12 +480,33 @@
     },
     "Decision": {
       "additionalProperties": false,
-      "description": "A decision point in the analysis.",
+      "description": "A decision point in the analysis.\n\nA decision can be either locally defined (with ``label``, ``options``, etc.)\nor a reference to a parent decision via ``from``. When ``from`` is set, the\ndecision is a pure reference and must not have ``label``, ``options``, etc.\n\nThe ``from`` field uses ``../`` prefix syntax to reference parent scope:\n``from: ../z_min`` references the parent analysis's ``z_min`` decision.",
       "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference to a parent decision using '../' prefix (e.g., '../z_min'). When set, this decision is a pure reference.",
+          "title": "From"
+        },
         "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "description": "Human-readable name for the decision",
-          "title": "Label",
-          "type": "string"
+          "title": "Label"
         },
         "rationale": {
           "anyOf": [
@@ -523,18 +570,22 @@
           "title": "Default"
         },
         "options": {
-          "additionalProperties": {
-            "$ref": "#/$defs/Option"
-          },
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Option"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "description": "Map of option IDs to option specifications",
-          "title": "Options",
-          "type": "object"
+          "title": "Options"
         }
       },
-      "required": [
-        "label",
-        "options"
-      ],
       "title": "Decision",
       "type": "object"
     },

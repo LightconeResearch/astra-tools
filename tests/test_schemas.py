@@ -121,4 +121,9 @@ class TestSchemaGeneration:
         assert "options" in decision_def["properties"]
         # Options should allow additional properties (dynamic option IDs)
         options_prop = decision_def["properties"]["options"]
-        assert "additionalProperties" in options_prop
+        # Options is now Optional[dict[str, Option]], so it uses anyOf with object | null
+        if "anyOf" in options_prop:
+            obj_schema = next(s for s in options_prop["anyOf"] if s.get("type") == "object")
+            assert "additionalProperties" in obj_schema
+        else:
+            assert "additionalProperties" in options_prop

@@ -13,10 +13,22 @@ if TYPE_CHECKING:
 
 
 class UniverseNode(BaseModel):
-    """A universe node mirroring the analysis tree structure."""
+    """A universe node mirroring the analysis tree structure.
+
+    A universe node can either contain inline decisions or reference
+    an external sub-analysis universe by name via ``universe``.
+    When ``universe`` is set, it points to a universe file in the
+    sub-analysis's ``universes/`` directory (e.g., ``universe: baseline``
+    loads ``<sub_analysis_path>/universes/baseline.yaml``).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
+    universe: str | None = Field(
+        default=None,
+        description="Name of a universe in the sub-analysis's universes/ directory. "
+        "Alternative to inline decisions.",
+    )
     decisions: dict[str, str] = Field(
         default_factory=dict,
         description="Map of decision ID to selected option ID",

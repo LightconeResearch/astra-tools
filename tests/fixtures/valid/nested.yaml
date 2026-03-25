@@ -25,7 +25,6 @@ decisions:
 
 analyses:
   build_mocks:
-    parent_decisions: [cosmology_model]
     success_criteria:
       - claim: "Mock catalog matches observed magnitude distribution"
     inputs:
@@ -44,6 +43,8 @@ analyses:
           command: python src/generate_mocks.py
           inputs: [mock_catalog]
     decisions:
+      cosmology_model:
+        from: ../cosmology_model
       noise_model:
         label: "Noise Model"
         default: heteroscedastic

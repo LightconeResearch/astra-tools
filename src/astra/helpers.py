@@ -47,9 +47,82 @@ def is_condition_met(
 
 
 def _collect_node_decisions(node: dict[str, Any]) -> dict[str, Any]:
-    """Collect decisions from a node."""
-    decisions: dict[str, Any] = dict(node.get("decisions") or {})
+    """Collect locally-defined decisions from a node.
+
+    Decisions with a ``from`` field are references to parent decisions
+    and are excluded from the result since they are not locally defined.
+    """
+    decisions: dict[str, Any] = {}
+    for decision_id, decision in (node.get("decisions") or {}).items():
+        if isinstance(decision, dict) and decision.get("from"):
+            continue  # Skip from: references
+        decisions[decision_id] = decision
     return decisions
+
+
+def resolve_analysis_tree(
+    data: dict[str, Any], base_path: Path
+) -> dict[str, Any]:
+    """Resolve external sub-analysis references in an analysis tree.
+
+    Walks the ``analyses`` dict. For any sub-analysis with a ``path`` field,
+    loads ``<path>/astra.yaml`` and merges its content into the tree.
+    Metadata fields (``name``, ``description``) from the parent reference
+    are preserved as overrides.
+
+    Args:
+        data: The analysis data as a dict.
+        base_path: Base directory for resolving relative paths.
+
+    Returns:
+        A new dict with external sub-analyses resolved (deep copy of modified branches).
+    """
+    analyses = data.get("analyses")
+    if not analyses:
+        return data
+
+    resolved_analyses: dict[str, Any] = {}
+    changed = False
+
+    for analysis_id, analysis_node in analyses.items():
+        sub_path = analysis_node.get("path")
+        if sub_path:
+            # Resolve relative path
+            resolved_dir = (base_path / sub_path).resolve()
+            sub_yaml_path = resolved_dir / "astra.yaml"
+            if sub_yaml_path.exists():
+                sub_data = load_yaml(sub_yaml_path)
+                # Preserve metadata overrides from parent reference
+                for key in ("name", "description"):
+                    if analysis_node.get(key):
+                        sub_data[key] = analysis_node[key]
+                # Keep the path field for reference
+                sub_data["path"] = sub_path
+                # Recursively resolve nested sub-analyses
+                sub_data = resolve_analysis_tree(sub_data, resolved_dir)
+                resolved_analyses[analysis_id] = sub_data
+                changed = True
+            else:
+                logger.warning(
+                    "Sub-analysis '%s' has path '%s' but %s does not exist",
+                    analysis_id,
+                    sub_path,
+                    sub_yaml_path,
+                )
+                resolved_analyses[analysis_id] = analysis_node
+        else:
+            # Inline sub-analysis: recursively resolve its children
+            resolved_sub = resolve_analysis_tree(analysis_node, base_path)
+            resolved_analyses[analysis_id] = resolved_sub
+            if resolved_sub is not analysis_node:
+                changed = True
+
+    if not changed:
+        return data
+
+    result = dict(data)
+    result["analyses"] = resolved_analyses
+    return result
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:

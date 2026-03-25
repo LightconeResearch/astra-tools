@@ -9,7 +9,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from astra.helpers import _collect_node_decisions, is_condition_met, load_yaml
+from astra.helpers import (
+    _collect_node_decisions,
+    is_condition_met,
+    load_yaml,
+    resolve_analysis_tree,
+)
 
 
 class SemanticError:
@@ -26,7 +31,9 @@ class SemanticError:
         return f"[{self.code}] {self.message}"
 
 
-def validate_analysis(data: dict[str, Any]) -> list[SemanticError]:
+def validate_analysis(
+    data: dict[str, Any], base_path: Path | None = None
+) -> list[SemanticError]:
     """Validate an analysis specification semantically.
 
     Checks:
@@ -34,14 +41,23 @@ def validate_analysis(data: dict[str, Any]) -> list[SemanticError]:
     - Decisions: defaults exist, evidence refs valid, constraint refs valid
     - Sub-analysis validation (recursive)
     - `from` reference validation on sub-analysis inputs
+    - `from` reference validation on sub-analysis decisions
+
+    If ``base_path`` is provided, sub-analyses with ``path:`` will be loaded
+    and merged before validation.
 
     Args:
         data: The analysis data as a dict.
+        base_path: Base directory for resolving ``path:`` references on sub-analyses.
 
     Returns:
         List of semantic errors (empty if valid).
     """
     errors: list[SemanticError] = []
+
+    # Resolve external sub-analysis paths if base_path is provided
+    if base_path is not None:
+        data = resolve_analysis_tree(data, base_path)
 
     # Root analysis requires version, name, inputs, outputs
     for field in ("version", "name", "inputs", "outputs"):
@@ -91,7 +107,7 @@ def validate_analysis(data: dict[str, Any]) -> list[SemanticError]:
     # Validate success criteria output references
     errors.extend(_validate_success_criteria(data.get("success_criteria"), output_ids, ""))
 
-    # Collect all decisions
+    # Collect all decisions (only locally-defined ones at root)
     root_decisions = _collect_node_decisions(data)
 
     # Validate all decisions
@@ -134,6 +150,10 @@ def _validate_analysis_node(
     errors: list[SemanticError] = []
     node_path = f"{path_prefix}.{node_id}"
 
+    # If this is a path-only sub-analysis stub (not yet resolved), skip deep validation
+    if node.get("path") and not node.get("inputs") and not node.get("outputs"):
+        return errors
+
     # Check required sub-analysis fields
     for field in ("inputs", "outputs"):
         if not node.get(field):
@@ -145,14 +165,17 @@ def _validate_analysis_node(
                 )
             )
 
-    # Validate parent_decisions references
-    for pd in node.get("parent_decisions") or []:
-        if pd not in parent_decisions:
-            errors.append(
-                SemanticError(
-                    "INVALID_PARENT_DECISION",
-                    f"parent_decisions references non-existent parent decision: {pd}",
-                    f"{node_path}.parent_decisions",
+    # Validate decision `from:` references against parent decisions
+    node_all_decisions = node.get("decisions") or {}
+    for decision_id, decision in node_all_decisions.items():
+        from_ref = decision.get("from")
+        if from_ref:
+            errors.extend(
+                _validate_decision_from_ref(
+                    decision_id,
+                    from_ref,
+                    parent_decisions,
+                    f"{node_path}.decisions.{decision_id}",
                 )
             )
 
@@ -195,12 +218,16 @@ def _validate_analysis_node(
     errors.extend(_validate_success_criteria(criteria, node_output_ids, node_path))
 
     # Validate decisions
-    # Include parent decisions declared via parent_decisions for constraint resolution
+    # Collect only locally-defined decisions (not from: references)
     node_decisions = _collect_node_decisions(node)
+    # Build constraint scope: local decisions + resolved from: references from parent
     constraint_scope = dict(node_decisions)
-    for pd in node.get("parent_decisions") or []:
-        if pd in parent_decisions:
-            constraint_scope[pd] = parent_decisions[pd]
+    for decision_id, decision in node_all_decisions.items():
+        from_ref = decision.get("from")
+        if from_ref and from_ref.startswith("../"):
+            parent_decision_id = from_ref[3:]  # strip ../
+            if parent_decision_id in parent_decisions:
+                constraint_scope[decision_id] = parent_decisions[parent_decision_id]
     errors.extend(_validate_decisions(node_decisions, insights, node_path, constraint_scope))
 
     # Validate output recipes
@@ -545,6 +572,40 @@ def _detect_output_cycle(dep_graph: dict[str, list[str]]) -> list[str] | None:
     return None
 
 
+def _validate_decision_from_ref(
+    decision_id: str,
+    from_ref: str,
+    parent_decisions: dict[str, Any],
+    decision_path: str,
+) -> list[SemanticError]:
+    """Validate a `from` reference on a decision.
+
+    ``from: ../parent_decision_id`` references a parent decision.
+    The ``../`` prefix is required.
+    """
+
+    def _error(message: str) -> list[SemanticError]:
+        return [SemanticError("INVALID_DECISION_FROM_REF", message, decision_path)]
+
+    if not from_ref.startswith("../"):
+        return _error(
+            f"Decision from reference '{from_ref}' must use '../' prefix "
+            "to reference parent scope"
+        )
+
+    parent_decision_id = from_ref[3:]  # strip ../
+    if not parent_decision_id:
+        return _error(f"Decision from reference '{from_ref}' is empty after '../'")
+
+    if parent_decision_id not in parent_decisions:
+        return _error(
+            f"Decision from reference '{from_ref}' points to non-existent "
+            f"parent decision '{parent_decision_id}'"
+        )
+
+    return []
+
+
 def _validate_from_ref(
     from_ref: str,
     parent_input_ids: set[str],
@@ -554,16 +615,24 @@ def _validate_from_ref(
 ) -> list[SemanticError]:
     """Validate a `from` reference on a sub-analysis input.
 
-    `from: input_id` references a parent input.
-    `from: sibling.output_id` references a sibling's output.
+    Supports two syntaxes:
+    - ``../`` prefix (new): ``../input_id`` (parent input),
+      ``../sibling.output_id`` (sibling output)
+    - Legacy (no prefix): ``input_id`` (parent input),
+      ``sibling.output_id`` (sibling output)
     """
 
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_FROM_REF", message, node_path)]
 
-    parts = from_ref.split(".")
+    # Strip ../ prefix if present
+    ref = from_ref
+    if ref.startswith("../"):
+        ref = ref[3:]
+
+    parts = ref.split(".")
     if len(parts) == 1:
-        if from_ref not in parent_input_ids:
+        if ref not in parent_input_ids:
             return _error(f"from reference '{from_ref}' not found in parent inputs")
         return []
 
@@ -586,7 +655,7 @@ def _validate_from_ref(
 
     return _error(
         f"from reference '{from_ref}' has invalid format "
-        "(expected 'input_id' or 'sibling.output_id')"
+        "(expected '[../]input_id' or '[../]sibling.output_id')"
     )
 
 
@@ -666,17 +735,38 @@ def _validate_universe_node(
     """Recursively validate a universe node against an analysis node.
 
     Validates decisions at this level, checks for unknown/missing analyses,
-    then recurses into sub-analyses.
+    then recurses into sub-analyses. Decisions with ``from:`` references are
+    skipped (they inherit their value from the parent universe).
     """
     errors: list[SemanticError] = []
 
     # Validate decisions at this level
     analysis_decisions = _collect_node_decisions(analysis_node)
+    # Also get all decisions including from: references for detecting what the
+    # universe should/shouldn't contain
+    all_analysis_decisions = analysis_node.get("decisions") or {}
     universe_decisions = universe_node.get("decisions") or {}
     decisions_path = f"{path_prefix}.decisions" if path_prefix else "decisions"
 
+    # Identify from: reference decisions (these are resolved from parent, not set in universe)
+    from_decision_ids = set()
+    for decision_id, decision in all_analysis_decisions.items():
+        if isinstance(decision, dict) and decision.get("from"):
+            from_decision_ids.add(decision_id)
+
     # Check for unknown decisions in universe
     for decision_id, option_id in universe_decisions.items():
+        if decision_id in from_decision_ids:
+            errors.append(
+                SemanticError(
+                    "FROM_DECISION_IN_UNIVERSE",
+                    f"Universe should not set decision '{decision_id}' "
+                    f"(it uses 'from:' to reference a parent decision)",
+                    f"{decisions_path}.{decision_id}",
+                )
+            )
+            continue
+
         if decision_id not in analysis_decisions:
             errors.append(
                 SemanticError(
@@ -714,8 +804,12 @@ def _validate_universe_node(
     all_universe_decisions = dict(parent_universe_decisions)
     all_universe_decisions.update(universe_decisions)
 
-    # Check all analysis decisions are covered (respecting conditional decisions)
+    # Check all locally-defined analysis decisions are covered
+    # (skip from: references -- they get their value from the parent universe)
     for decision_id in analysis_decisions:
+        if decision_id in from_decision_ids:
+            continue  # from: decisions are inherited, not set locally
+
         decision = analysis_decisions[decision_id]
         when = decision.get("when")
 
@@ -743,18 +837,29 @@ def _validate_universe_node(
                 )
             )
 
-    # Check constraints (include parent decisions for cross-level constraints)
-    # Sub-analyses with parent_decisions can reference parent decision options in constraints
-    parent_decisions_refs = set(analysis_node.get("parent_decisions") or [])
+    # Check constraints
+    # Build effective decisions: local selections + from: resolved from parent
     effective_decisions = dict(universe_decisions)
-    for pd in parent_decisions_refs:
-        if pd in parent_universe_decisions:
-            effective_decisions[pd] = parent_universe_decisions[pd]
+    for decision_id in from_decision_ids:
+        from_ref = all_analysis_decisions[decision_id].get("from", "")
+        if from_ref.startswith("../"):
+            parent_decision_id = from_ref[3:]
+            if parent_decision_id in parent_universe_decisions:
+                effective_decisions[decision_id] = parent_universe_decisions[parent_decision_id]
+
+    # Build effective analysis decisions for constraint checking (include resolved from:)
+    effective_analysis_decisions = dict(analysis_decisions)
+    for decision_id in from_decision_ids:
+        from_ref = all_analysis_decisions[decision_id].get("from", "")
+        if from_ref.startswith("../"):
+            parent_decision_id = from_ref[3:]
+            # The constraint scope uses the parent's decision definition
+            # (This is already in analysis_decisions if _collect_node_decisions handled it)
 
     errors.extend(
         _validate_node_universe_constraints(
             effective_decisions,
-            analysis_decisions,
+            effective_analysis_decisions,
             decisions_path,
         )
     )
@@ -775,9 +880,15 @@ def _validate_universe_node(
             )
 
     for analysis_id, sub_analysis_node in analysis_sub.items():
+        sub_universe = universe_sub.get(analysis_id, {})
+
+        # Handle universe: reference on universe nodes
+        # (The actual loading of external universe files is done by the caller/resolver;
+        # here we just validate the structure we have)
+
         errors.extend(
             _validate_universe_node(
-                universe_sub.get(analysis_id, {}),
+                sub_universe,
                 sub_analysis_node,
                 path_prefix=f"{analyses_prefix}.{analysis_id}",
                 parent_universe_decisions=universe_decisions,
@@ -844,8 +955,9 @@ def _validate_node_universe_constraints(
 
 def validate_analysis_file(path: str | Path) -> list[SemanticError]:
     """Load and validate an analysis file."""
+    path = Path(path)
     data = load_yaml(path)
-    return validate_analysis(data)
+    return validate_analysis(data, base_path=path.parent)
 
 
 def validate_universe_file(

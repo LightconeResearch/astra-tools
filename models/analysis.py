@@ -198,11 +198,28 @@ class Option(BaseModel):
 
 
 class Decision(BaseModel):
-    """A decision point in the analysis."""
+    """A decision point in the analysis.
 
-    model_config = ConfigDict(extra="forbid")
+    A decision can be either locally defined (with ``label``, ``options``, etc.)
+    or a reference to a parent decision via ``from``. When ``from`` is set, the
+    decision is a pure reference and must not have ``label``, ``options``, etc.
 
-    label: str = Field(description="Human-readable name for the decision")
+    The ``from`` field uses ``../`` prefix syntax to reference parent scope:
+    ``from: ../z_min`` references the parent analysis's ``z_min`` decision.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    # Reference to parent decision (mutually exclusive with local definition)
+    from_: str | None = Field(
+        default=None,
+        alias="from",
+        description="Reference to a parent decision using '../' prefix "
+        "(e.g., '../z_min'). When set, this decision is a pure reference.",
+    )
+
+    # Local definition fields (only valid when from_ is None)
+    label: str | None = Field(default=None, description="Human-readable name for the decision")
     rationale: str | None = Field(default=None, description="Why this decision exists")
     tags: list[str] | None = Field(
         default=None, description="Tags for grouping and categorizing this decision"
@@ -216,11 +233,35 @@ class Decision(BaseModel):
     default: str | None = Field(
         default=None, description="Default option ID for baseline universes"
     )
-    options: dict[str, Option] = Field(description="Map of option IDs to option specifications")
+    options: dict[str, Option] | None = Field(
+        default=None, description="Map of option IDs to option specifications"
+    )
 
     @model_validator(mode="after")
     def validate_decision(self) -> Decision:
-        """Validate default option exists and when conditions have valid format."""
+        """Validate decision consistency."""
+        if self.from_ is not None:
+            # Reference decision: must not have local definition fields
+            local_fields = [self.label, self.options, self.default]
+            if any(f is not None for f in local_fields):
+                raise ValueError(
+                    "A decision with 'from' is a pure reference and must not have "
+                    "'label', 'options', or 'default'"
+                )
+            # Validate from_ format: must start with ../
+            if not self.from_.startswith("../"):
+                raise ValueError(
+                    f"Decision 'from' reference '{self.from_}' must use '../' prefix "
+                    "to reference parent scope"
+                )
+            return self
+
+        # Local decision: label and options are required
+        if self.label is None:
+            raise ValueError("Decision must have 'label' (or use 'from' for a reference)")
+        if self.options is None:
+            raise ValueError("Decision must have 'options' (or use 'from' for a reference)")
+
         if self.default is not None and self.default not in self.options:
             raise ValueError(f"Default option '{self.default}' not found in options")
         if self.when is not None:
@@ -322,11 +363,40 @@ class Analysis(BaseModel):
         description="Default container image for recipes in this node. "
         "Can be a string (pre-built image) or a build spec with 'build' key.",
     )
+
+    # External sub-analysis path
+    path: str | None = Field(
+        default=None,
+        description="Path to a directory containing its own astra.yaml. "
+        "When set, the sub-analysis content is loaded from <path>/astra.yaml. "
+        "Mutually exclusive with inline content fields (inputs, outputs, decisions, etc.).",
+    )
+
     # Self-similar nesting
     analyses: dict[str, Analysis] | None = Field(
         default=None,
         description="Map of sub-analysis IDs to nested analyses",
     )
+
+    @model_validator(mode="after")
+    def validate_path_exclusivity(self) -> Analysis:
+        """Validate that path is mutually exclusive with inline content."""
+        if self.path is not None:
+            inline_fields = [self.inputs, self.outputs]
+            inline_dicts = [self.decisions, self.insights]
+            has_inline = (
+                any(f is not None for f in inline_fields)
+                or any(d for d in inline_dicts)
+                or self.analyses is not None
+                or self.success_criteria is not None
+            )
+            if has_inline:
+                raise ValueError(
+                    "A sub-analysis with 'path' must not have inline content "
+                    "(inputs, outputs, decisions, insights, analyses, success_criteria). "
+                    "Content is loaded from the external astra.yaml."
+                )
+        return self
 
 
 

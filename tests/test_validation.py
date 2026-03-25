@@ -139,18 +139,19 @@ class TestNestedAnalysisValidation:
 
 
 class TestSubAnalysisRequirements:
-    """Tests for sub-analysis required fields and parent_decisions."""
+    """Tests for sub-analysis required fields and decision from: references."""
 
     def test_sub_missing_outputs(self, invalid_dir: Path):
         errors = validate_analysis_file(invalid_dir / "sub_missing_outputs.yaml")
         assert any(e.code == "MISSING_SUB_FIELD" and "outputs" in e.message for e in errors)
 
-    def test_invalid_parent_decision(self, invalid_dir: Path):
+    def test_invalid_decision_from_ref(self, invalid_dir: Path):
+        """Decision with from: referencing non-existent parent decision."""
         errors = validate_analysis_file(invalid_dir / "invalid_parent_decision.yaml")
-        assert any(e.code == "INVALID_PARENT_DECISION" for e in errors)
+        assert any(e.code == "INVALID_DECISION_FROM_REF" for e in errors)
 
     def test_cross_level_constraint_in_analysis(self, valid_dir: Path):
-        """parent_decisions allows constraints referencing parent decisions."""
+        """Decision from: allows constraints referencing parent decisions."""
         errors = validate_analysis_file(valid_dir / "nested.yaml")
         assert errors == []
 
