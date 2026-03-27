@@ -1,4 +1,4 @@
-# Option references non-existent insight
+# Option references non-existent prior insight
 version: "1.0"
 name: "Test"
 inputs:

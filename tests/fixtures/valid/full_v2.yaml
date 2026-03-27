@@ -61,7 +61,7 @@ outputs:
       command: python src/evaluate.py
       inputs: [trained_output]
 
-insights:
+prior_insights:
   compute_scaling:
     id: compute_scaling
     claim: "Standard scaling improves SVM convergence."
@@ -74,6 +74,14 @@ insights:
         quote:
           type: TextQuoteSelector
           exact: "Standard scaling leads to faster convergence"
+
+findings:
+  scaling_result:
+    id: scaling_result
+    claim: "StandardScaler achieves the best accuracy across all model types."
+    created_at: "2024-01-20T15:00:00Z"
+    outputs: [accuracy, f1_score]
+    tags: [preprocessing, performance]
 
 decisions:
   preprocessing:

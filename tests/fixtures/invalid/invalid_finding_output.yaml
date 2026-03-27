@@ -1,0 +1,15 @@
+# Finding references non-existent output
+version: "1.0"
+name: "Test"
+inputs:
+  - id: data
+    type: data
+outputs:
+  - id: result
+    type: metric
+findings:
+  bad_finding:
+    id: bad_finding
+    claim: "Something was discovered"
+    created_at: "2024-01-01T00:00:00Z"
+    outputs: [nonexistent_output]

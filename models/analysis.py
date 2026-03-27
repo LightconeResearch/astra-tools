@@ -352,9 +352,13 @@ class Analysis(BaseModel):
         default_factory=dict,
         description="Map of decision IDs to decision specifications",
     )
-    insights: dict[str, Insight] = Field(
+    prior_insights: dict[str, Insight] = Field(
         default_factory=dict,
-        description="Map of insight IDs to insight specifications",
+        description="Map of prior insight IDs to insight specifications (inform decisions)",
+    )
+    findings: dict[str, Insight] = Field(
+        default_factory=dict,
+        description="Map of finding IDs to insight specifications (conclusions from outputs)",
     )
 
     # Execution
@@ -383,7 +387,7 @@ class Analysis(BaseModel):
         """Validate that path is mutually exclusive with inline content."""
         if self.path is not None:
             inline_fields = [self.inputs, self.outputs]
-            inline_dicts = [self.decisions, self.insights]
+            inline_dicts = [self.decisions, self.prior_insights, self.findings]
             has_inline = (
                 any(f is not None for f in inline_fields)
                 or any(d for d in inline_dicts)
@@ -393,8 +397,8 @@ class Analysis(BaseModel):
             if has_inline:
                 raise ValueError(
                     "A sub-analysis with 'path' must not have inline content "
-                    "(inputs, outputs, decisions, insights, analyses, success_criteria). "
-                    "Content is loaded from the external astra.yaml."
+                    "(inputs, outputs, decisions, prior_insights, findings, analyses, "
+                    "success_criteria). Content is loaded from the external astra.yaml."
                 )
         return self
 

@@ -296,7 +296,7 @@ class TestFullValidationWorkflow:
                     },
                 }
             },
-            "insights": {
+            "prior_insights": {
                 "flexion_insight": {
                     "id": "flexion_insight",
                     "claim": "Flexion improves weak lensing resolution",
@@ -331,7 +331,7 @@ class TestFullValidationWorkflow:
 
         # Stage 3: Evidence verification
         verification_cache = VerificationCache(cache_dir=temp_cache_dir / "verification")
-        results = verify_all_insights(data["insights"], paper_cache, verification_cache)
+        results = verify_all_insights(data["prior_insights"], paper_cache, verification_cache)
 
         assert "flexion_insight" in results
         assert results["flexion_insight"].is_valid

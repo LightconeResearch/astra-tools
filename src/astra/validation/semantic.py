@@ -72,7 +72,7 @@ def validate_analysis(
 
     inputs = data.get("inputs") or []
     outputs = data.get("outputs") or []
-    insights = data.get("insights") or {}
+    prior_insights = data.get("prior_insights") or {}
 
     # Check for duplicate input IDs
     input_ids: set[str] = set()
@@ -111,7 +111,10 @@ def validate_analysis(
     root_decisions = _collect_node_decisions(data)
 
     # Validate all decisions
-    errors.extend(_validate_decisions(root_decisions, insights, ""))
+    errors.extend(_validate_decisions(root_decisions, prior_insights, ""))
+
+    # Validate findings output references
+    errors.extend(_validate_findings(data.get("findings") or {}, output_ids, ""))
 
     # Collect qualified sub-analysis output IDs so root recipes can
     # reference them (e.g. ``inputs: [hod_fitting.galaxy_mesh]``).
@@ -133,7 +136,7 @@ def validate_analysis(
             _validate_analysis_node(
                 analysis_id,
                 analysis_node,
-                insights,
+                prior_insights,
                 parent_input_ids=input_ids,
                 parent_decisions=root_decisions,
                 sibling_analyses=sub_analyses,
@@ -147,7 +150,7 @@ def validate_analysis(
 def _validate_analysis_node(
     node_id: str,
     node: dict[str, Any],
-    insights: dict[str, Any],
+    prior_insights: dict[str, Any],
     parent_input_ids: set[str],
     parent_decisions: dict[str, Any],
     sibling_analyses: dict[str, Any],
@@ -235,7 +238,11 @@ def _validate_analysis_node(
             parent_decision_id = from_ref[3:]  # strip ../
             if parent_decision_id in parent_decisions:
                 constraint_scope[decision_id] = parent_decisions[parent_decision_id]
-    errors.extend(_validate_decisions(node_decisions, insights, node_path, constraint_scope))
+    errors.extend(_validate_decisions(node_decisions, prior_insights, node_path, constraint_scope))
+
+    # Validate findings output references
+    node_findings = node.get("findings") or {}
+    errors.extend(_validate_findings(node_findings, node_output_ids, node_path))
 
     # Validate output recipes
     node_outputs = node.get("outputs") or []
@@ -251,7 +258,7 @@ def _validate_analysis_node(
             _validate_analysis_node(
                 sub_id,
                 sub_node,
-                insights,
+                prior_insights,
                 parent_input_ids=node_input_ids,
                 parent_decisions=node_decisions,
                 sibling_analyses=sub_analyses,
@@ -303,9 +310,38 @@ def _validate_success_criteria(
     return errors
 
 
+def _validate_findings(
+    findings: dict[str, Any],
+    output_ids: set[str],
+    path_prefix: str,
+) -> list[SemanticError]:
+    """Validate that findings reference valid output IDs.
+
+    Each finding must have an ``outputs`` list whose entries are declared output IDs.
+    """
+    errors: list[SemanticError] = []
+    if not findings:
+        return errors
+
+    findings_prefix = f"{path_prefix}.findings" if path_prefix else "findings"
+    for finding_id, finding in findings.items():
+        finding_path = f"{findings_prefix}.{finding_id}"
+        finding_outputs = finding.get("outputs") or []
+        for i, out_ref in enumerate(finding_outputs):
+            if out_ref not in output_ids:
+                errors.append(
+                    SemanticError(
+                        "INVALID_FINDING_OUTPUT",
+                        f"Finding output '{out_ref}' not found in declared outputs",
+                        f"{finding_path}.outputs[{i}]",
+                    )
+                )
+    return errors
+
+
 def _validate_decisions(
     decisions: dict[str, Any],
-    insights: dict[str, Any],
+    prior_insights: dict[str, Any],
     path_prefix: str,
     constraint_scope: dict[str, Any] | None = None,
 ) -> list[SemanticError]:
@@ -380,14 +416,14 @@ def _validate_decisions(
         for option_id, option in options.items():
             option_path = f"{decision_path}.options.{option_id}"
 
-            # Check insight references
+            # Check insight references (options reference prior_insights)
             insight_refs = option.get("insights") or []
             for i, insight_ref in enumerate(insight_refs):
-                if insight_ref not in insights:
+                if insight_ref not in prior_insights:
                     errors.append(
                         SemanticError(
                             "INVALID_INSIGHT_REF",
-                            f"Option insight '{insight_ref}' not found in insights",
+                            f"Option insight '{insight_ref}' not found in prior_insights",
                             f"{option_path}.insights[{i}]",
                         )
                     )

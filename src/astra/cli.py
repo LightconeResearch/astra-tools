@@ -237,7 +237,7 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
 @click.option(
     "--skip-evidence",
     is_flag=True,
-    help="Skip evidence verification even if insights are present",
+    help="Skip evidence verification even if prior insights are present",
 )
 def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evidence: bool) -> None:
     """Validate an ASTRA specification file.
@@ -245,7 +245,7 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
     FILE can be an analysis (astra.yaml) or universe file.
     For universe files, use --analysis to specify the analysis file.
 
-    Evidence verification (--verify-evidence) checks that quotes in insights
+    Evidence verification (--verify-evidence) checks that quotes in prior insights
     actually exist in the source papers. Papers must be cached first using
     'astra paper add'.
     """
@@ -291,34 +291,34 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
     console.print("[green]✓[/green] Semantic validation passed")
 
-    # Evidence verification (for analysis files with insights)
+    # Evidence verification (for analysis files with prior insights)
     if not is_universe and not skip_evidence:
         data = load_yaml(file)
-        insights = data.get("insights", {})
+        prior_insights = data.get("prior_insights", {})
 
-        if insights:
+        if prior_insights:
             if not verify_evidence:
                 # Show hint about evidence verification
                 evidence_count = sum(
-                    len(insight.get("evidence", [])) for insight in insights.values()
+                    len(insight.get("evidence", [])) for insight in prior_insights.values()
                 )
                 if evidence_count > 0:
                     console.print(
-                        f"\n[dim]Note: {len(insights)} insight(s) with {evidence_count} "
-                        f"evidence item(s) found.[/dim]"
+                        f"\n[dim]Note: {len(prior_insights)} prior insight(s) with "
+                        f"{evidence_count} evidence item(s) found.[/dim]"
                     )
                     console.print(
                         "[dim]Run with --verify-evidence to verify quotes exist in papers.[/dim]"
                     )
             else:
                 console.print("\n[bold]Verifying evidence...[/bold]")
-                _verify_insights_evidence(insights)
+                _verify_insights_evidence(prior_insights)
 
     console.print("\n[green]Validation successful![/green]")
 
 
-def _verify_insights_evidence(insights: dict[str, Any]) -> None:
-    """Verify evidence for all insights."""
+def _verify_insights_evidence(prior_insights: dict[str, Any]) -> None:
+    """Verify evidence for all prior insights."""
     from astra.papers.cache import PaperCache
     from astra.verification.cache import VerificationCache
     from astra.verification.core import VerificationStatus, verify_all_insights
@@ -326,7 +326,7 @@ def _verify_insights_evidence(insights: dict[str, Any]) -> None:
     paper_cache = PaperCache()
     verification_cache = VerificationCache()
 
-    results = verify_all_insights(insights, paper_cache, verification_cache)
+    results = verify_all_insights(prior_insights, paper_cache, verification_cache)
 
     has_errors = False
     verified_count = 0

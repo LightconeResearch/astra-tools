@@ -240,18 +240,32 @@ def _search_node_decision(node: dict[str, Any], decision_id: str) -> dict[str, A
     return None
 
 
-def get_insight(data: dict[str, Any], insight_id: str) -> dict[str, Any] | None:
-    """Get an insight by ID from analysis data.
+def get_prior_insight(data: dict[str, Any], insight_id: str) -> dict[str, Any] | None:
+    """Get a prior insight by ID from analysis data.
 
     Args:
         data: Analysis data as a dict.
-        insight_id: The insight ID to find.
+        insight_id: The prior insight ID to find.
 
     Returns:
-        The insight dict if found, None otherwise.
+        The prior insight dict if found, None otherwise.
     """
-    insights: dict[str, dict[str, Any]] = data.get("insights", {})
-    return insights.get(insight_id)
+    prior_insights: dict[str, dict[str, Any]] = data.get("prior_insights", {})
+    return prior_insights.get(insight_id)
+
+
+def get_finding(data: dict[str, Any], finding_id: str) -> dict[str, Any] | None:
+    """Get a finding by ID from analysis data.
+
+    Args:
+        data: Analysis data as a dict.
+        finding_id: The finding ID to find.
+
+    Returns:
+        The finding dict if found, None otherwise.
+    """
+    findings: dict[str, dict[str, Any]] = data.get("findings", {})
+    return findings.get(finding_id)
 
 
 def get_default_universe(data: dict[str, Any]) -> dict[str, Any]:
@@ -381,16 +395,28 @@ def _collect_node_decision_ids(node: dict[str, Any], result: set[str]) -> None:
         _collect_node_decision_ids(sub_node, result)
 
 
-def get_insight_ids(data: dict[str, Any]) -> set[str]:
-    """Get all insight IDs from analysis data.
+def get_prior_insight_ids(data: dict[str, Any]) -> set[str]:
+    """Get all prior insight IDs from analysis data.
 
     Args:
         data: Analysis data as a dict.
 
     Returns:
-        Set of insight IDs.
+        Set of prior insight IDs.
     """
-    return set(data.get("insights", {}).keys())
+    return set(data.get("prior_insights", {}).keys())
+
+
+def get_finding_ids(data: dict[str, Any]) -> set[str]:
+    """Get all finding IDs from analysis data.
+
+    Args:
+        data: Analysis data as a dict.
+
+    Returns:
+        Set of finding IDs.
+    """
+    return set(data.get("findings", {}).keys())
 
 
 def get_inputs(data: dict[str, Any]) -> list[dict[str, Any]]:

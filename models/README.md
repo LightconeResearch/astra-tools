@@ -39,12 +39,13 @@ Universe (decision selections)  ─────▶  Execution Parameters
 
 | Term | Definition |
 |------|-----------|
-| **Analysis** | A self-similar node with inputs, outputs, decisions, insights, and optional sub-analyses |
+| **Analysis** | A self-similar node with inputs, outputs, decisions, prior insights, findings, and optional sub-analyses |
 | **Decision** | A choice point with multiple options (e.g., "which scaling method?") |
 | **Option** | One possible choice for a decision |
 | **Universe** | One complete set of decisions — one option selected per decision point |
 | **Multiverse** | The space of all valid decision combinations |
-| **Insight** | A scientific claim backed by verifiable evidence from literature |
+| **Prior Insight** | A scientific claim backed by verifiable evidence from literature that informs decisions |
+| **Finding** | A conclusion derived from the analysis outputs, framed in terms of the analysis aims |
 | **Evidence** | A reference to a specific quote, figure, or table in a paper or analysis artifact |
 | **Recipe** | An inline build rule on an output declaring how to produce it |
 | **Constraint** | A rule between options: `incompatible_with` or `requires` |
@@ -396,22 +397,30 @@ analyses:
 
 ---
 
-## Insights Schema
+## Prior Insights and Findings
 
-Insights represent scientific knowledge extracted from literature, with full traceability to source material.
+ASTRA distinguishes two kinds of knowledge, both using the same `Insight` model:
 
-### Insight
+- **Prior insights** (`prior_insights:`) — backward-looking. Knowledge from literature or prior artifacts that informs decisions. Typically has `evidence`.
+- **Findings** (`findings:`) — forward-looking. Conclusions derived from running the analysis. Typically has `outputs`.
+
+The placement determines direction; the structure is the same.
+
+### Insight (shared model)
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | `string` | **Yes** | Unique identifier |
 | `claim` | `string` | **Yes** | What we learned (1-2 sentences) |
 | `created_at` | `datetime` | **Yes** | ISO 8601 timestamp |
-| `evidence` | `Evidence[]` | **Yes** | Supporting evidence (at least one) |
+| `evidence` | `Evidence[]` | No | Supporting evidence from literature/artifacts (backward-looking) |
+| `outputs` | `string[]` | No | Output IDs this insight is derived from (forward-looking) |
 | `derived` | `boolean` | No | Whether synthesized/inferred (default: `false`) |
 | `scope` | `string` | No | Applicability conditions |
 | `tags` | `string[]` | No | Categorization tags |
 | `notes` | `string` | No | Reasoning notes |
+
+At least one of `evidence` or `outputs` must be non-empty.
 
 ### Evidence
 
@@ -472,10 +481,10 @@ Evidence uses [W3C Web Annotation](https://www.w3.org/TR/annotation-model/) comp
 | `value` | `string` | No | Fragment (e.g., `"page=6"`) |
 | `page` | `integer` | No | 1-indexed page number |
 
-### Insight Example
+### Example
 
 ```yaml
-insights:
+prior_insights:
   compute_scaling:
     id: compute_scaling
     claim: "Standard scaling outperforms min-max for SVM classifiers on tabular data."
@@ -494,6 +503,14 @@ insights:
     scope: "Tabular classification with SVMs"
     tags: [preprocessing, scaling]
 
+findings:
+  scaling_result:
+    id: scaling_result
+    claim: "StandardScaler achieves 3% higher accuracy than MinMaxScaler across all models."
+    created_at: "2024-07-01T10:00:00Z"
+    outputs: [accuracy, model_comparison]
+    tags: [preprocessing, performance]
+
 decisions:
   scaling:
     label: "Feature Scaling"
@@ -501,10 +518,10 @@ decisions:
       standard:
         label: "StandardScaler"
         insights:
-          - compute_scaling        # Links decision to evidence
+          - compute_scaling        # Links decision to prior insight
 ```
 
-The chain **decision option** → **insight** → **evidence** → **paper (DOI)** provides end-to-end traceability from analytical choice to published literature.
+The chain **decision option** → **prior insight** → **evidence** → **paper (DOI)** provides end-to-end traceability from analytical choice to published literature. The chain **analysis** → **outputs** → **finding** captures what was learned from running the analysis.
 
 ---
 
@@ -692,4 +709,4 @@ python tools/generate_schemas.py
 |------|---------|-------------|
 | `analysis.py` | `Analysis`, `Input`, `Output`, `Decision`, `Option`, `Recipe`, `Resources`, `ContainerBuildSpec`, `Checksum`, `SuccessCriterion` | Core analysis specification |
 | `universe.py` | `Universe`, `UniverseNode` | Universe (decision selections) |
-| `insight.py` | `Insight`, `Evidence`, `InsightCollection`, `TextQuoteSelector`, `FigureSelector`, `TableSelector`, `FragmentSelector` | Insights and W3C selectors |
+| `insight.py` | `Insight`, `Evidence`, `InsightCollection`, `TextQuoteSelector`, `FigureSelector`, `TableSelector`, `FragmentSelector` | Insights (used for both prior_insights and findings), evidence, and W3C selectors |

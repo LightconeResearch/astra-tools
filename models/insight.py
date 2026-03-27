@@ -234,12 +234,18 @@ class Evidence(BaseModel):
 
 
 class Insight(BaseModel):
-    """A scientific insight with provenance and supporting evidence.
+    """A unit of scientific knowledge — either prior (informing decisions)
+    or produced (derived from outputs).
 
-    Represents a discrete unit of scientific knowledge with full
-    traceability to source material. Evidence can come from literature
-    (papers referenced by DOI) or from analysis artifacts (outputs
-    referenced by ID), both using W3C-compliant selectors.
+    The same model is used for both ``prior_insights`` and ``findings``
+    on an analysis node. The placement determines the direction:
+
+    - **prior_insights**: backward-looking — evidence from literature or
+      prior artifacts that informs decisions.
+    - **findings**: forward-looking — conclusions derived from running
+      the analysis, linked to the outputs that produced them.
+
+    At least one of ``evidence`` or ``outputs`` must be non-empty.
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -248,7 +254,16 @@ class Insight(BaseModel):
     id: str = Field(min_length=1, description="Unique identifier")
     claim: str = Field(min_length=1, description="What we learned (1-2 sentences)")
     created_at: datetime = Field(description="Creation timestamp (ISO 8601)")
-    evidence: list[Evidence] = Field(min_length=1, description="Supporting evidence")
+
+    # Backward-looking: evidence from literature/artifacts
+    evidence: list[Evidence] = Field(
+        default_factory=list, description="Supporting evidence (papers, artifacts)"
+    )
+
+    # Forward-looking: derived from these outputs
+    outputs: list[str] = Field(
+        default_factory=list, description="Output IDs this insight is derived from"
+    )
 
     # Optional classification
     derived: bool = Field(default=False, description="True if synthesized/inferred")
@@ -257,6 +272,15 @@ class Insight(BaseModel):
     scope: str | None = Field(default=None, description="Applicability conditions")
     tags: list[str] = Field(default_factory=list, description="Categorization tags")
     notes: str | None = Field(default=None, description="Reasoning notes")
+
+    @model_validator(mode="after")
+    def validate_provenance(self) -> Insight:
+        """Ensure at least one provenance link (evidence or outputs)."""
+        if not self.evidence and not self.outputs:
+            raise ValueError(
+                "Insight must have at least one of 'evidence' or 'outputs'"
+            )
+        return self
 
 
 # =============================================================================

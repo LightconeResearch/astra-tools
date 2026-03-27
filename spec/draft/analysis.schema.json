@@ -145,12 +145,20 @@
       "title": "Decisions",
       "type": "object"
     },
-    "insights": {
+    "prior_insights": {
       "additionalProperties": {
         "$ref": "#/$defs/Insight"
       },
-      "description": "Map of insight IDs to insight specifications",
-      "title": "Insights",
+      "description": "Map of prior insight IDs to insight specifications (inform decisions)",
+      "title": "Prior Insights",
+      "type": "object"
+    },
+    "findings": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Insight"
+      },
+      "description": "Map of finding IDs to insight specifications (conclusions from outputs)",
+      "title": "Findings",
       "type": "object"
     },
     "container": {
@@ -349,12 +357,20 @@
           "title": "Decisions",
           "type": "object"
         },
-        "insights": {
+        "prior_insights": {
           "additionalProperties": {
             "$ref": "#/$defs/Insight"
           },
-          "description": "Map of insight IDs to insight specifications",
-          "title": "Insights",
+          "description": "Map of prior insight IDs to insight specifications (inform decisions)",
+          "title": "Prior Insights",
+          "type": "object"
+        },
+        "findings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Insight"
+          },
+          "description": "Map of finding IDs to insight specifications (conclusions from outputs)",
+          "title": "Findings",
           "type": "object"
         },
         "container": {
@@ -960,7 +976,7 @@
     },
     "Insight": {
       "additionalProperties": false,
-      "description": "A scientific insight with provenance and supporting evidence.\n\nRepresents a discrete unit of scientific knowledge with full\ntraceability to source material. Evidence can come from literature\n(papers referenced by DOI) or from analysis artifacts (outputs\nreferenced by ID), both using W3C-compliant selectors.",
+      "description": "A unit of scientific knowledge \u2014 either prior (informing decisions)\nor produced (derived from outputs).\n\nThe same model is used for both ``prior_insights`` and ``findings``\non an analysis node. The placement determines the direction:\n\n- **prior_insights**: backward-looking \u2014 evidence from literature or\n  prior artifacts that informs decisions.\n- **findings**: forward-looking \u2014 conclusions derived from running\n  the analysis, linked to the outputs that produced them.\n\nAt least one of ``evidence`` or ``outputs`` must be non-empty.",
       "properties": {
         "id": {
           "description": "Unique identifier",
@@ -981,12 +997,19 @@
           "type": "string"
         },
         "evidence": {
-          "description": "Supporting evidence",
+          "description": "Supporting evidence (papers, artifacts)",
           "items": {
             "$ref": "#/$defs/Evidence"
           },
-          "minItems": 1,
           "title": "Evidence",
+          "type": "array"
+        },
+        "outputs": {
+          "description": "Output IDs this insight is derived from",
+          "items": {
+            "type": "string"
+          },
+          "title": "Outputs",
           "type": "array"
         },
         "derived": {
@@ -1033,8 +1056,7 @@
       "required": [
         "id",
         "claim",
-        "created_at",
-        "evidence"
+        "created_at"
       ],
       "title": "Insight",
       "type": "object"

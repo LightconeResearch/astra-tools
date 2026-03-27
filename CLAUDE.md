@@ -95,11 +95,12 @@ ASTRA/
 
 ### Key Concepts
 
-- **Analysis**: A self-similar node with inputs, outputs (with optional inline recipes), decisions, insights, and optional sub-analyses. Every level has the same structure.
+- **Analysis**: A self-similar node with inputs, outputs (with optional inline recipes), decisions, prior insights, findings, and optional sub-analyses. Every level has the same structure.
 - **Decision**: A choice point with multiple options (e.g., "which scaling method?"). Decisions live directly on the analysis node.
 - **Universe**: One complete set of decisions — one option per decision point. The universe mirrors the analysis tree structure.
 - **Multiverse**: The space of all valid decision combinations
-- **Insight**: Scientific knowledge from papers, with precise evidence (W3C selectors)
+- **Prior Insight**: Scientific knowledge from papers or prior analysis artifacts, with precise evidence (W3C selectors). Informs decisions.
+- **Finding**: A conclusion derived from the analysis outputs. Links to the output IDs that produced it.
 - **Recipe**: An inline build rule on an output (command, optional inputs/container/resources)
 - **Constraints**: `incompatible_with` and `requires` relationships between decision options (scoped within an analysis node)
 - **Sub-analysis**: A nested analysis under `analyses:` with its own inputs, outputs, and decisions. Inputs can reference parent inputs (`from: input_id`) or sibling outputs (`from: sibling.output_id`).
@@ -201,14 +202,26 @@ Constraints are validated in `semantic.py`, scoped within each analysis node:
 - `requires`: Lists of "decision.option" pairs that must be selected together
 - Universe validation checks these constraints per node
 
-### 5. Insight-Based Decisions
-Decisions can reference insights:
+### 5. Prior Insights and Findings
+Decisions can reference prior insights; findings capture what the analysis learned:
 ```yaml
+prior_insights:
+  compute_scaling:
+    id: compute_scaling
+    claim: "Standard scaling improves SVM convergence."
+    ...
+
+findings:
+  scaling_result:
+    id: scaling_result
+    claim: "StandardScaler achieves best accuracy."
+    outputs: [accuracy, model_comparison]
+
 decisions:
   scaling:
     options:
       standard:
-        insights: [compute_scaling]  # References insights.compute_scaling
+        insights: [compute_scaling]  # References prior_insights.compute_scaling
 ```
 
 ### 6. Self-Similar Nesting
