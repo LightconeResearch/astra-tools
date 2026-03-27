@@ -120,7 +120,6 @@ decisions:
     label: "SVM Kernel"
     rationale: "Kernel choice for SVM"
     tags: [model_selection]
-    when: model.svm
     default: rbf
     options:
       linear:

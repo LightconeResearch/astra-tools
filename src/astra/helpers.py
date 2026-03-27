@@ -15,37 +15,6 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-def is_condition_met(
-    when: str | list[str] | None,
-    universe_decisions: dict[str, str],
-) -> bool:
-    """Check if a when condition is met given universe decisions.
-
-    Args:
-        when: A string, list of strings, or None. Each string is
-            ``decision_id.option_id`` or ``~decision_id.option_id`` (negation).
-            Multiple items are AND'd together.
-        universe_decisions: Dict mapping decision_id to selected option_id.
-
-    Returns:
-        True if the condition is met (or when is None), False otherwise.
-    """
-    if when is None:
-        return True
-    conditions = [when] if isinstance(when, str) else when
-    for cond in conditions:
-        negate = cond.startswith("~")
-        ref = cond.lstrip("~")
-        decision_id, option_id = ref.split(".")
-        selected = universe_decisions.get(decision_id)
-        match = selected == option_id
-        if negate:
-            match = not match
-        if not match:
-            return False  # AND logic: all must be true
-    return True
-
-
 def _collect_node_decisions(node: dict[str, Any]) -> dict[str, Any]:
     """Collect locally-defined decisions from a node.
 
@@ -267,32 +236,15 @@ def get_default_universe(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _get_node_defaults(node: dict[str, Any]) -> dict[str, Any]:
-    """Recursively get defaults from a node.
-
-    Skips conditional decisions whose ``when`` condition is not met
-    by the defaults being collected so far.
-    """
+    """Recursively get defaults from a node."""
     result: dict[str, Any] = {}
     decisions: dict[str, str] = {}
     all_decisions = _collect_node_decisions(node)
 
-    # First pass: collect defaults for unconditional decisions
     for decision_id, decision in all_decisions.items():
-        if decision.get("when"):
-            continue  # handle in second pass
         default = decision.get("default")
         if default is not None:
             decisions[decision_id] = default
-
-    # Second pass: collect defaults for conditional decisions whose condition is met
-    for decision_id, decision in all_decisions.items():
-        when = decision.get("when")
-        if not when:
-            continue
-        if is_condition_met(when, decisions):
-            default = decision.get("default")
-            if default is not None:
-                decisions[decision_id] = default
 
     if decisions:
         result["decisions"] = decisions

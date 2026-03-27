@@ -537,25 +537,6 @@
           "description": "Tags for grouping and categorizing this decision",
           "title": "Tags"
         },
-        "when": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Condition(s): 'decision_id.option_id' or '~decision_id.option_id' \u2014 this decision only exists when all conditions are met. Prefix with ~ for negation. Lists are AND'd together.",
-          "title": "When"
-        },
         "default": {
           "anyOf": [
             {
@@ -1182,25 +1163,6 @@
           "default": null,
           "description": "Sub-analysis output that produces this (e.g., 'sub_analysis.output_id')",
           "title": "From"
-        },
-        "when": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Condition(s): 'decision_id.option_id' or '~decision_id.option_id' \u2014 this output only exists when all conditions are met. Prefix with ~ for negation. Lists are AND'd together.",
-          "title": "When"
         },
         "recipe": {
           "anyOf": [
