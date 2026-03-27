@@ -29,9 +29,7 @@ def _collect_node_decisions(node: dict[str, Any]) -> dict[str, Any]:
     return decisions
 
 
-def resolve_analysis_tree(
-    data: dict[str, Any], base_path: Path
-) -> dict[str, Any]:
+def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, Any]:
     """Resolve external sub-analysis references in an analysis tree.
 
     Walks the ``analyses`` dict. For any sub-analysis with a ``path`` field,

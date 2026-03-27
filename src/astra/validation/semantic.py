@@ -30,9 +30,7 @@ class SemanticError:
         return f"[{self.code}] {self.message}"
 
 
-def validate_analysis(
-    data: dict[str, Any], base_path: Path | None = None
-) -> list[SemanticError]:
+def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> list[SemanticError]:
     """Validate an analysis specification semantically.
 
     Checks:
@@ -117,7 +115,7 @@ def validate_analysis(
     sub_analyses = data.get("analyses") or {}
     sub_output_ids: set[str] = set()
     for analysis_id, analysis_node in sub_analyses.items():
-        for out in (analysis_node.get("outputs") or []):
+        for out in analysis_node.get("outputs") or []:
             out_id = out.get("id")
             if out_id:
                 sub_output_ids.add(f"{analysis_id}.{out_id}")
@@ -495,8 +493,7 @@ def _validate_decision_from_ref(
 
     if not from_ref.startswith("../"):
         return _error(
-            f"Decision from reference '{from_ref}' must use '../' prefix "
-            "to reference parent scope"
+            f"Decision from reference '{from_ref}' must use '../' prefix to reference parent scope"
         )
 
     parent_decision_id = from_ref[3:]  # strip ../

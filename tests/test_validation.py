@@ -341,6 +341,7 @@ class TestUniverseNewFeaturesValidation:
         errors = validate_universe(universe_data, analysis_data)
         assert any(e.code == "EXCLUDED_OPTION_SELECTED" for e in errors)
 
+
 class TestSuccessCriteriaValidation:
     """Tests for structured success criteria."""
 
