@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-# Pattern for when condition strings: optional ~ prefix, then decision_id.option_id
-WHEN_PATTERN = re.compile(r"^~?[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 
 
 class Checksum(BaseModel):
@@ -145,33 +141,11 @@ class Output(BaseModel):
         "(e.g., 'sub_analysis.output_id')",
     )
 
-    # Conditional: when this output is active
-    when: str | list[str] | None = Field(
-        default=None,
-        description="Condition(s): 'decision_id.option_id' or '~decision_id.option_id' — "
-        "this output only exists when all conditions are met. "
-        "Prefix with ~ for negation. Lists are AND'd together.",
-    )
-
     # Execution: how to produce this output
     recipe: Recipe | None = Field(
         default=None,
         description="Inline recipe describing how to produce this output",
     )
-
-    @model_validator(mode="after")
-    def validate_when_format(self) -> Output:
-        """Validate that each when condition matches the expected pattern."""
-        if self.when is not None:
-            conditions = [self.when] if isinstance(self.when, str) else self.when
-            for cond in conditions:
-                if not WHEN_PATTERN.match(cond):
-                    raise ValueError(
-                        f"Invalid 'when' condition '{cond}': must match "
-                        "'[~]decision_id.option_id'"
-                    )
-        return self
-
 
 class Option(BaseModel):
     """An option for a decision."""
@@ -191,7 +165,9 @@ class Option(BaseModel):
         default=None,
         description="List of decision.option pairs that must also be selected",
     )
-    excluded: bool = Field(default=False, description="Whether this option was considered and rejected")
+    excluded: bool = Field(
+        default=False, description="Whether this option was considered and rejected"
+    )
     excluded_reason: str | None = Field(
         default=None, description="Why this option was excluded"
     )
@@ -223,12 +199,6 @@ class Decision(BaseModel):
     rationale: str | None = Field(default=None, description="Why this decision exists")
     tags: list[str] | None = Field(
         default=None, description="Tags for grouping and categorizing this decision"
-    )
-    when: str | list[str] | None = Field(
-        default=None,
-        description="Condition(s): 'decision_id.option_id' or '~decision_id.option_id' — "
-        "this decision only exists when all conditions are met. "
-        "Prefix with ~ for negation. Lists are AND'd together.",
     )
     default: str | None = Field(
         default=None, description="Default option ID for baseline universes"
@@ -264,14 +234,6 @@ class Decision(BaseModel):
 
         if self.default is not None and self.default not in self.options:
             raise ValueError(f"Default option '{self.default}' not found in options")
-        if self.when is not None:
-            conditions = [self.when] if isinstance(self.when, str) else self.when
-            for cond in conditions:
-                if not WHEN_PATTERN.match(cond):
-                    raise ValueError(
-                        f"Invalid 'when' condition '{cond}': must match "
-                        "'[~]decision_id.option_id'"
-                    )
         return self
 
 

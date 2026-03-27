@@ -164,7 +164,8 @@ class Evidence(BaseModel):
     )
     source_commit: str | None = Field(
         default=None,
-        description="Git commit that produced the original artifact (only valid when artifact is set)",
+        description="Git commit that produced the original artifact "
+        "(only valid when artifact is set)",
     )
 
     # Content selectors (at least one required)
