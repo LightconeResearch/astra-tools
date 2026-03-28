@@ -41,20 +41,14 @@ class Input(BaseModel):
     description: str | None = Field(default=None, description="Description of the input")
 
     # Data inputs
-    source: str | None = Field(
-        default=None, description="URI or path to the data source"
-    )
+    source: str | None = Field(default=None, description="URI or path to the data source")
     checksum: Checksum | None = Field(
         default=None, description="Checksum for data integrity verification"
     )
 
     # Analysis inputs
-    ref: str | None = Field(
-        default=None, description="Reference to another ASTRA analysis"
-    )
-    ref_version: str | None = Field(
-        default=None, description="Version of the referenced analysis"
-    )
+    ref: str | None = Field(default=None, description="Reference to another ASTRA analysis")
+    ref_version: str | None = Field(default=None, description="Version of the referenced analysis")
     use_outputs: list[str] | None = Field(
         default=None, description="Specific outputs to use from referenced analysis"
     )
@@ -141,8 +135,7 @@ class Output(BaseModel):
     from_: str | None = Field(
         default=None,
         alias="from",
-        description="Sub-analysis output that produces this "
-        "(e.g., 'sub_analysis.output_id')",
+        description="Sub-analysis output that produces this (e.g., 'sub_analysis.output_id')",
     )
 
     # Conditional: when this output is active
@@ -167,11 +160,9 @@ class Output(BaseModel):
             for cond in conditions:
                 if not WHEN_PATTERN.match(cond):
                     raise ValueError(
-                        f"Invalid 'when' condition '{cond}': must match "
-                        "'[~]decision_id.option_id'"
+                        f"Invalid 'when' condition '{cond}': must match '[~]decision_id.option_id'"
                     )
         return self
-
 
 
 class Option(BaseModel):
@@ -195,9 +186,7 @@ class Option(BaseModel):
     excluded: bool = Field(
         default=False, description="Whether this option was considered and rejected"
     )
-    excluded_reason: str | None = Field(
-        default=None, description="Why this option was excluded"
-    )
+    excluded_reason: str | None = Field(default=None, description="Why this option was excluded")
 
 
 class Decision(BaseModel):
@@ -272,8 +261,7 @@ class Decision(BaseModel):
             for cond in conditions:
                 if not WHEN_PATTERN.match(cond):
                     raise ValueError(
-                        f"Invalid 'when' condition '{cond}': must match "
-                        "'[~]decision_id.option_id'"
+                        f"Invalid 'when' condition '{cond}': must match '[~]decision_id.option_id'"
                     )
         return self
 
@@ -404,7 +392,6 @@ class Analysis(BaseModel):
                     "success_criteria). Content is loaded from the external astra.yaml."
                 )
         return self
-
 
 
 # Resolve forward references to Insight from models.insight.

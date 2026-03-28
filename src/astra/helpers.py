@@ -60,9 +60,7 @@ def _collect_node_decisions(node: dict[str, Any]) -> dict[str, Any]:
     return decisions
 
 
-def resolve_analysis_tree(
-    data: dict[str, Any], base_path: Path
-) -> dict[str, Any]:
+def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, Any]:
     """Resolve external sub-analysis references in an analysis tree.
 
     Walks the ``analyses`` dict. For any sub-analysis with a ``path`` field,
@@ -293,16 +291,23 @@ def _get_node_defaults(node: dict[str, Any]) -> dict[str, Any]:
         if default is not None:
             decisions[decision_id] = default
 
-    # Second pass: collect defaults for conditional decisions whose condition is met
-    for decision_id, decision in all_decisions.items():
-        when = decision.get("when")
-        if not when:
-            continue
-        if is_condition_met(when, decisions):
-            default = decision.get("default")
-            if default is not None:
-                decisions[decision_id] = default
-
+    # Second pass: fixed-point loop for conditional decisions whose conditions are met.
+    # Iterate until no new defaults are added, so that ordering in the YAML doesn't matter
+    # (a conditional decision can depend on another conditional decision resolved earlier).
+    changed = True
+    while changed:
+        changed = False
+        for decision_id, decision in all_decisions.items():
+            if decision_id in decisions:
+                continue  # Already resolved
+            when = decision.get("when")
+            if not when:
+                continue
+            if is_condition_met(when, decisions):
+                default = decision.get("default")
+                if default is not None:
+                    decisions[decision_id] = default
+                    changed = True
 
     if decisions:
         result["decisions"] = decisions

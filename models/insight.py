@@ -201,7 +201,8 @@ class Evidence(BaseModel):
 
         if has_doi and not (self.quote or self.figure or self.table):
             raise ValueError(
-                "Literature evidence must have at least one content selector: quote, figure, or table"
+                "Literature evidence must have at least one content selector: "
+                "quote, figure, or table"
             )
         return self
 

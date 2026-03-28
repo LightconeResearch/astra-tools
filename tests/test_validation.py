@@ -522,7 +522,6 @@ class TestConditionalOutputs:
         assert errors == []
 
 
-
 class TestConditionalOutputsUniverse:
     """Tests for universe validation with conditional outputs."""
 

@@ -31,9 +31,7 @@ class SemanticError:
         return f"[{self.code}] {self.message}"
 
 
-def validate_analysis(
-    data: dict[str, Any], base_path: Path | None = None
-) -> list[SemanticError]:
+def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> list[SemanticError]:
     """Validate an analysis specification semantically.
 
     Checks:
@@ -115,7 +113,9 @@ def validate_analysis(
 
     # Validate evidence artifact references in prior_insights and findings
     errors.extend(
-        _validate_insight_artifacts(data.get("prior_insights") or {}, output_ids, "", "prior_insights")
+        _validate_insight_artifacts(
+            data.get("prior_insights") or {}, output_ids, "", "prior_insights"
+        )
     )
     errors.extend(
         _validate_insight_artifacts(data.get("findings") or {}, output_ids, "", "findings")
@@ -126,7 +126,7 @@ def validate_analysis(
     sub_analyses = data.get("analyses") or {}
     sub_output_ids: set[str] = set()
     for analysis_id, analysis_node in sub_analyses.items():
-        for out in (analysis_node.get("outputs") or []):
+        for out in analysis_node.get("outputs") or []:
             out_id = out.get("id")
             if out_id:
                 sub_output_ids.add(f"{analysis_id}.{out_id}")
@@ -393,40 +393,47 @@ def _validate_decisions(
             for cond in conditions:
                 ref = cond.lstrip("~")
                 when_parts = ref.split(".")
-                if len(when_parts) == 2:
-                    when_decision_id, when_option_id = when_parts
-                    scope = constraint_scope or {}
-                    if when_decision_id not in decisions and when_decision_id not in scope:
+                if len(when_parts) != 2:
+                    errors.append(
+                        SemanticError(
+                            "INVALID_WHEN_REF",
+                            f"Decision 'when' condition '{cond}' has invalid format",
+                            decision_path,
+                        )
+                    )
+                    continue
+                when_decision_id, when_option_id = when_parts
+                scope = constraint_scope or {}
+                if when_decision_id not in decisions and when_decision_id not in scope:
+                    errors.append(
+                        SemanticError(
+                            "INVALID_WHEN_REF",
+                            f"'when' references non-existent decision '{when_decision_id}'",
+                            decision_path,
+                        )
+                    )
+                else:
+                    ref_decision = decisions.get(when_decision_id) or (constraint_scope or {}).get(
+                        when_decision_id
+                    )
+                    if ref_decision and when_option_id not in ref_decision.get("options", {}):
                         errors.append(
                             SemanticError(
                                 "INVALID_WHEN_REF",
-                                f"'when' references non-existent decision '{when_decision_id}'",
+                                f"'when' references non-existent option '{when_option_id}' "
+                                f"in decision '{when_decision_id}'",
                                 decision_path,
                             )
                         )
-                    else:
-                        ref_decision = decisions.get(when_decision_id) or (
-                            constraint_scope or {}
-                        ).get(when_decision_id)
-                        if ref_decision and when_option_id not in ref_decision.get("options", {}):
-                            errors.append(
-                                SemanticError(
-                                    "INVALID_WHEN_REF",
-                                    f"'when' references non-existent option '{when_option_id}' "
-                                    f"in decision '{when_decision_id}'",
-                                    decision_path,
-                                )
-                            )
-                    # Check no self-reference
-                    if when_decision_id == decision_id:
-                        errors.append(
-                            SemanticError(
-                                "INVALID_WHEN_REF",
-                                "'when' cannot reference own decision",
-                                decision_path,
-                            )
+                # Check no self-reference
+                if when_decision_id == decision_id:
+                    errors.append(
+                        SemanticError(
+                            "INVALID_WHEN_REF",
+                            "'when' cannot reference own decision",
+                            decision_path,
                         )
-
+                    )
 
         # Validate options
         for option_id, option in options.items():
@@ -653,8 +660,7 @@ def _validate_decision_from_ref(
 
     if not from_ref.startswith("../"):
         return _error(
-            f"Decision from reference '{from_ref}' must use '../' prefix "
-            "to reference parent scope"
+            f"Decision from reference '{from_ref}' must use '../' prefix to reference parent scope"
         )
 
     parent_decision_id = from_ref[3:]  # strip ../
@@ -867,7 +873,6 @@ def _validate_universe_node(
     # Merge current and parent universe decisions for condition evaluation
     all_universe_decisions = dict(parent_universe_decisions)
     all_universe_decisions.update(universe_decisions)
-
 
     # Check all locally-defined analysis decisions are covered
     # (skip from: references -- they get their value from the parent universe)
