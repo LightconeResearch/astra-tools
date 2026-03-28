@@ -173,6 +173,7 @@ class Output(BaseModel):
         return self
 
 
+
 class Option(BaseModel):
     """An option for a decision."""
 
@@ -191,7 +192,9 @@ class Option(BaseModel):
         default=None,
         description="List of decision.option pairs that must also be selected",
     )
-    excluded: bool = Field(default=False, description="Whether this option was considered and rejected")
+    excluded: bool = Field(
+        default=False, description="Whether this option was considered and rejected"
+    )
     excluded_reason: str | None = Field(
         default=None, description="Why this option was excluded"
     )

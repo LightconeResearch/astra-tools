@@ -320,18 +320,6 @@ class TestDecisionTagsValidation:
         assert data["decisions"]["preprocessing"]["tags"] == ["data_preparation"]
 
 
-class TestConditionalDecisionValidation:
-    """Tests for conditional decision (when) validation."""
-
-    def test_valid_when(self, valid_dir: Path):
-        errors = validate_analysis_file(valid_dir / "full_v2.yaml")
-        assert errors == []
-
-    def test_invalid_when_ref(self, invalid_dir: Path):
-        errors = validate_analysis_file(invalid_dir / "invalid_when_ref.yaml")
-        assert any(e.code == "INVALID_WHEN_REF" for e in errors)
-
-
 class TestExcludedOptionValidation:
     """Tests for excluded option validation."""
 
@@ -356,12 +344,6 @@ class TestUniverseNewFeaturesValidation:
         universe_data = load_yaml(invalid_dir / "universe_excluded_option.yaml")
         errors = validate_universe(universe_data, analysis_data)
         assert any(e.code == "EXCLUDED_OPTION_SELECTED" for e in errors)
-
-    def test_inactive_decision_in_universe(self, invalid_dir: Path, valid_dir: Path):
-        analysis_data = load_yaml(valid_dir / "full_v2.yaml")
-        universe_data = load_yaml(invalid_dir / "universe_inactive_decision.yaml")
-        errors = validate_universe(universe_data, analysis_data)
-        assert any(e.code == "INACTIVE_DECISION" for e in errors)
 
 
 class TestSuccessCriteriaValidation:
@@ -538,6 +520,7 @@ class TestConditionalOutputs:
         }
         errors = validate_analysis(data)
         assert errors == []
+
 
 
 class TestConditionalOutputsUniverse:

@@ -281,19 +281,14 @@ def get_default_universe(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _get_node_defaults(node: dict[str, Any]) -> dict[str, Any]:
-    """Recursively get defaults from a node.
-
-    Skips conditional decisions whose ``when`` condition is not met
-    by the defaults being collected so far.
-    """
+    """Recursively get defaults from a node."""
     result: dict[str, Any] = {}
     decisions: dict[str, str] = {}
     all_decisions = _collect_node_decisions(node)
 
-    # First pass: collect defaults for unconditional decisions
     for decision_id, decision in all_decisions.items():
         if decision.get("when"):
-            continue  # handle in second pass
+            continue  # Conditional decisions handled in second pass
         default = decision.get("default")
         if default is not None:
             decisions[decision_id] = default
@@ -307,6 +302,7 @@ def _get_node_defaults(node: dict[str, Any]) -> dict[str, Any]:
             default = decision.get("default")
             if default is not None:
                 decisions[decision_id] = default
+
 
     if decisions:
         result["decisions"] = decisions

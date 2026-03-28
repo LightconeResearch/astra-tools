@@ -427,6 +427,7 @@ def _validate_decisions(
                             )
                         )
 
+
         # Validate options
         for option_id, option in options.items():
             option_path = f"{decision_path}.options.{option_id}"
@@ -866,6 +867,7 @@ def _validate_universe_node(
     # Merge current and parent universe decisions for condition evaluation
     all_universe_decisions = dict(parent_universe_decisions)
     all_universe_decisions.update(universe_decisions)
+
 
     # Check all locally-defined analysis decisions are covered
     # (skip from: references -- they get their value from the parent universe)
