@@ -1,0 +1,17 @@
+$schema: "https://astra-spec.org/v1/universe.schema.json"
+
+id: baseline
+description: "PCA with 2 components, logistic regression — the simplest sensible pipeline"
+
+decisions:
+  test_split: twenty_pct
+  random_seed: seed_42
+
+analyses:
+  feature_extraction:
+    decisions:
+      method: pca
+      n_components: two
+  classification:
+    decisions:
+      classifier: logistic
