@@ -113,8 +113,13 @@ def validate_analysis(
     # Validate all decisions
     errors.extend(_validate_decisions(root_decisions, prior_insights, ""))
 
-    # Validate findings output references
-    errors.extend(_validate_findings(data.get("findings") or {}, output_ids, ""))
+    # Validate evidence artifact references in prior_insights and findings
+    errors.extend(
+        _validate_insight_artifacts(data.get("prior_insights") or {}, output_ids, "", "prior_insights")
+    )
+    errors.extend(
+        _validate_insight_artifacts(data.get("findings") or {}, output_ids, "", "findings")
+    )
 
     # Collect qualified sub-analysis output IDs so root recipes can
     # reference them (e.g. ``inputs: [hod_fitting.galaxy_mesh]``).
@@ -240,9 +245,17 @@ def _validate_analysis_node(
                 constraint_scope[decision_id] = parent_decisions[parent_decision_id]
     errors.extend(_validate_decisions(node_decisions, prior_insights, node_path, constraint_scope))
 
-    # Validate findings output references
-    node_findings = node.get("findings") or {}
-    errors.extend(_validate_findings(node_findings, node_output_ids, node_path))
+    # Validate evidence artifact references in prior_insights and findings
+    errors.extend(
+        _validate_insight_artifacts(
+            node.get("prior_insights") or {}, node_output_ids, node_path, "prior_insights"
+        )
+    )
+    errors.extend(
+        _validate_insight_artifacts(
+            node.get("findings") or {}, node_output_ids, node_path, "findings"
+        )
+    )
 
     # Validate output recipes
     node_outputs = node.get("outputs") or []
@@ -310,30 +323,32 @@ def _validate_success_criteria(
     return errors
 
 
-def _validate_findings(
-    findings: dict[str, Any],
+def _validate_insight_artifacts(
+    insights: dict[str, Any],
     output_ids: set[str],
     path_prefix: str,
+    section: str,
 ) -> list[SemanticError]:
-    """Validate that findings reference valid output IDs.
+    """Validate that insight evidence artifacts reference valid output IDs.
 
-    Each finding must have an ``outputs`` list whose entries are declared output IDs.
+    Each evidence item with an ``artifact`` field must reference a declared output ID.
+    Applied to both ``prior_insights`` and ``findings``.
     """
     errors: list[SemanticError] = []
-    if not findings:
+    if not insights:
         return errors
 
-    findings_prefix = f"{path_prefix}.findings" if path_prefix else "findings"
-    for finding_id, finding in findings.items():
-        finding_path = f"{findings_prefix}.{finding_id}"
-        finding_outputs = finding.get("outputs") or []
-        for i, out_ref in enumerate(finding_outputs):
-            if out_ref not in output_ids:
+    insights_prefix = f"{path_prefix}.{section}" if path_prefix else section
+    for insight_id, insight in insights.items():
+        insight_path = f"{insights_prefix}.{insight_id}"
+        for i, ev in enumerate(insight.get("evidence") or []):
+            artifact_ref = ev.get("artifact")
+            if artifact_ref is not None and artifact_ref not in output_ids:
                 errors.append(
                     SemanticError(
-                        "INVALID_FINDING_OUTPUT",
-                        f"Finding output '{out_ref}' not found in declared outputs",
-                        f"{finding_path}.outputs[{i}]",
+                        "INVALID_ARTIFACT_REF",
+                        f"Evidence artifact '{artifact_ref}' not found in declared outputs",
+                        f"{insight_path}.evidence[{i}].artifact",
                     )
                 )
     return errors

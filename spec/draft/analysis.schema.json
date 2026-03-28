@@ -976,7 +976,7 @@
     },
     "Insight": {
       "additionalProperties": false,
-      "description": "A unit of scientific knowledge \u2014 either prior (informing decisions)\nor produced (derived from outputs).\n\nThe same model is used for both ``prior_insights`` and ``findings``\non an analysis node. The placement determines the direction:\n\n- **prior_insights**: backward-looking \u2014 evidence from literature or\n  prior artifacts that informs decisions.\n- **findings**: forward-looking \u2014 conclusions derived from running\n  the analysis, linked to the outputs that produced them.\n\nAt least one of ``evidence`` or ``outputs`` must be non-empty.",
+      "description": "A unit of scientific knowledge backed by evidence.\n\nUsed for both ``prior_insights`` (informing decisions) and ``findings``\n(conclusions from the analysis) on an analysis node. The placement\ndetermines direction; the model is the same in both cases.\n\nEvidence can reference literature (by DOI) or analysis output artifacts\n(by output ID via ``Evidence.artifact``). At least one evidence item\nis required.",
       "properties": {
         "id": {
           "description": "Unique identifier",
@@ -997,19 +997,12 @@
           "type": "string"
         },
         "evidence": {
-          "description": "Supporting evidence (papers, artifacts)",
+          "description": "Supporting evidence (papers or analysis artifacts)",
           "items": {
             "$ref": "#/$defs/Evidence"
           },
+          "minItems": 1,
           "title": "Evidence",
-          "type": "array"
-        },
-        "outputs": {
-          "description": "Output IDs this insight is derived from",
-          "items": {
-            "type": "string"
-          },
-          "title": "Outputs",
           "type": "array"
         },
         "derived": {
@@ -1056,7 +1049,8 @@
       "required": [
         "id",
         "claim",
-        "created_at"
+        "created_at",
+        "evidence"
       ],
       "title": "Insight",
       "type": "object"

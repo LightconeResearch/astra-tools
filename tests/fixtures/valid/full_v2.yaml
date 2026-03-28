@@ -80,7 +80,18 @@ findings:
     id: scaling_result
     claim: "StandardScaler achieves the best accuracy across all model types."
     created_at: "2024-01-20T15:00:00Z"
-    outputs: [accuracy, f1_score]
+    evidence:
+      - id: ev_accuracy
+        artifact: accuracy
+        table:
+          type: TableSelector
+          label: "Table 1"
+          caption: "Model accuracy comparison"
+      - id: ev_f1
+        artifact: f1_score
+        table:
+          type: TableSelector
+          label: "Table 1"
     tags: [preprocessing, performance]
 
 decisions:

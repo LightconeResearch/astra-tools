@@ -5,5 +5,6 @@ description: "Selects an excluded option"
 decisions:
   preprocessing: deprecated_method
   model: rf
+  svm_kernel: rbf
   test_split: split_20
   seed: seed_42

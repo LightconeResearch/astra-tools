@@ -401,10 +401,10 @@ analyses:
 
 ASTRA distinguishes two kinds of knowledge, both using the same `Insight` model:
 
-- **Prior insights** (`prior_insights:`) — backward-looking. Knowledge from literature or prior artifacts that informs decisions. Typically has `evidence`.
-- **Findings** (`findings:`) — forward-looking. Conclusions derived from running the analysis. Typically has `outputs`.
+- **Prior insights** (`prior_insights:`) — knowledge from literature or prior artifacts that informs decisions.
+- **Findings** (`findings:`) — conclusions derived from running the analysis, backed by output artifacts.
 
-The placement determines direction; the structure is the same.
+Both use `evidence` to ground the claim. The placement determines direction; the model is the same.
 
 ### Insight (shared model)
 
@@ -413,31 +413,30 @@ The placement determines direction; the structure is the same.
 | `id` | `string` | **Yes** | Unique identifier |
 | `claim` | `string` | **Yes** | What we learned (1-2 sentences) |
 | `created_at` | `datetime` | **Yes** | ISO 8601 timestamp |
-| `evidence` | `Evidence[]` | No | Supporting evidence from literature/artifacts (backward-looking) |
-| `outputs` | `string[]` | No | Output IDs this insight is derived from (forward-looking) |
+| `evidence` | `Evidence[]` | **Yes** | Supporting evidence (literature DOI or analysis artifact) |
 | `derived` | `boolean` | No | Whether synthesized/inferred (default: `false`) |
 | `scope` | `string` | No | Applicability conditions |
 | `tags` | `string[]` | No | Categorization tags |
 | `notes` | `string` | No | Reasoning notes |
 
-At least one of `evidence` or `outputs` must be non-empty.
+At least one evidence item is required.
 
 ### Evidence
 
-Each evidence item references either a paper (by DOI) or an analysis artifact (by output ID). Exactly one source type must be set.
+Each evidence item references either a paper (by DOI) or an analysis output artifact (by output ID). Exactly one source type must be set. Literature evidence requires at least one content selector (quote, figure, or table); artifact evidence may omit selectors.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | `string` | **Yes** | Evidence ID |
 | `doi` | `string` | **Exactly one of `doi` or `artifact`** | DOI of source paper |
-| `artifact` | `string` | **Exactly one of `doi` or `artifact`** | Output ID in this analysis |
+| `artifact` | `string` | **Exactly one of `doi` or `artifact`** | Output ID of a declared analysis output |
 | `version` | `integer` | No | Paper version (arXiv; literature only) |
 | `checksum` | `Checksum` | No | Artifact integrity hash (artifact only) |
 | `snapshot` | `string` | No | Path to immutable artifact copy (artifact only) |
 | `source_commit` | `string` | No | Git commit that produced artifact (artifact only) |
-| `quote` | `TextQuoteSelector` | **At least one selector** | Text quote anchor |
-| `figure` | `FigureSelector` | **At least one selector** | Figure reference |
-| `table` | `TableSelector` | **At least one selector** | Table reference |
+| `quote` | `TextQuoteSelector` | **Required for literature** | Text quote anchor |
+| `figure` | `FigureSelector` | No | Figure reference |
+| `table` | `TableSelector` | No | Table reference |
 | `location` | `FragmentSelector` | No | Location hint (page number) |
 
 **DOI pattern**: `^10\.\d{4,}/.*$`
@@ -508,7 +507,14 @@ findings:
     id: scaling_result
     claim: "StandardScaler achieves 3% higher accuracy than MinMaxScaler across all models."
     created_at: "2024-07-01T10:00:00Z"
-    outputs: [accuracy, model_comparison]
+    evidence:
+      - id: ev_accuracy
+        artifact: accuracy          # References declared output "accuracy"
+        table:
+          type: TableSelector
+          label: "Table 1"
+      - id: ev_comparison
+        artifact: model_comparison
     tags: [preprocessing, performance]
 
 decisions:
@@ -521,7 +527,7 @@ decisions:
           - compute_scaling        # Links decision to prior insight
 ```
 
-The chain **decision option** → **prior insight** → **evidence** → **paper (DOI)** provides end-to-end traceability from analytical choice to published literature. The chain **analysis** → **outputs** → **finding** captures what was learned from running the analysis.
+The chain **decision option** → **prior insight** → **evidence** → **paper (DOI)** provides end-to-end traceability from analytical choice to published literature. The chain **finding** → **evidence** → **output artifact** captures what was learned from running the analysis.
 
 ---
 

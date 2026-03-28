@@ -74,7 +74,7 @@ class TestSemanticValidation:
 
     def test_invalid_finding_output(self, invalid_dir: Path):
         errors = validate_analysis_file(invalid_dir / "invalid_finding_output.yaml")
-        assert any(e.code == "INVALID_FINDING_OUTPUT" for e in errors)
+        assert any(e.code == "INVALID_ARTIFACT_REF" for e in errors)
 
     def test_invalid_constraint_ref(self, invalid_dir: Path):
         errors = validate_analysis_file(invalid_dir / "invalid_constraint_ref.yaml")

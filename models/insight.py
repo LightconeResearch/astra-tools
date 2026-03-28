@@ -198,9 +198,9 @@ class Evidence(BaseModel):
         if has_artifact and self.version is not None:
             raise ValueError("'version' is only valid for literature evidence, not artifacts")
 
-        if not (self.quote or self.figure or self.table):
+        if has_doi and not (self.quote or self.figure or self.table):
             raise ValueError(
-                "Evidence must have at least one content selector: quote, figure, or table"
+                "Literature evidence must have at least one content selector: quote, figure, or table"
             )
         return self
 
@@ -234,18 +234,15 @@ class Evidence(BaseModel):
 
 
 class Insight(BaseModel):
-    """A unit of scientific knowledge — either prior (informing decisions)
-    or produced (derived from outputs).
+    """A unit of scientific knowledge backed by evidence.
 
-    The same model is used for both ``prior_insights`` and ``findings``
-    on an analysis node. The placement determines the direction:
+    Used for both ``prior_insights`` (informing decisions) and ``findings``
+    (conclusions from the analysis) on an analysis node. The placement
+    determines direction; the model is the same in both cases.
 
-    - **prior_insights**: backward-looking — evidence from literature or
-      prior artifacts that informs decisions.
-    - **findings**: forward-looking — conclusions derived from running
-      the analysis, linked to the outputs that produced them.
-
-    At least one of ``evidence`` or ``outputs`` must be non-empty.
+    Evidence can reference literature (by DOI) or analysis output artifacts
+    (by output ID via ``Evidence.artifact``). At least one evidence item
+    is required.
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -255,14 +252,9 @@ class Insight(BaseModel):
     claim: str = Field(min_length=1, description="What we learned (1-2 sentences)")
     created_at: datetime = Field(description="Creation timestamp (ISO 8601)")
 
-    # Backward-looking: evidence from literature/artifacts
+    # Evidence supporting this insight
     evidence: list[Evidence] = Field(
-        default_factory=list, description="Supporting evidence (papers, artifacts)"
-    )
-
-    # Forward-looking: derived from these outputs
-    outputs: list[str] = Field(
-        default_factory=list, description="Output IDs this insight is derived from"
+        min_length=1, description="Supporting evidence (papers or analysis artifacts)"
     )
 
     # Optional classification
@@ -272,15 +264,6 @@ class Insight(BaseModel):
     scope: str | None = Field(default=None, description="Applicability conditions")
     tags: list[str] = Field(default_factory=list, description="Categorization tags")
     notes: str | None = Field(default=None, description="Reasoning notes")
-
-    @model_validator(mode="after")
-    def validate_provenance(self) -> Insight:
-        """Ensure at least one provenance link (evidence or outputs)."""
-        if not self.evidence and not self.outputs:
-            raise ValueError(
-                "Insight must have at least one of 'evidence' or 'outputs'"
-            )
-        return self
 
 
 # =============================================================================
