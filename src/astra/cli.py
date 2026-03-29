@@ -100,7 +100,7 @@ def init(directory: Path, no_git: bool) -> None:
     # Create project directory
     if directory != Path("."):
         if directory.exists() and any(directory.iterdir()):
-            if not click.confirm(
+            if sys.stdin.isatty() and not click.confirm(
                 f"[yellow]{directory}[/yellow] already exists and is not empty. Continue?"
             ):
                 raise SystemExit(0)
@@ -926,7 +926,7 @@ def paper_remove(doi: str, version: int | None, yes: bool) -> None:
         console.print(f"[red]Error:[/red] Paper not found: {doi}")
         raise SystemExit(1)
 
-    if not yes:
+    if not yes and sys.stdin.isatty():
         if not click.confirm(f"Remove paper {doi} from cache?"):
             console.print("Aborted.")
             return
