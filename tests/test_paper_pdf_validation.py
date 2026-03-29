@@ -4,8 +4,6 @@ Ensures that non-PDF content (HTML paywall pages, CAPTCHA redirects, etc.)
 is rejected before being written to the paper cache.
 """
 
-from __future__ import annotations
-
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
