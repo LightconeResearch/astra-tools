@@ -137,6 +137,18 @@ class PaperDownloadResult:
     error: str | None = None
 
 
+def is_valid_pdf(content: bytes) -> bool:
+    """Check if content is a valid PDF by inspecting magic bytes.
+
+    Args:
+        content: Raw bytes of the downloaded file.
+
+    Returns:
+        True if the content starts with the PDF magic bytes ``%PDF``.
+    """
+    return content[:4] == b"%PDF"
+
+
 def _is_arxiv_doi(doi: str) -> bool:
     """Check if DOI is an arXiv DOI."""
     return doi.startswith("10.48550/arXiv.")
@@ -174,10 +186,19 @@ def _download_arxiv_pdf(arxiv_id: str, doi: str, version: int | None = None) -> 
 
         # Check if we got a PDF (arXiv returns application/pdf or application/octet-stream)
         content_type = response.headers.get("content-type", "")
-        is_pdf = "application/pdf" in content_type or content_type.startswith("application/octet")
-        if not is_pdf:
+        is_pdf_content_type = "application/pdf" in content_type or content_type.startswith(
+            "application/octet"
+        )
+        if not is_pdf_content_type:
             return PaperDownloadResult(
                 success=False, error=f"Unexpected content type: {content_type}"
+            )
+
+        # Validate magic bytes — guard against content-type lies
+        if not is_valid_pdf(response.content):
+            return PaperDownloadResult(
+                success=False,
+                error="Downloaded content is not a valid PDF (magic bytes mismatch)",
             )
 
         # Fetch metadata using DOI content negotiation
@@ -252,6 +273,17 @@ def _try_unpaywall(doi: str) -> PaperDownloadResult:
         # Download the PDF
         pdf_response = httpx.get(pdf_url, follow_redirects=True, timeout=60.0)
         pdf_response.raise_for_status()
+
+        # Validate that we actually got a PDF and not an HTML redirect/paywall page
+        if not is_valid_pdf(pdf_response.content):
+            content_type = pdf_response.headers.get("content-type", "unknown")
+            return PaperDownloadResult(
+                success=False,
+                error=(
+                    f"Downloaded content is not a valid PDF (got content-type: {content_type}). "
+                    "The URL may have redirected to a paywall or CAPTCHA page."
+                ),
+            )
 
         # Extract metadata
         title = data.get("title")

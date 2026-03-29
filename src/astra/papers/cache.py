@@ -182,6 +182,14 @@ class PaperCache:
         Returns:
             CachedPaper with paths and metadata.
         """
+        from astra.papers.download import is_valid_pdf
+
+        if not is_valid_pdf(pdf_content):
+            raise ValueError(
+                "Content is not a valid PDF (magic bytes mismatch). "
+                "Refusing to cache non-PDF content."
+            )
+
         paper_dir = self._paper_dir(doi, version)
         paper_dir.mkdir(parents=True, exist_ok=True)
 
