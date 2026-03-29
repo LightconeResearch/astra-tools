@@ -100,10 +100,11 @@ def init(directory: Path, no_git: bool) -> None:
     # Create project directory
     if directory != Path("."):
         if directory.exists() and any(directory.iterdir()):
-            if sys.stdin.isatty() and not click.confirm(
-                f"[yellow]{directory}[/yellow] already exists and is not empty. Continue?"
-            ):
-                raise SystemExit(0)
+            console.print(
+                f"[red]Error:[/red] [cyan]{directory}[/cyan] already exists and is not empty. "
+                "Please specify an empty or non-existing directory."
+            )
+            raise SystemExit(1)
         directory.mkdir(parents=True, exist_ok=True)
 
     # Create directory structure
@@ -915,8 +916,7 @@ def paper_path(doi: str, version: int | None) -> None:
 @paper.command("remove")
 @click.argument("doi")
 @click.option("--version", "-v", type=int, help="Paper version (for arXiv papers)")
-@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
-def paper_remove(doi: str, version: int | None, yes: bool) -> None:
+def paper_remove(doi: str, version: int | None) -> None:
     """Remove a paper from the cache."""
     from astra.papers.cache import PaperCache
 
@@ -925,11 +925,6 @@ def paper_remove(doi: str, version: int | None, yes: bool) -> None:
     if not cache.has(doi, version):
         console.print(f"[red]Error:[/red] Paper not found: {doi}")
         raise SystemExit(1)
-
-    if not yes and sys.stdin.isatty():
-        if not click.confirm(f"Remove paper {doi} from cache?"):
-            console.print("Aborted.")
-            return
 
     cache.remove(doi, version)
     console.print("[green]✓[/green] Paper removed from cache")

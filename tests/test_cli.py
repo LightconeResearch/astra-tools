@@ -296,8 +296,8 @@ class TestInitCommand:
         assert "outputs/" in gitignore
         assert "__pycache__/" in gitignore
 
-    def test_init_existing_nonempty_dir_decline(self, runner: CliRunner, tmp_path: Path):
-        """Test declining to overwrite existing non-empty directory."""
+    def test_init_existing_nonempty_dir_fails(self, runner: CliRunner, tmp_path: Path):
+        """Test that init fails on existing non-empty directory."""
         project_dir = tmp_path / "existing"
         project_dir.mkdir()
         (project_dir / "some_file.txt").write_text("existing content")
@@ -305,10 +305,9 @@ class TestInitCommand:
         result = runner.invoke(
             main,
             ["init", str(project_dir), "--no-git"],
-            input="n\n",  # Decline to continue
         )
-        assert result.exit_code == 0
-        # astra.yaml should NOT have been created
+        assert result.exit_code == 1
+        assert "not empty" in result.output
         assert not (project_dir / "astra.yaml").exists()
 
     def test_init_refuses_if_astra_yaml_exists(self, runner: CliRunner, tmp_path: Path):
@@ -346,21 +345,17 @@ class TestInitCommand:
         finally:
             os.chdir(old_cwd)
 
-    def test_init_existing_nonempty_dir_confirm(self, runner: CliRunner, tmp_path: Path):
-        """Test confirming to overwrite existing non-empty directory."""
-        project_dir = tmp_path / "existing-confirm"
+    def test_init_existing_empty_dir_succeeds(self, runner: CliRunner, tmp_path: Path):
+        """Test that init succeeds on existing empty directory."""
+        project_dir = tmp_path / "existing-empty"
         project_dir.mkdir()
-        (project_dir / "some_file.txt").write_text("existing content")
 
         result = runner.invoke(
             main,
             ["init", str(project_dir), "--no-git"],
-            input="y\n",  # Confirm to continue
         )
         assert result.exit_code == 0
         assert (project_dir / "astra.yaml").exists()
-        # Original file should still exist
-        assert (project_dir / "some_file.txt").exists()
 
     def test_init_current_directory(self, runner: CliRunner, tmp_path: Path):
         """Test init with default '.' directory."""
