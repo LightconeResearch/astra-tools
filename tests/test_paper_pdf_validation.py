@@ -13,7 +13,6 @@ import pytest
 from astra.papers.cache import PaperCache
 from astra.papers.download import is_valid_pdf
 
-
 # ---------------------------------------------------------------------------
 # is_valid_pdf helper
 # ---------------------------------------------------------------------------
@@ -46,6 +45,7 @@ class TestIsValidPdf:
 # ---------------------------------------------------------------------------
 # PaperCache.add() guard
 # ---------------------------------------------------------------------------
+
 
 class TestPaperCacheAddValidation:
     def test_add_rejects_non_pdf(self) -> None:
@@ -101,6 +101,7 @@ class TestPaperCacheAddValidation:
 # ---------------------------------------------------------------------------
 # Download path validation (mocked HTTP)
 # ---------------------------------------------------------------------------
+
 
 class TestUnpaywallPdfValidation:
     """Ensure _try_unpaywall rejects non-PDF download responses."""
@@ -187,9 +188,10 @@ class TestArxivPdfValidation:
 
         resp = self._make_arxiv_response(PDF_MAGIC, "application/pdf")
 
-        with patch("astra.papers.download.httpx") as mock_httpx, patch(
-            "astra.papers.download.fetch_doi_metadata"
-        ) as mock_meta:
+        with (
+            patch("astra.papers.download.httpx") as mock_httpx,
+            patch("astra.papers.download.fetch_doi_metadata") as mock_meta,
+        ):
             mock_httpx.get.return_value = resp
             mock_httpx.HTTPStatusError = Exception
             mock_httpx.RequestError = Exception
