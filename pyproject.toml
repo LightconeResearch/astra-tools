@@ -21,7 +21,9 @@ classifiers = [
 
 dependencies = [
     "click>=8.0",
-    "rocrate>=0.14",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "jsonschema>=4.0",
     "rich>=13.0",
     "pypdf>=4.0",
     "httpx>=0.27",
@@ -29,13 +31,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+rocrate = [
+    "rocrate>=0.14",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov",
     "ruff",
     "mypy",
-    "pydantic>=2.0",
-    "pyyaml>=6.0",
+    "rocrate>=0.14",
+    "linkml>=1.8",
 ]
 
 [project.scripts]
