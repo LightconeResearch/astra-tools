@@ -1,0 +1,478 @@
+{
+    "@context": [
+        "https://w3id.org/ro/crate/1.2/context",
+        {
+            "ASTRAAnalysis": "astra:ASTRAAnalysis",
+            "ASTRADecision": "astra:ASTRADecision",
+            "ASTRAEvidence": "astra:ASTRAEvidence",
+            "ASTRAInput": "astra:ASTRAInput",
+            "ASTRAInsight": "astra:ASTRAInsight",
+            "ASTRAOption": "astra:ASTRAOption",
+            "ASTRAOutput": "astra:ASTRAOutput",
+            "ASTRARecipe": "astra:ASTRARecipe",
+            "ASTRAResources": "astra:ASTRAResources",
+            "ASTRASuccessCriterion": "astra:ASTRASuccessCriterion",
+            "ASTRAUniverse": "astra:ASTRAUniverse",
+            "ASTRAUniverseSelection": "astra:ASTRAUniverseSelection",
+            "FormalParameter": "https://bioschemas.org/FormalParameter",
+            "activeWhen": "astra:activeWhen",
+            "astra": "https://w3id.org/astra/terms/",
+            "astraVersion": "astra:astraVersion",
+            "build": "astra:build",
+            "buildArgs": "astra:buildArgs",
+            "buildContext": "astra:buildContext",
+            "condition": "astra:condition",
+            "cpus": "astra:cpus",
+            "defaultOption": {
+                "@id": "astra:defaultOption",
+                "@type": "@id"
+            },
+            "delegatesTo": {
+                "@id": "astra:delegatesTo",
+                "@type": "@id"
+            },
+            "excludedReason": "astra:excludedReason",
+            "gpus": "astra:gpus",
+            "hasDecision": {
+                "@id": "astra:hasDecision",
+                "@type": "@id"
+            },
+            "hasEvidence": {
+                "@id": "astra:hasEvidence",
+                "@type": "@id"
+            },
+            "hasFinding": {
+                "@id": "astra:hasFinding",
+                "@type": "@id"
+            },
+            "hasInput": {
+                "@id": "astra:hasInput",
+                "@type": "@id"
+            },
+            "hasOption": {
+                "@id": "astra:hasOption",
+                "@type": "@id"
+            },
+            "hasOutput": {
+                "@id": "astra:hasOutput",
+                "@type": "@id"
+            },
+            "hasPriorInsight": {
+                "@id": "astra:hasPriorInsight",
+                "@type": "@id"
+            },
+            "hasResources": {
+                "@id": "astra:hasResources",
+                "@type": "@id"
+            },
+            "hasSelection": {
+                "@id": "astra:hasSelection",
+                "@type": "@id"
+            },
+            "hasSuccessCriterion": {
+                "@id": "astra:hasSuccessCriterion",
+                "@type": "@id"
+            },
+            "incompatibleWith": {
+                "@id": "astra:incompatibleWith",
+                "@type": "@id"
+            },
+            "inputFrom": "astra:inputFrom",
+            "inputType": "astra:inputType",
+            "isDerived": "astra:isDerived",
+            "isExcluded": "astra:isExcluded",
+            "memory": "astra:memory",
+            "oa": "http://www.w3.org/ns/oa#",
+            "outputFrom": "astra:outputFrom",
+            "outputType": "astra:outputType",
+            "requiresOption": {
+                "@id": "astra:requiresOption",
+                "@type": "@id"
+            },
+            "scope": "astra:scope",
+            "selectsDecision": {
+                "@id": "astra:selectsDecision",
+                "@type": "@id"
+            },
+            "selectsOption": {
+                "@id": "astra:selectsOption",
+                "@type": "@id"
+            },
+            "sourceCommit": "astra:sourceCommit",
+            "supportsInsight": {
+                "@id": "astra:supportsInsight",
+                "@type": "@id"
+            },
+            "timeLimit": "astra:timeLimit",
+            "useOutputs": "astra:useOutputs",
+            "wfrun": "https://w3id.org/ro/terms/workflow-run#"
+        }
+    ],
+    "@graph": [
+        {
+            "@id": "./",
+            "@type": [
+                "Dataset",
+                "ASTRAAnalysis"
+            ],
+            "astraVersion": "1.0",
+            "author": {
+                "@id": "#author/0"
+            },
+            "conformsTo": {
+                "@id": "https://w3id.org/astra/profile/1.0"
+            },
+            "datePublished": "2026-03-30T20:48:10+00:00",
+            "description": "A two-stage pipeline demonstrating sub-analyses.",
+            "hasDecision": [
+                {
+                    "@id": "#decision/test_split"
+                },
+                {
+                    "@id": "#decision/random_seed"
+                }
+            ],
+            "hasInput": {
+                "@id": "#input/iris_data"
+            },
+            "hasOutput": [
+                {
+                    "@id": "#output/accuracy"
+                },
+                {
+                    "@id": "#output/feature_plot"
+                },
+                {
+                    "@id": "#output/pipeline_summary"
+                }
+            ],
+            "hasPart": [
+                {
+                    "@id": "feature_extraction/"
+                },
+                {
+                    "@id": "classification/"
+                }
+            ],
+            "keywords": "classification, sub-analyses, sklearn, example",
+            "name": "Iris Two-Stage Classification"
+        },
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "about": {
+                "@id": "./"
+            },
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/crate/1.2"
+            }
+        },
+        {
+            "@id": "#author/0",
+            "@type": "Person",
+            "name": "ASTRA Examples"
+        },
+        {
+            "@id": "https://w3id.org/astra/profile/1.0",
+            "@type": [
+                "CreativeWork",
+                "Profile"
+            ],
+            "name": "ASTRA Analysis Profile",
+            "version": "1.0.0"
+        },
+        {
+            "@id": "#input/iris_data",
+            "@type": [
+                "FormalParameter",
+                "ASTRAInput"
+            ],
+            "description": "Fisher's classic 150-sample, 4-feature, 3-class dataset",
+            "identifier": "sklearn.datasets.load_iris",
+            "inputType": "data",
+            "name": "iris_data"
+        },
+        {
+            "@id": "#output/accuracy",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Classification accuracy",
+            "name": "accuracy",
+            "outputFrom": "classification.accuracy",
+            "outputType": "metric"
+        },
+        {
+            "@id": "#output/feature_plot",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Scatter plot of extracted features",
+            "name": "feature_plot",
+            "outputFrom": "feature_extraction.feature_plot",
+            "outputType": "figure"
+        },
+        {
+            "@id": "#output/pipeline_summary/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/summarize.py",
+            "result": {
+                "@id": "#output/pipeline_summary"
+            }
+        },
+        {
+            "@id": "#output/pipeline_summary",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "End-to-end comparison",
+            "name": "pipeline_summary",
+            "outputType": "report",
+            "producer": {
+                "@id": "#output/pipeline_summary/recipe"
+            }
+        },
+        {
+            "@id": "#decision/test_split/option/twenty_pct",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "20%",
+            "name": "twenty_pct"
+        },
+        {
+            "@id": "#decision/test_split/option/thirty_pct",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "30%",
+            "name": "thirty_pct"
+        },
+        {
+            "@id": "#decision/test_split",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Test Set Proportion",
+            "defaultOption": {
+                "@id": "#decision/test_split/option/twenty_pct"
+            },
+            "hasOption": [
+                {
+                    "@id": "#decision/test_split/option/twenty_pct"
+                },
+                {
+                    "@id": "#decision/test_split/option/thirty_pct"
+                }
+            ],
+            "name": "test_split"
+        },
+        {
+            "@id": "#decision/random_seed/option/seed_42",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "42",
+            "name": "seed_42"
+        },
+        {
+            "@id": "#decision/random_seed/option/seed_7",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "7",
+            "name": "seed_7"
+        },
+        {
+            "@id": "#decision/random_seed",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Random Seed",
+            "defaultOption": {
+                "@id": "#decision/random_seed/option/seed_42"
+            },
+            "hasOption": [
+                {
+                    "@id": "#decision/random_seed/option/seed_42"
+                },
+                {
+                    "@id": "#decision/random_seed/option/seed_7"
+                }
+            ],
+            "name": "random_seed"
+        },
+        {
+            "@id": "feature_extraction/",
+            "@type": "Dataset",
+            "conformsTo": {
+                "@id": "https://w3id.org/astra/profile/1.0"
+            }
+        },
+        {
+            "@id": "classification/",
+            "@type": "Dataset",
+            "conformsTo": {
+                "@id": "https://w3id.org/astra/profile/1.0"
+            }
+        },
+        {
+            "@id": "#universe/baseline/sel/0",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/test_split"
+            },
+            "selectsOption": {
+                "@id": "#decision/test_split/option/twenty_pct"
+            }
+        },
+        {
+            "@id": "#universe/baseline/sel/1",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/random_seed"
+            },
+            "selectsOption": {
+                "@id": "#decision/random_seed/option/seed_42"
+            }
+        },
+        {
+            "@id": "#universe/baseline/sel/2",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "feature_extraction/#decision/method"
+            },
+            "selectsOption": {
+                "@id": "feature_extraction/#decision/method/option/pca"
+            }
+        },
+        {
+            "@id": "#universe/baseline/sel/3",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "feature_extraction/#decision/n_components"
+            },
+            "selectsOption": {
+                "@id": "feature_extraction/#decision/n_components/option/two"
+            }
+        },
+        {
+            "@id": "#universe/baseline/sel/4",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "classification/#decision/classifier"
+            },
+            "selectsOption": {
+                "@id": "classification/#decision/classifier/option/logistic"
+            }
+        },
+        {
+            "@id": "#universe/baseline",
+            "@type": "ASTRAUniverse",
+            "description": "PCA with 2 components, logistic regression",
+            "hasSelection": [
+                {
+                    "@id": "#universe/baseline/sel/0"
+                },
+                {
+                    "@id": "#universe/baseline/sel/1"
+                },
+                {
+                    "@id": "#universe/baseline/sel/2"
+                },
+                {
+                    "@id": "#universe/baseline/sel/3"
+                },
+                {
+                    "@id": "#universe/baseline/sel/4"
+                }
+            ],
+            "name": "baseline"
+        },
+        {
+            "@id": "#universe/mlp_svm/sel/0",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/test_split"
+            },
+            "selectsOption": {
+                "@id": "#decision/test_split/option/twenty_pct"
+            }
+        },
+        {
+            "@id": "#universe/mlp_svm/sel/1",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/random_seed"
+            },
+            "selectsOption": {
+                "@id": "#decision/random_seed/option/seed_42"
+            }
+        },
+        {
+            "@id": "#universe/mlp_svm/sel/2",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "feature_extraction/#decision/method"
+            },
+            "selectsOption": {
+                "@id": "feature_extraction/#decision/method/option/mlp_encoder"
+            }
+        },
+        {
+            "@id": "#universe/mlp_svm/sel/3",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "feature_extraction/#decision/n_components"
+            },
+            "selectsOption": {
+                "@id": "feature_extraction/#decision/n_components/option/two"
+            }
+        },
+        {
+            "@id": "#universe/mlp_svm/sel/4",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "classification/#decision/classifier"
+            },
+            "selectsOption": {
+                "@id": "classification/#decision/classifier/option/svm"
+            }
+        },
+        {
+            "@id": "#universe/mlp_svm",
+            "@type": "ASTRAUniverse",
+            "description": "MLP encoder features with SVM classifier",
+            "hasSelection": [
+                {
+                    "@id": "#universe/mlp_svm/sel/0"
+                },
+                {
+                    "@id": "#universe/mlp_svm/sel/1"
+                },
+                {
+                    "@id": "#universe/mlp_svm/sel/2"
+                },
+                {
+                    "@id": "#universe/mlp_svm/sel/3"
+                },
+                {
+                    "@id": "#universe/mlp_svm/sel/4"
+                }
+            ],
+            "name": "mlp_svm"
+        }
+    ]
+}

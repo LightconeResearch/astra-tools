@@ -1,0 +1,324 @@
+{
+    "@context": [
+        "https://w3id.org/ro/crate/1.2/context",
+        {
+            "ASTRAAnalysis": "astra:ASTRAAnalysis",
+            "ASTRADecision": "astra:ASTRADecision",
+            "ASTRAEvidence": "astra:ASTRAEvidence",
+            "ASTRAInput": "astra:ASTRAInput",
+            "ASTRAInsight": "astra:ASTRAInsight",
+            "ASTRAOption": "astra:ASTRAOption",
+            "ASTRAOutput": "astra:ASTRAOutput",
+            "ASTRARecipe": "astra:ASTRARecipe",
+            "ASTRAResources": "astra:ASTRAResources",
+            "ASTRASuccessCriterion": "astra:ASTRASuccessCriterion",
+            "ASTRAUniverse": "astra:ASTRAUniverse",
+            "ASTRAUniverseSelection": "astra:ASTRAUniverseSelection",
+            "FormalParameter": "https://bioschemas.org/FormalParameter",
+            "activeWhen": "astra:activeWhen",
+            "astra": "https://w3id.org/astra/terms/",
+            "astraVersion": "astra:astraVersion",
+            "build": "astra:build",
+            "buildArgs": "astra:buildArgs",
+            "buildContext": "astra:buildContext",
+            "condition": "astra:condition",
+            "cpus": "astra:cpus",
+            "defaultOption": {
+                "@id": "astra:defaultOption",
+                "@type": "@id"
+            },
+            "delegatesTo": {
+                "@id": "astra:delegatesTo",
+                "@type": "@id"
+            },
+            "excludedReason": "astra:excludedReason",
+            "gpus": "astra:gpus",
+            "hasDecision": {
+                "@id": "astra:hasDecision",
+                "@type": "@id"
+            },
+            "hasEvidence": {
+                "@id": "astra:hasEvidence",
+                "@type": "@id"
+            },
+            "hasFinding": {
+                "@id": "astra:hasFinding",
+                "@type": "@id"
+            },
+            "hasInput": {
+                "@id": "astra:hasInput",
+                "@type": "@id"
+            },
+            "hasOption": {
+                "@id": "astra:hasOption",
+                "@type": "@id"
+            },
+            "hasOutput": {
+                "@id": "astra:hasOutput",
+                "@type": "@id"
+            },
+            "hasPriorInsight": {
+                "@id": "astra:hasPriorInsight",
+                "@type": "@id"
+            },
+            "hasResources": {
+                "@id": "astra:hasResources",
+                "@type": "@id"
+            },
+            "hasSelection": {
+                "@id": "astra:hasSelection",
+                "@type": "@id"
+            },
+            "hasSuccessCriterion": {
+                "@id": "astra:hasSuccessCriterion",
+                "@type": "@id"
+            },
+            "incompatibleWith": {
+                "@id": "astra:incompatibleWith",
+                "@type": "@id"
+            },
+            "inputFrom": "astra:inputFrom",
+            "inputType": "astra:inputType",
+            "isDerived": "astra:isDerived",
+            "isExcluded": "astra:isExcluded",
+            "memory": "astra:memory",
+            "oa": "http://www.w3.org/ns/oa#",
+            "outputFrom": "astra:outputFrom",
+            "outputType": "astra:outputType",
+            "requiresOption": {
+                "@id": "astra:requiresOption",
+                "@type": "@id"
+            },
+            "scope": "astra:scope",
+            "selectsDecision": {
+                "@id": "astra:selectsDecision",
+                "@type": "@id"
+            },
+            "selectsOption": {
+                "@id": "astra:selectsOption",
+                "@type": "@id"
+            },
+            "sourceCommit": "astra:sourceCommit",
+            "supportsInsight": {
+                "@id": "astra:supportsInsight",
+                "@type": "@id"
+            },
+            "timeLimit": "astra:timeLimit",
+            "useOutputs": "astra:useOutputs",
+            "wfrun": "https://w3id.org/ro/terms/workflow-run#"
+        }
+    ],
+    "@graph": [
+        {
+            "@id": "./",
+            "@type": [
+                "Dataset",
+                "ASTRAAnalysis"
+            ],
+            "astraVersion": "1.0",
+            "conformsTo": {
+                "@id": "https://w3id.org/astra/profile/1.0"
+            },
+            "datePublished": "2026-03-30T20:48:10+00:00",
+            "description": "Learn a low-dimensional representation of the 4 Iris features.",
+            "hasDecision": [
+                {
+                    "@id": "#decision/seed"
+                },
+                {
+                    "@id": "#decision/method"
+                },
+                {
+                    "@id": "#decision/n_components"
+                }
+            ],
+            "hasInput": {
+                "@id": "#input/raw_features"
+            },
+            "hasOutput": [
+                {
+                    "@id": "#output/features"
+                },
+                {
+                    "@id": "#output/feature_plot"
+                }
+            ],
+            "name": "Feature Extraction"
+        },
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "about": {
+                "@id": "./"
+            },
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/crate/1.2"
+            }
+        },
+        {
+            "@id": "https://w3id.org/astra/profile/1.0",
+            "@type": [
+                "CreativeWork",
+                "Profile"
+            ],
+            "name": "ASTRA Analysis Profile",
+            "version": "1.0.0"
+        },
+        {
+            "@id": "#input/raw_features",
+            "@type": [
+                "FormalParameter",
+                "ASTRAInput"
+            ],
+            "description": "Raw 4-dimensional Iris features",
+            "inputFrom": "iris_data",
+            "inputType": "data",
+            "name": "raw_features"
+        },
+        {
+            "@id": "#output/features/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/extract_features.py",
+            "result": {
+                "@id": "#output/features"
+            }
+        },
+        {
+            "@id": "#output/features",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Transformed feature matrix",
+            "name": "features",
+            "outputType": "data",
+            "producer": {
+                "@id": "#output/features/recipe"
+            }
+        },
+        {
+            "@id": "#output/feature_plot/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/plot_features.py",
+            "object": [
+                {
+                    "@id": "#output/features"
+                }
+            ],
+            "result": {
+                "@id": "#output/feature_plot"
+            }
+        },
+        {
+            "@id": "#output/feature_plot",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Scatter plot",
+            "name": "feature_plot",
+            "outputType": "figure",
+            "producer": {
+                "@id": "#output/feature_plot/recipe"
+            }
+        },
+        {
+            "@id": "#decision/seed",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "delegatesTo": {
+                "@id": "../#decision/random_seed"
+            },
+            "name": "seed"
+        },
+        {
+            "@id": "#decision/method/option/pca",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "PCA",
+            "name": "pca"
+        },
+        {
+            "@id": "#decision/method/option/mlp_encoder",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "MLP Encoder",
+            "incompatibleWith": [
+                {
+                    "@id": "#decision/n_components/option/three"
+                }
+            ],
+            "name": "mlp_encoder"
+        },
+        {
+            "@id": "#decision/method",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Extraction Method",
+            "defaultOption": {
+                "@id": "#decision/method/option/pca"
+            },
+            "hasOption": [
+                {
+                    "@id": "#decision/method/option/pca"
+                },
+                {
+                    "@id": "#decision/method/option/mlp_encoder"
+                }
+            ],
+            "name": "method"
+        },
+        {
+            "@id": "#decision/n_components/option/two",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "2 components",
+            "name": "two"
+        },
+        {
+            "@id": "#decision/n_components/option/three",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "3 components",
+            "name": "three"
+        },
+        {
+            "@id": "#decision/n_components",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Number of Components",
+            "defaultOption": {
+                "@id": "#decision/n_components/option/two"
+            },
+            "hasOption": [
+                {
+                    "@id": "#decision/n_components/option/two"
+                },
+                {
+                    "@id": "#decision/n_components/option/three"
+                }
+            ],
+            "name": "n_components"
+        }
+    ]
+}

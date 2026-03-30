@@ -1,9 +1,0 @@
-# Invalid input type
-version: "1.0"
-name: "Test"
-inputs:
-  - id: data
-    type: invalid_type
-outputs:
-  - id: result
-    type: metric

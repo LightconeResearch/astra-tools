@@ -1,0 +1,698 @@
+{
+    "@context": [
+        "https://w3id.org/ro/crate/1.2/context",
+        {
+            "ASTRAAnalysis": "astra:ASTRAAnalysis",
+            "ASTRADecision": "astra:ASTRADecision",
+            "ASTRAEvidence": "astra:ASTRAEvidence",
+            "ASTRAInput": "astra:ASTRAInput",
+            "ASTRAInsight": "astra:ASTRAInsight",
+            "ASTRAOption": "astra:ASTRAOption",
+            "ASTRAOutput": "astra:ASTRAOutput",
+            "ASTRARecipe": "astra:ASTRARecipe",
+            "ASTRAResources": "astra:ASTRAResources",
+            "ASTRASuccessCriterion": "astra:ASTRASuccessCriterion",
+            "ASTRAUniverse": "astra:ASTRAUniverse",
+            "ASTRAUniverseSelection": "astra:ASTRAUniverseSelection",
+            "FormalParameter": "https://bioschemas.org/FormalParameter",
+            "activeWhen": "astra:activeWhen",
+            "astra": "https://w3id.org/astra/terms/",
+            "astraVersion": "astra:astraVersion",
+            "build": "astra:build",
+            "buildArgs": "astra:buildArgs",
+            "buildContext": "astra:buildContext",
+            "condition": "astra:condition",
+            "cpus": "astra:cpus",
+            "defaultOption": {
+                "@id": "astra:defaultOption",
+                "@type": "@id"
+            },
+            "delegatesTo": {
+                "@id": "astra:delegatesTo",
+                "@type": "@id"
+            },
+            "excludedReason": "astra:excludedReason",
+            "gpus": "astra:gpus",
+            "hasDecision": {
+                "@id": "astra:hasDecision",
+                "@type": "@id"
+            },
+            "hasEvidence": {
+                "@id": "astra:hasEvidence",
+                "@type": "@id"
+            },
+            "hasFinding": {
+                "@id": "astra:hasFinding",
+                "@type": "@id"
+            },
+            "hasInput": {
+                "@id": "astra:hasInput",
+                "@type": "@id"
+            },
+            "hasOption": {
+                "@id": "astra:hasOption",
+                "@type": "@id"
+            },
+            "hasOutput": {
+                "@id": "astra:hasOutput",
+                "@type": "@id"
+            },
+            "hasPriorInsight": {
+                "@id": "astra:hasPriorInsight",
+                "@type": "@id"
+            },
+            "hasResources": {
+                "@id": "astra:hasResources",
+                "@type": "@id"
+            },
+            "hasSelection": {
+                "@id": "astra:hasSelection",
+                "@type": "@id"
+            },
+            "hasSuccessCriterion": {
+                "@id": "astra:hasSuccessCriterion",
+                "@type": "@id"
+            },
+            "incompatibleWith": {
+                "@id": "astra:incompatibleWith",
+                "@type": "@id"
+            },
+            "inputFrom": "astra:inputFrom",
+            "inputType": "astra:inputType",
+            "isDerived": "astra:isDerived",
+            "isExcluded": "astra:isExcluded",
+            "memory": "astra:memory",
+            "oa": "http://www.w3.org/ns/oa#",
+            "outputFrom": "astra:outputFrom",
+            "outputType": "astra:outputType",
+            "requiresOption": {
+                "@id": "astra:requiresOption",
+                "@type": "@id"
+            },
+            "scope": "astra:scope",
+            "selectsDecision": {
+                "@id": "astra:selectsDecision",
+                "@type": "@id"
+            },
+            "selectsOption": {
+                "@id": "astra:selectsOption",
+                "@type": "@id"
+            },
+            "sourceCommit": "astra:sourceCommit",
+            "supportsInsight": {
+                "@id": "astra:supportsInsight",
+                "@type": "@id"
+            },
+            "timeLimit": "astra:timeLimit",
+            "useOutputs": "astra:useOutputs",
+            "wfrun": "https://w3id.org/ro/terms/workflow-run#"
+        }
+    ],
+    "@graph": [
+        {
+            "@id": "./",
+            "@type": [
+                "Dataset",
+                "ASTRAAnalysis"
+            ],
+            "astraVersion": "1.0",
+            "author": {
+                "@id": "#author/0"
+            },
+            "conformsTo": {
+                "@id": "https://w3id.org/astra/profile/1.0"
+            },
+            "datePublished": "2026-03-30T20:48:10+00:00",
+            "description": "A demonstration analysis that builds a classifier for the classic Iris dataset, exploring different preprocessing and model choices.",
+            "hasDecision": [
+                {
+                    "@id": "#decision/scaling"
+                },
+                {
+                    "@id": "#decision/model"
+                },
+                {
+                    "@id": "#decision/test_size"
+                },
+                {
+                    "@id": "#decision/random_seed"
+                }
+            ],
+            "hasInput": [
+                {
+                    "@id": "#input/iris_data"
+                },
+                {
+                    "@id": "#input/preprocessing_study"
+                }
+            ],
+            "hasOutput": [
+                {
+                    "@id": "#output/trained_output"
+                },
+                {
+                    "@id": "#output/accuracy"
+                },
+                {
+                    "@id": "#output/f1_score"
+                },
+                {
+                    "@id": "#output/confusion_matrix"
+                },
+                {
+                    "@id": "#output/model_comparison"
+                },
+                {
+                    "@id": "#output/conclusion"
+                }
+            ],
+            "keywords": "classification, sklearn, example",
+            "name": "Iris Classification Study"
+        },
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "about": {
+                "@id": "./"
+            },
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/crate/1.2"
+            }
+        },
+        {
+            "@id": "#author/0",
+            "@type": "Person",
+            "name": "ASTRA Examples"
+        },
+        {
+            "@id": "https://w3id.org/astra/profile/1.0",
+            "@type": [
+                "CreativeWork",
+                "Profile"
+            ],
+            "name": "ASTRA Analysis Profile",
+            "version": "1.0.0"
+        },
+        {
+            "@id": "#input/iris_data",
+            "@type": [
+                "FormalParameter",
+                "ASTRAInput"
+            ],
+            "description": "Fisher's classic 150-sample, 3-class dataset",
+            "identifier": "sklearn.datasets.load_iris",
+            "inputType": "data",
+            "name": "iris_data"
+        },
+        {
+            "@id": "#input/preprocessing_study",
+            "@type": [
+                "FormalParameter",
+                "ASTRAInput"
+            ],
+            "description": "Our previous study on scaling methods",
+            "inputType": "analysis",
+            "isBasedOn": {
+                "@id": "analyses/scaling_comparison_2024"
+            },
+            "name": "preprocessing_study"
+        },
+        {
+            "@id": "#output/trained_output/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/train.py",
+            "result": {
+                "@id": "#output/trained_output"
+            }
+        },
+        {
+            "@id": "#output/trained_output",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Best performing classifier",
+            "name": "trained_output",
+            "outputType": "data",
+            "producer": {
+                "@id": "#output/trained_output/recipe"
+            }
+        },
+        {
+            "@id": "#output/accuracy/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/evaluate.py",
+            "object": [
+                {
+                    "@id": "#output/trained_output"
+                }
+            ],
+            "result": {
+                "@id": "#output/accuracy"
+            }
+        },
+        {
+            "@id": "#output/accuracy",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Classification accuracy on held-out test set",
+            "name": "accuracy",
+            "outputType": "metric",
+            "producer": {
+                "@id": "#output/accuracy/recipe"
+            }
+        },
+        {
+            "@id": "#output/f1_score/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/evaluate.py",
+            "object": [
+                {
+                    "@id": "#output/trained_output"
+                }
+            ],
+            "result": {
+                "@id": "#output/f1_score"
+            }
+        },
+        {
+            "@id": "#output/f1_score",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Macro-averaged F1 score",
+            "name": "f1_score",
+            "outputType": "metric",
+            "producer": {
+                "@id": "#output/f1_score/recipe"
+            }
+        },
+        {
+            "@id": "#output/confusion_matrix/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/evaluate.py",
+            "object": [
+                {
+                    "@id": "#output/trained_output"
+                }
+            ],
+            "result": {
+                "@id": "#output/confusion_matrix"
+            }
+        },
+        {
+            "@id": "#output/confusion_matrix",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Confusion matrix heatmap",
+            "name": "confusion_matrix",
+            "outputType": "figure",
+            "producer": {
+                "@id": "#output/confusion_matrix/recipe"
+            }
+        },
+        {
+            "@id": "#output/model_comparison/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/evaluate.py",
+            "object": [
+                {
+                    "@id": "#output/trained_output"
+                }
+            ],
+            "result": {
+                "@id": "#output/model_comparison"
+            }
+        },
+        {
+            "@id": "#output/model_comparison",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Accuracy by model and preprocessing combination",
+            "name": "model_comparison",
+            "outputType": "table",
+            "producer": {
+                "@id": "#output/model_comparison/recipe"
+            }
+        },
+        {
+            "@id": "#output/conclusion/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/evaluate.py",
+            "object": [
+                {
+                    "@id": "#output/trained_output"
+                }
+            ],
+            "result": {
+                "@id": "#output/conclusion"
+            }
+        },
+        {
+            "@id": "#output/conclusion",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Summary of classifier performance and suitability",
+            "name": "conclusion",
+            "outputType": "report",
+            "producer": {
+                "@id": "#output/conclusion/recipe"
+            }
+        },
+        {
+            "@id": "#decision/scaling/option/none",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "No Scaling",
+            "name": "none"
+        },
+        {
+            "@id": "#decision/scaling/option/standard",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "StandardScaler",
+            "name": "standard"
+        },
+        {
+            "@id": "#decision/scaling/option/minmax",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "MinMaxScaler",
+            "incompatibleWith": [
+                {
+                    "@id": "#decision/model/option/svm"
+                }
+            ],
+            "name": "minmax"
+        },
+        {
+            "@id": "#decision/scaling",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Feature Scaling",
+            "defaultOption": {
+                "@id": "#decision/scaling/option/standard"
+            },
+            "description": "Scaling affects distance-based algorithms like SVM",
+            "hasOption": [
+                {
+                    "@id": "#decision/scaling/option/none"
+                },
+                {
+                    "@id": "#decision/scaling/option/standard"
+                },
+                {
+                    "@id": "#decision/scaling/option/minmax"
+                }
+            ],
+            "name": "scaling"
+        },
+        {
+            "@id": "#decision/model/option/svm",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "SVM",
+            "name": "svm",
+            "requiresOption": [
+                {
+                    "@id": "#decision/scaling/option/standard"
+                }
+            ]
+        },
+        {
+            "@id": "#decision/model/option/random_forest",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "Random Forest",
+            "name": "random_forest"
+        },
+        {
+            "@id": "#decision/model/option/logistic",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "Logistic Regression",
+            "name": "logistic"
+        },
+        {
+            "@id": "#decision/model",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Classification Model",
+            "defaultOption": {
+                "@id": "#decision/model/option/random_forest"
+            },
+            "description": "Core algorithmic choice affecting accuracy and interpretability",
+            "hasOption": [
+                {
+                    "@id": "#decision/model/option/svm"
+                },
+                {
+                    "@id": "#decision/model/option/random_forest"
+                },
+                {
+                    "@id": "#decision/model/option/logistic"
+                }
+            ],
+            "name": "model"
+        },
+        {
+            "@id": "#decision/test_size/option/small",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "20%",
+            "name": "small"
+        },
+        {
+            "@id": "#decision/test_size/option/medium",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "30%",
+            "name": "medium"
+        },
+        {
+            "@id": "#decision/test_size",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Test Set Proportion",
+            "defaultOption": {
+                "@id": "#decision/test_size/option/small"
+            },
+            "hasOption": [
+                {
+                    "@id": "#decision/test_size/option/small"
+                },
+                {
+                    "@id": "#decision/test_size/option/medium"
+                }
+            ],
+            "name": "test_size"
+        },
+        {
+            "@id": "#decision/random_seed/option/seed_42",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "42",
+            "name": "seed_42"
+        },
+        {
+            "@id": "#decision/random_seed/option/seed_123",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "123",
+            "name": "seed_123"
+        },
+        {
+            "@id": "#decision/random_seed",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Random Seed",
+            "defaultOption": {
+                "@id": "#decision/random_seed/option/seed_42"
+            },
+            "hasOption": [
+                {
+                    "@id": "#decision/random_seed/option/seed_42"
+                },
+                {
+                    "@id": "#decision/random_seed/option/seed_123"
+                }
+            ],
+            "name": "random_seed"
+        },
+        {
+            "@id": "#universe/baseline/sel/0",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/scaling"
+            },
+            "selectsOption": {
+                "@id": "#decision/scaling/option/standard"
+            }
+        },
+        {
+            "@id": "#universe/baseline/sel/1",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/model"
+            },
+            "selectsOption": {
+                "@id": "#decision/model/option/random_forest"
+            }
+        },
+        {
+            "@id": "#universe/baseline/sel/2",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/test_size"
+            },
+            "selectsOption": {
+                "@id": "#decision/test_size/option/small"
+            }
+        },
+        {
+            "@id": "#universe/baseline/sel/3",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/random_seed"
+            },
+            "selectsOption": {
+                "@id": "#decision/random_seed/option/seed_42"
+            }
+        },
+        {
+            "@id": "#universe/baseline",
+            "@type": "ASTRAUniverse",
+            "description": "Default configuration using standard practices",
+            "hasSelection": [
+                {
+                    "@id": "#universe/baseline/sel/0"
+                },
+                {
+                    "@id": "#universe/baseline/sel/1"
+                },
+                {
+                    "@id": "#universe/baseline/sel/2"
+                },
+                {
+                    "@id": "#universe/baseline/sel/3"
+                }
+            ],
+            "name": "baseline"
+        },
+        {
+            "@id": "#universe/svm_focused/sel/0",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/scaling"
+            },
+            "selectsOption": {
+                "@id": "#decision/scaling/option/standard"
+            }
+        },
+        {
+            "@id": "#universe/svm_focused/sel/1",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/model"
+            },
+            "selectsOption": {
+                "@id": "#decision/model/option/svm"
+            }
+        },
+        {
+            "@id": "#universe/svm_focused/sel/2",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/test_size"
+            },
+            "selectsOption": {
+                "@id": "#decision/test_size/option/small"
+            }
+        },
+        {
+            "@id": "#universe/svm_focused/sel/3",
+            "@type": "ASTRAUniverseSelection",
+            "selectsDecision": {
+                "@id": "#decision/random_seed"
+            },
+            "selectsOption": {
+                "@id": "#decision/random_seed/option/seed_42"
+            }
+        },
+        {
+            "@id": "#universe/svm_focused",
+            "@type": "ASTRAUniverse",
+            "description": "Configuration optimized for SVM",
+            "hasSelection": [
+                {
+                    "@id": "#universe/svm_focused/sel/0"
+                },
+                {
+                    "@id": "#universe/svm_focused/sel/1"
+                },
+                {
+                    "@id": "#universe/svm_focused/sel/2"
+                },
+                {
+                    "@id": "#universe/svm_focused/sel/3"
+                }
+            ],
+            "name": "svm_focused"
+        }
+    ]
+}

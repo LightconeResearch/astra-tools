@@ -21,9 +21,7 @@ classifiers = [
 
 dependencies = [
     "click>=8.0",
-    "pyyaml>=6.0",
-    "jsonschema>=4.0",
-    "pydantic>=2.0",
+    "rocrate>=0.14",
     "rich>=13.0",
     "pypdf>=4.0",
     "httpx>=0.27",
@@ -36,8 +34,8 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
-    "types-PyYAML",
-    "types-jsonschema",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -53,12 +51,8 @@ source = "vcs"
 [tool.hatch.build.targets.wheel]
 packages = ["src/astra"]
 
-# Automatically bundle spec/draft/ into the package as astra/spec/
-[tool.hatch.build.targets.wheel.force-include]
-"spec/draft" = "astra/spec"
-
 [tool.hatch.build.targets.sdist]
-include = ["src/astra", "spec/draft"]
+include = ["src/astra"]
 
 [tool.ruff]
 target-version = "py311"

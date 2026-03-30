@@ -1,9 +1,10 @@
 """Pytest configuration and fixtures."""
 
 from pathlib import Path
-from typing import Any
 
 import pytest
+
+from astra.crate import ASTRACrate
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -25,77 +26,17 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
                 item.add_marker(skip_network)
 
 
-# Fixture directories
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
-VALID_DIR = FIXTURES_DIR / "valid"
-INVALID_DIR = FIXTURES_DIR / "invalid"
+# Example directories
+EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
 
 
 @pytest.fixture
-def fixtures_dir() -> Path:
-    """Return the fixtures directory."""
-    return FIXTURES_DIR
+def iris_crate() -> ASTRACrate:
+    """Load the iris example crate."""
+    return ASTRACrate.load(EXAMPLES_DIR / "iris")
 
 
 @pytest.fixture
-def valid_dir() -> Path:
-    """Return the valid fixtures directory."""
-    return VALID_DIR
-
-
-@pytest.fixture
-def invalid_dir() -> Path:
-    """Return the invalid fixtures directory."""
-    return INVALID_DIR
-
-
-@pytest.fixture
-def minimal_analysis_path() -> Path:
-    """Return path to minimal valid analysis."""
-    return VALID_DIR / "minimal.yaml"
-
-
-@pytest.fixture
-def full_analysis_path() -> Path:
-    """Return path to full valid analysis."""
-    return VALID_DIR / "full.yaml"
-
-
-@pytest.fixture
-def baseline_universe_path() -> Path:
-    """Return path to baseline universe."""
-    return VALID_DIR / "universe_baseline.yaml"
-
-
-@pytest.fixture
-def svm_universe_path() -> Path:
-    """Return path to SVM universe."""
-    return VALID_DIR / "universe_svm.yaml"
-
-
-@pytest.fixture
-def minimal_analysis_data() -> dict[str, Any]:
-    """Return minimal analysis data as dict."""
-    return {
-        "version": "1.0",
-        "name": "Test Analysis",
-        "inputs": [{"id": "test_data", "type": "data"}],
-        "outputs": [{"id": "result", "type": "metric"}],
-        "decisions": {
-            "method": {
-                "label": "Method",
-                "default": "a",
-                "options": {"a": {"label": "A"}, "b": {"label": "B"}},
-            }
-        },
-    }
-
-
-@pytest.fixture
-def baseline_universe_data() -> dict[str, Any]:
-    """Return baseline universe data as dict."""
-    return {
-        "id": "baseline",
-        "description": "Test baseline",
-        "decisions": {"method": "a"},
-    }
+def iris_pipeline_crate() -> ASTRACrate:
+    """Load the iris_pipeline example crate."""
+    return ASTRACrate.load(EXAMPLES_DIR / "iris_pipeline")

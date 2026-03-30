@@ -1,0 +1,290 @@
+{
+    "@context": [
+        "https://w3id.org/ro/crate/1.2/context",
+        {
+            "ASTRAAnalysis": "astra:ASTRAAnalysis",
+            "ASTRADecision": "astra:ASTRADecision",
+            "ASTRAEvidence": "astra:ASTRAEvidence",
+            "ASTRAInput": "astra:ASTRAInput",
+            "ASTRAInsight": "astra:ASTRAInsight",
+            "ASTRAOption": "astra:ASTRAOption",
+            "ASTRAOutput": "astra:ASTRAOutput",
+            "ASTRARecipe": "astra:ASTRARecipe",
+            "ASTRAResources": "astra:ASTRAResources",
+            "ASTRASuccessCriterion": "astra:ASTRASuccessCriterion",
+            "ASTRAUniverse": "astra:ASTRAUniverse",
+            "ASTRAUniverseSelection": "astra:ASTRAUniverseSelection",
+            "FormalParameter": "https://bioschemas.org/FormalParameter",
+            "activeWhen": "astra:activeWhen",
+            "astra": "https://w3id.org/astra/terms/",
+            "astraVersion": "astra:astraVersion",
+            "build": "astra:build",
+            "buildArgs": "astra:buildArgs",
+            "buildContext": "astra:buildContext",
+            "condition": "astra:condition",
+            "cpus": "astra:cpus",
+            "defaultOption": {
+                "@id": "astra:defaultOption",
+                "@type": "@id"
+            },
+            "delegatesTo": {
+                "@id": "astra:delegatesTo",
+                "@type": "@id"
+            },
+            "excludedReason": "astra:excludedReason",
+            "gpus": "astra:gpus",
+            "hasDecision": {
+                "@id": "astra:hasDecision",
+                "@type": "@id"
+            },
+            "hasEvidence": {
+                "@id": "astra:hasEvidence",
+                "@type": "@id"
+            },
+            "hasFinding": {
+                "@id": "astra:hasFinding",
+                "@type": "@id"
+            },
+            "hasInput": {
+                "@id": "astra:hasInput",
+                "@type": "@id"
+            },
+            "hasOption": {
+                "@id": "astra:hasOption",
+                "@type": "@id"
+            },
+            "hasOutput": {
+                "@id": "astra:hasOutput",
+                "@type": "@id"
+            },
+            "hasPriorInsight": {
+                "@id": "astra:hasPriorInsight",
+                "@type": "@id"
+            },
+            "hasResources": {
+                "@id": "astra:hasResources",
+                "@type": "@id"
+            },
+            "hasSelection": {
+                "@id": "astra:hasSelection",
+                "@type": "@id"
+            },
+            "hasSuccessCriterion": {
+                "@id": "astra:hasSuccessCriterion",
+                "@type": "@id"
+            },
+            "incompatibleWith": {
+                "@id": "astra:incompatibleWith",
+                "@type": "@id"
+            },
+            "inputFrom": "astra:inputFrom",
+            "inputType": "astra:inputType",
+            "isDerived": "astra:isDerived",
+            "isExcluded": "astra:isExcluded",
+            "memory": "astra:memory",
+            "oa": "http://www.w3.org/ns/oa#",
+            "outputFrom": "astra:outputFrom",
+            "outputType": "astra:outputType",
+            "requiresOption": {
+                "@id": "astra:requiresOption",
+                "@type": "@id"
+            },
+            "scope": "astra:scope",
+            "selectsDecision": {
+                "@id": "astra:selectsDecision",
+                "@type": "@id"
+            },
+            "selectsOption": {
+                "@id": "astra:selectsOption",
+                "@type": "@id"
+            },
+            "sourceCommit": "astra:sourceCommit",
+            "supportsInsight": {
+                "@id": "astra:supportsInsight",
+                "@type": "@id"
+            },
+            "timeLimit": "astra:timeLimit",
+            "useOutputs": "astra:useOutputs",
+            "wfrun": "https://w3id.org/ro/terms/workflow-run#"
+        }
+    ],
+    "@graph": [
+        {
+            "@id": "./",
+            "@type": [
+                "Dataset",
+                "ASTRAAnalysis"
+            ],
+            "astraVersion": "1.0",
+            "conformsTo": {
+                "@id": "https://w3id.org/astra/profile/1.0"
+            },
+            "datePublished": "2026-03-30T20:48:10+00:00",
+            "description": "Train a classifier on extracted features.",
+            "hasDecision": [
+                {
+                    "@id": "#decision/split"
+                },
+                {
+                    "@id": "#decision/classifier"
+                }
+            ],
+            "hasInput": {
+                "@id": "#input/features"
+            },
+            "hasOutput": [
+                {
+                    "@id": "#output/predictions"
+                },
+                {
+                    "@id": "#output/accuracy"
+                }
+            ],
+            "name": "Classification"
+        },
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "about": {
+                "@id": "./"
+            },
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/crate/1.2"
+            }
+        },
+        {
+            "@id": "https://w3id.org/astra/profile/1.0",
+            "@type": [
+                "CreativeWork",
+                "Profile"
+            ],
+            "name": "ASTRA Analysis Profile",
+            "version": "1.0.0"
+        },
+        {
+            "@id": "#input/features",
+            "@type": [
+                "FormalParameter",
+                "ASTRAInput"
+            ],
+            "description": "Transformed features",
+            "inputFrom": "feature_extraction.features",
+            "inputType": "data",
+            "name": "features"
+        },
+        {
+            "@id": "#output/predictions/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/classify.py",
+            "result": {
+                "@id": "#output/predictions"
+            }
+        },
+        {
+            "@id": "#output/predictions",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Predicted class labels",
+            "name": "predictions",
+            "outputType": "data",
+            "producer": {
+                "@id": "#output/predictions/recipe"
+            }
+        },
+        {
+            "@id": "#output/accuracy/recipe",
+            "@type": [
+                "CreateAction",
+                "ASTRARecipe"
+            ],
+            "description": "python src/evaluate.py",
+            "object": [
+                {
+                    "@id": "#output/predictions"
+                }
+            ],
+            "result": {
+                "@id": "#output/accuracy"
+            }
+        },
+        {
+            "@id": "#output/accuracy",
+            "@type": [
+                "FormalParameter",
+                "ASTRAOutput"
+            ],
+            "description": "Classification accuracy",
+            "name": "accuracy",
+            "outputType": "metric",
+            "producer": {
+                "@id": "#output/accuracy/recipe"
+            }
+        },
+        {
+            "@id": "#decision/split",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "delegatesTo": {
+                "@id": "../#decision/test_split"
+            },
+            "name": "split"
+        },
+        {
+            "@id": "#decision/classifier/option/logistic",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "Logistic Regression",
+            "name": "logistic"
+        },
+        {
+            "@id": "#decision/classifier/option/svm",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "SVM (RBF)",
+            "name": "svm"
+        },
+        {
+            "@id": "#decision/classifier/option/knn",
+            "@type": [
+                "DefinedTerm",
+                "ASTRAOption"
+            ],
+            "alternateName": "k-Nearest Neighbors",
+            "name": "knn"
+        },
+        {
+            "@id": "#decision/classifier",
+            "@type": [
+                "DefinedTermSet",
+                "ASTRADecision"
+            ],
+            "alternateName": "Classifier",
+            "defaultOption": {
+                "@id": "#decision/classifier/option/logistic"
+            },
+            "hasOption": [
+                {
+                    "@id": "#decision/classifier/option/logistic"
+                },
+                {
+                    "@id": "#decision/classifier/option/svm"
+                },
+                {
+                    "@id": "#decision/classifier/option/knn"
+                }
+            ],
+            "name": "classifier"
+        }
+    ]
+}

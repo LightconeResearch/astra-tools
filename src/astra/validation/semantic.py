@@ -1,19 +1,46 @@
-"""Semantic validation for ASTRA specifications.
+"""Semantic validation for ASTRA RO-Crate specifications.
 
-This module performs semantic validation (cross-references, constraints)
-using dict-based data structures loaded from YAML files.
+Validates cross-references, constraints, and logical consistency
+of ASTRA crates.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
-from astra.helpers import (
-    _collect_node_decisions,
-    is_condition_met,
-    load_yaml,
-    resolve_analysis_tree,
+from astra.crate import ASTRACrate
+
+if TYPE_CHECKING:
+    from rocrate.model.contextentity import ContextEntity
+
+import re
+
+from astra.vocabulary import (
+    ID_PATTERN,
+    INPUT_TYPES,
+    OUTPUT_TYPES,
+    PROP_ACTIVE_WHEN,
+    PROP_CONDITION,
+    PROP_DEFAULT_OPTION,
+    PROP_DELEGATES_TO,
+    PROP_EXCLUDED_REASON,
+    PROP_HAS_EVIDENCE,
+    PROP_HAS_OPTION,
+    PROP_INCOMPATIBLE_WITH,
+    PROP_INPUT_TYPE,
+    PROP_IS_EXCLUDED,
+    PROP_OUTPUT_TYPE,
+    PROP_REQUIRES_OPTION,
+    PROP_SUPPORTS_INSIGHT,
+    SCHEMA_ALTERNATE_NAME,
+    SCHEMA_IDENTIFIER,
+    SCHEMA_IS_BASED_ON,
+    SCHEMA_OBJECT,
+    WHEN_PATTERN,
+    as_list,
+    id_of,
+    parse_entity_name,
 )
 
 
@@ -30,1011 +57,534 @@ class SemanticError:
             return f"[{self.code}] {self.path}: {self.message}"
         return f"[{self.code}] {self.message}"
 
+    def __repr__(self) -> str:
+        return f"SemanticError({self.code!r}, {self.message!r}, path={self.path!r})"
 
-def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> list[SemanticError]:
-    """Validate an analysis specification semantically.
+
+def validate_analysis(crate: ASTRACrate, path: str = "") -> list[SemanticError]:
+    """Validate an ASTRA crate semantically.
+
+    Checks cross-references, constraints, uniqueness, and logical consistency.
+    Recursively validates subcrates.
+    """
+    errors: list[SemanticError] = []
+    prefix = f"{path}/" if path else ""
+
+    # Fetch entities once so check functions don't re-resolve references
+    inputs = crate.get_inputs()
+    outputs = crate.get_outputs()
+    decisions = crate.get_decisions()
+
+    _check_unique_ids(inputs, outputs, errors, prefix)
+    _check_decisions(crate, decisions, errors, prefix)
+    _check_outputs(outputs, errors, prefix)
+    _check_inputs(inputs, errors, prefix)
+    _check_recipes(crate, outputs, errors, prefix)
+    _check_insights(crate, outputs, errors, prefix)
+    _check_success_criteria(crate, outputs, errors, prefix)
+
+    # --- Recurse into subcrates ---
+    for sub_name, sub_crate in crate.subcrates.items():
+        sub_path = f"{prefix}{sub_name}"
+        errors.extend(validate_analysis(sub_crate, sub_path))
+
+    return errors
+
+
+def validate_analysis_file(crate_dir: str | Path) -> list[SemanticError]:
+    """Load a crate from a directory and validate it."""
+    crate = ASTRACrate.load(crate_dir)
+    return validate_analysis(crate)
+
+
+def validate_universe(universe_name: str, crate: ASTRACrate) -> list[SemanticError]:
+    """Validate a universe against the analysis crate.
 
     Checks:
-    - Input/output IDs are unique
-    - Decisions: defaults exist, evidence refs valid, constraint refs valid
-    - Sub-analysis validation (recursive)
-    - `from` reference validation on sub-analysis inputs
-    - `from` reference validation on sub-analysis decisions
-
-    If ``base_path`` is provided, sub-analyses with ``path:`` will be loaded
-    and merged before validation.
-
-    Args:
-        data: The analysis data as a dict.
-        base_path: Base directory for resolving ``path:`` references on sub-analyses.
-
-    Returns:
-        List of semantic errors (empty if valid).
+    - Every non-delegated decision has a selection
+    - All selections reference valid options
+    - Constraint violations (incompatible_with, requires)
+    - Excluded options not selected
     """
     errors: list[SemanticError] = []
-
-    # Resolve external sub-analysis paths if base_path is provided
-    if base_path is not None:
-        data = resolve_analysis_tree(data, base_path)
-
-    # Root analysis requires version, name, inputs, outputs
-    for field in ("version", "name", "inputs", "outputs"):
-        if field not in data or data[field] is None:
-            errors.append(
-                SemanticError(
-                    "MISSING_ROOT_FIELD",
-                    f"Root analysis is missing required field '{field}'",
-                    field,
-                )
-            )
-
-    inputs = data.get("inputs") or []
-    outputs = data.get("outputs") or []
-    prior_insights = data.get("prior_insights") or {}
-
-    # Check for duplicate input IDs
-    input_ids: set[str] = set()
-    for inp in inputs:
-        inp_id = inp.get("id")
-        if inp_id in input_ids:
-            errors.append(
-                SemanticError(
-                    "DUPLICATE_INPUT",
-                    f"Duplicate input ID: {inp_id}",
-                    f"inputs.{inp_id}",
-                )
-            )
-        if inp_id:
-            input_ids.add(inp_id)
-
-    # Check for duplicate output IDs
-    output_ids: set[str] = set()
-    for out in outputs:
-        out_id = out.get("id")
-        if out_id in output_ids:
-            errors.append(
-                SemanticError(
-                    "DUPLICATE_OUTPUT",
-                    f"Duplicate output ID: {out_id}",
-                    f"outputs.{out_id}",
-                )
-            )
-        if out_id:
-            output_ids.add(out_id)
-
-    # Validate success criteria output references
-    errors.extend(_validate_success_criteria(data.get("success_criteria"), output_ids, ""))
-
-    # Collect all decisions (only locally-defined ones at root)
-    root_decisions = _collect_node_decisions(data)
-
-    # Validate all decisions
-    errors.extend(_validate_decisions(root_decisions, prior_insights, ""))
-
-    # Validate evidence artifact references in prior_insights and findings
-    errors.extend(
-        _validate_insight_artifacts(
-            data.get("prior_insights") or {}, output_ids, "", "prior_insights"
-        )
-    )
-    errors.extend(
-        _validate_insight_artifacts(data.get("findings") or {}, output_ids, "", "findings")
-    )
-
-    # Collect qualified sub-analysis output IDs so root recipes can
-    # reference them (e.g. ``inputs: [hod_fitting.galaxy_mesh]``).
-    sub_analyses = data.get("analyses") or {}
-    sub_output_ids: set[str] = set()
-    for analysis_id, analysis_node in sub_analyses.items():
-        for out in analysis_node.get("outputs") or []:
-            out_id = out.get("id")
-            if out_id:
-                sub_output_ids.add(f"{analysis_id}.{out_id}")
-
-    # Validate output recipes
-    errors.extend(_validate_output_recipes(outputs, "", extra_valid_ids=sub_output_ids))
-
-    # Validate output when conditions
-    errors.extend(_validate_output_when(outputs, root_decisions, ""))
-    for analysis_id, analysis_node in sub_analyses.items():
-        errors.extend(
-            _validate_analysis_node(
-                analysis_id,
-                analysis_node,
-                prior_insights,
-                parent_input_ids=input_ids,
-                parent_decisions=root_decisions,
-                sibling_analyses=sub_analyses,
-                path_prefix="analyses",
-            )
-        )
-
-    return errors
-
-
-def _validate_analysis_node(
-    node_id: str,
-    node: dict[str, Any],
-    prior_insights: dict[str, Any],
-    parent_input_ids: set[str],
-    parent_decisions: dict[str, Any],
-    sibling_analyses: dict[str, Any],
-    path_prefix: str,
-) -> list[SemanticError]:
-    """Validate a single analysis node's decisions, inputs, and sub-analyses."""
-    errors: list[SemanticError] = []
-    node_path = f"{path_prefix}.{node_id}"
-
-    # If this is a path-only sub-analysis stub (not yet resolved), skip deep validation
-    if node.get("path") and not node.get("inputs") and not node.get("outputs"):
-        return errors
-
-    # Check required sub-analysis fields
-    for field in ("inputs", "outputs"):
-        if not node.get(field):
-            errors.append(
-                SemanticError(
-                    "MISSING_SUB_FIELD",
-                    f"Sub-analysis '{node_id}' is missing required field: {field}",
-                    node_path,
-                )
-            )
-
-    # Validate decision `from:` references against parent decisions
-    node_all_decisions = node.get("decisions") or {}
-    for decision_id, decision in node_all_decisions.items():
-        from_ref = decision.get("from")
-        if from_ref:
-            errors.extend(
-                _validate_decision_from_ref(
-                    decision_id,
-                    from_ref,
-                    parent_decisions,
-                    f"{node_path}.decisions.{decision_id}",
-                )
-            )
-
-    # Validate node inputs (check `from` references)
-    node_inputs = node.get("inputs") or []
-    node_input_ids: set[str] = set()
-    for inp in node_inputs:
-        inp_id = inp.get("id")
-        if inp_id:
-            node_input_ids.add(inp_id)
-        from_ref = inp.get("from")
-        if from_ref:
-            errors.extend(
-                _validate_from_ref(
-                    from_ref,
-                    parent_input_ids,
-                    sibling_analyses,
-                    node_id,
-                    node_path,
-                )
-            )
-
-    # Validate node output IDs are unique
-    node_output_ids: set[str] = set()
-    for out in node.get("outputs") or []:
-        out_id = out.get("id")
-        if out_id in node_output_ids:
-            errors.append(
-                SemanticError(
-                    "DUPLICATE_OUTPUT",
-                    f"Duplicate output ID in analysis node: {out_id}",
-                    f"{node_path}.outputs.{out_id}",
-                )
-            )
-        if out_id:
-            node_output_ids.add(out_id)
-
-    # Validate success criteria output references
-    criteria = node.get("success_criteria")
-    errors.extend(_validate_success_criteria(criteria, node_output_ids, node_path))
-
-    # Validate decisions
-    # Collect only locally-defined decisions (not from: references)
-    node_decisions = _collect_node_decisions(node)
-    # Build constraint scope: local decisions + resolved from: references from parent
-    constraint_scope = dict(node_decisions)
-    for decision_id, decision in node_all_decisions.items():
-        from_ref = decision.get("from")
-        if from_ref and from_ref.startswith("../"):
-            parent_decision_id = from_ref[3:]  # strip ../
-            if parent_decision_id in parent_decisions:
-                constraint_scope[decision_id] = parent_decisions[parent_decision_id]
-    errors.extend(_validate_decisions(node_decisions, prior_insights, node_path, constraint_scope))
-
-    # Validate evidence artifact references in prior_insights and findings
-    errors.extend(
-        _validate_insight_artifacts(
-            node.get("prior_insights") or {}, node_output_ids, node_path, "prior_insights"
-        )
-    )
-    errors.extend(
-        _validate_insight_artifacts(
-            node.get("findings") or {}, node_output_ids, node_path, "findings"
-        )
-    )
-
-    # Validate output recipes
-    node_outputs = node.get("outputs") or []
-    errors.extend(_validate_output_recipes(node_outputs, node_path))
-
-    # Validate output when conditions
-    errors.extend(_validate_output_when(node_outputs, constraint_scope, node_path))
-
-    # Recurse into sub-analyses
-    sub_analyses = node.get("analyses") or {}
-    for sub_id, sub_node in sub_analyses.items():
-        errors.extend(
-            _validate_analysis_node(
-                sub_id,
-                sub_node,
-                prior_insights,
-                parent_input_ids=node_input_ids,
-                parent_decisions=node_decisions,
-                sibling_analyses=sub_analyses,
-                path_prefix=f"{node_path}.analyses",
-            )
-        )
-
-    return errors
-
-
-def _validate_success_criteria(
-    success_criteria: list[Any] | None,
-    output_ids: set[str],
-    path_prefix: str,
-) -> list[SemanticError]:
-    """Validate success criteria output references.
-
-    Structured criteria with an ``output`` field must reference a declared output ID.
-    """
-    errors: list[SemanticError] = []
-    if not success_criteria:
-        return errors
-
-    criteria_prefix = f"{path_prefix}.success_criteria" if path_prefix else "success_criteria"
-    for i, criterion in enumerate(success_criteria):
-        if isinstance(criterion, dict):
-            output_ref = criterion.get("output")
-            condition = criterion.get("condition")
-
-            # condition requires output
-            if condition is not None and output_ref is None:
-                errors.append(
-                    SemanticError(
-                        "CRITERION_CONDITION_NO_OUTPUT",
-                        "Success criterion has 'condition' but no 'output'",
-                        f"{criteria_prefix}[{i}]",
-                    )
-                )
-
-            # output must reference a declared output
-            if output_ref is not None and output_ref not in output_ids:
-                errors.append(
-                    SemanticError(
-                        "INVALID_CRITERION_OUTPUT",
-                        f"Success criterion references non-existent output '{output_ref}'",
-                        f"{criteria_prefix}[{i}]",
-                    )
-                )
-    return errors
-
-
-def _validate_insight_artifacts(
-    insights: dict[str, Any],
-    output_ids: set[str],
-    path_prefix: str,
-    section: str,
-) -> list[SemanticError]:
-    """Validate that insight evidence artifacts reference valid output IDs.
-
-    Each evidence item with an ``artifact`` field must reference a declared output ID.
-    Applied to both ``prior_insights`` and ``findings``.
-    """
-    errors: list[SemanticError] = []
-    if not insights:
-        return errors
-
-    insights_prefix = f"{path_prefix}.{section}" if path_prefix else section
-    for insight_id, insight in insights.items():
-        insight_path = f"{insights_prefix}.{insight_id}"
-        for i, ev in enumerate(insight.get("evidence") or []):
-            artifact_ref = ev.get("artifact")
-            if artifact_ref is not None and artifact_ref not in output_ids:
-                errors.append(
-                    SemanticError(
-                        "INVALID_ARTIFACT_REF",
-                        f"Evidence artifact '{artifact_ref}' not found in declared outputs",
-                        f"{insight_path}.evidence[{i}].artifact",
-                    )
-                )
-    return errors
-
-
-def _validate_decisions(
-    decisions: dict[str, Any],
-    prior_insights: dict[str, Any],
-    path_prefix: str,
-    constraint_scope: dict[str, Any] | None = None,
-) -> list[SemanticError]:
-    """Validate a set of decisions at a given node.
-
-    Args:
-        constraint_scope: Decisions available for constraint resolution. Defaults to
-            decisions themselves, but may include parent decisions for sub-analyses.
-    """
-    errors: list[SemanticError] = []
-    if constraint_scope is None:
-        constraint_scope = decisions
-
-    decisions_prefix = f"{path_prefix}.decisions" if path_prefix else "decisions"
-    for decision_id, decision in decisions.items():
-        decision_path = f"{decisions_prefix}.{decision_id}"
-        options = decision.get("options", {})
-
-        # Check default option exists
-        default = decision.get("default")
-        if default is not None and default not in options:
-            errors.append(
-                SemanticError(
-                    "INVALID_DEFAULT",
-                    f"Default option '{default}' not found in options",
-                    decision_path,
-                )
-            )
-
-        # Check `when` condition references a valid decision.option
-        when = decision.get("when")
-        if when:
-            conditions = [when] if isinstance(when, str) else when
-            for cond in conditions:
-                ref = cond.lstrip("~")
-                when_parts = ref.split(".")
-                if len(when_parts) != 2:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_WHEN_REF",
-                            f"Decision 'when' condition '{cond}' has invalid format",
-                            decision_path,
-                        )
-                    )
-                    continue
-                when_decision_id, when_option_id = when_parts
-                scope = constraint_scope or {}
-                if when_decision_id not in decisions and when_decision_id not in scope:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_WHEN_REF",
-                            f"'when' references non-existent decision '{when_decision_id}'",
-                            decision_path,
-                        )
-                    )
-                else:
-                    ref_decision = decisions.get(when_decision_id) or (constraint_scope or {}).get(
-                        when_decision_id
-                    )
-                    if ref_decision and when_option_id not in ref_decision.get("options", {}):
-                        errors.append(
-                            SemanticError(
-                                "INVALID_WHEN_REF",
-                                f"'when' references non-existent option '{when_option_id}' "
-                                f"in decision '{when_decision_id}'",
-                                decision_path,
-                            )
-                        )
-                # Check no self-reference
-                if when_decision_id == decision_id:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_WHEN_REF",
-                            "'when' cannot reference own decision",
-                            decision_path,
-                        )
-                    )
-
-        # Validate options
-        for option_id, option in options.items():
-            option_path = f"{decision_path}.options.{option_id}"
-
-            # Check insight references (options reference prior_insights)
-            insight_refs = option.get("insights") or []
-            for i, insight_ref in enumerate(insight_refs):
-                if insight_ref not in prior_insights:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_INSIGHT_REF",
-                            f"Option insight '{insight_ref}' not found in prior_insights",
-                            f"{option_path}.insights[{i}]",
-                        )
-                    )
-
-            # Check incompatible_with refs (scoped to constraint_scope)
-            incompatible_with = option.get("incompatible_with") or []
-            for ref in incompatible_with:
-                errors.extend(_validate_constraint_ref(ref, constraint_scope, option_path))
-
-            # Check requires refs (scoped to constraint_scope)
-            requires = option.get("requires") or []
-            for ref in requires:
-                errors.extend(_validate_constraint_ref(ref, constraint_scope, option_path))
-
-            # Check excluded option consistency
-            is_excluded = option.get("excluded", False)
-            excluded_reason = option.get("excluded_reason")
-            if is_excluded and not excluded_reason:
-                errors.append(
-                    SemanticError(
-                        "MISSING_EXCLUDED_REASON",
-                        f"Excluded option '{option_id}' must have an 'excluded_reason'",
-                        option_path,
-                    )
-                )
-            if excluded_reason and not is_excluded:
-                errors.append(
-                    SemanticError(
-                        "ORPHAN_EXCLUDED_REASON",
-                        f"Option '{option_id}' has 'excluded_reason' but is not marked excluded",
-                        option_path,
-                    )
-                )
-
-        # Check default is not an excluded option
-        if default is not None and default in options:
-            default_option = options[default]
-            if default_option.get("excluded", False):
-                errors.append(
-                    SemanticError(
-                        "EXCLUDED_DEFAULT",
-                        f"Default option '{default}' is marked as excluded",
-                        decision_path,
-                    )
-                )
-
-    return errors
-
-
-def _validate_output_when(
-    outputs: list[dict[str, Any]],
-    decisions: dict[str, Any],
-    path_prefix: str,
-) -> list[SemanticError]:
-    """Validate ``when`` conditions on outputs.
-
-    Checks that each referenced decision.option exists in the available decisions.
-    """
-    errors: list[SemanticError] = []
-    outputs_prefix = f"{path_prefix}.outputs" if path_prefix else "outputs"
-
-    for out in outputs:
-        out_id = out.get("id")
-        if not out_id:
-            continue
-        when = out.get("when")
-        if not when:
-            continue
-
-        conditions = [when] if isinstance(when, str) else when
-        output_path = f"{outputs_prefix}.{out_id}"
-
-        for cond in conditions:
-            ref = cond.lstrip("~")
-            parts = ref.split(".")
-            if len(parts) != 2:
-                errors.append(
-                    SemanticError(
-                        "INVALID_WHEN_REF",
-                        f"Output 'when' condition '{cond}' has invalid format",
-                        output_path,
-                    )
-                )
-                continue
-            decision_id, option_id = parts
-            if decision_id not in decisions:
-                errors.append(
-                    SemanticError(
-                        "INVALID_WHEN_REF",
-                        f"Output 'when' references non-existent decision '{decision_id}'",
-                        output_path,
-                    )
-                )
-            else:
-                ref_decision = decisions[decision_id]
-                if option_id not in ref_decision.get("options", {}):
-                    errors.append(
-                        SemanticError(
-                            "INVALID_WHEN_REF",
-                            f"Output 'when' references non-existent option '{option_id}' "
-                            f"in decision '{decision_id}'",
-                            output_path,
-                        )
-                    )
-
-    return errors
-
-
-def _validate_output_recipes(
-    outputs: list[dict[str, Any]],
-    path_prefix: str,
-    extra_valid_ids: set[str] | None = None,
-) -> list[SemanticError]:
-    """Validate inline recipes on outputs.
-
-    Checks:
-    - Recipe inputs reference declared output IDs (or *extra_valid_ids*
-      such as qualified sub-analysis outputs like ``hod_fitting.galaxy_mesh``)
-    - No cycles in the output dependency graph
-    """
-    errors: list[SemanticError] = []
-    outputs_prefix = f"{path_prefix}.outputs" if path_prefix else "outputs"
-
-    # Collect all output IDs at this level
-    output_ids = {out.get("id") for out in outputs if out.get("id")}
-
-    # Combine with extra valid IDs (e.g. sub-analysis outputs)
-    valid_ids = output_ids | (extra_valid_ids or set())
-
-    # Build dependency graph and validate inputs
-    dep_graph: dict[str, list[str]] = {}
-    for out in outputs:
-        out_id = out.get("id")
-        if not out_id:
-            continue
-        recipe = out.get("recipe")
-        if not recipe:
-            dep_graph[out_id] = []
-            continue
-        inputs = recipe.get("inputs") or []
-        dep_graph[out_id] = inputs
-        for inp_id in inputs:
-            if inp_id not in valid_ids:
-                errors.append(
-                    SemanticError(
-                        "INVALID_RECIPE_INPUT",
-                        f"Recipe input '{inp_id}' is not a declared output",
-                        f"{outputs_prefix}.{out_id}.recipe",
-                    )
-                )
-
-    # Check for cycles
-    cycle = _detect_output_cycle(dep_graph)
-    if cycle:
+    universe = crate.get_universe(universe_name)
+    if not universe:
         errors.append(
             SemanticError(
-                "RECIPE_CYCLE",
-                f"Dependency cycle detected: {' -> '.join(cycle)}",
-                outputs_prefix,
+                "UNIVERSE_NOT_FOUND",
+                f"Universe '{universe_name}' not found",
             )
         )
+        return errors
 
-    return errors
+    selections = crate.get_universe_selections(universe_name)
+    sel_map: dict[str, str] = dict(selections)
 
+    # Collect all non-delegated decisions across the tree
+    all_decisions = _collect_all_decisions(crate)
 
-def _detect_output_cycle(dep_graph: dict[str, list[str]]) -> list[str] | None:
-    """Detect cycles in output dependency graph. Returns cycle path or None."""
-    _white, _gray, _black = 0, 1, 2
-    color: dict[str, int] = {oid: _white for oid in dep_graph}
-    path: list[str] = []
-
-    def dfs(node: str) -> list[str] | None:
-        color[node] = _gray
-        path.append(node)
-        for dep in dep_graph.get(node, []):
-            if dep not in color:
-                continue  # invalid ref, caught elsewhere
-            if color[dep] == _gray:
-                cycle_start = path.index(dep)
-                return path[cycle_start:] + [dep]
-            if color[dep] == _white:
-                result = dfs(dep)
-                if result:
-                    return result
-        path.pop()
-        color[node] = _black
-        return None
-
-    for oid in dep_graph:
-        if color[oid] == _white:
-            result = dfs(oid)
-            if result:
-                return result
-    return None
-
-
-def _validate_decision_from_ref(
-    decision_id: str,
-    from_ref: str,
-    parent_decisions: dict[str, Any],
-    decision_path: str,
-) -> list[SemanticError]:
-    """Validate a `from` reference on a decision.
-
-    ``from: ../parent_decision_id`` references a parent decision.
-    The ``../`` prefix is required.
-    """
-
-    def _error(message: str) -> list[SemanticError]:
-        return [SemanticError("INVALID_DECISION_FROM_REF", message, decision_path)]
-
-    if not from_ref.startswith("../"):
-        return _error(
-            f"Decision from reference '{from_ref}' must use '../' prefix to reference parent scope"
-        )
-
-    parent_decision_id = from_ref[3:]  # strip ../
-    if not parent_decision_id:
-        return _error(f"Decision from reference '{from_ref}' is empty after '../'")
-
-    if parent_decision_id not in parent_decisions:
-        return _error(
-            f"Decision from reference '{from_ref}' points to non-existent "
-            f"parent decision '{parent_decision_id}'"
-        )
-
-    return []
-
-
-def _validate_from_ref(
-    from_ref: str,
-    parent_input_ids: set[str],
-    sibling_analyses: dict[str, Any],
-    current_node_id: str,
-    node_path: str,
-) -> list[SemanticError]:
-    """Validate a `from` reference on a sub-analysis input.
-
-    Supports two syntaxes:
-    - ``../`` prefix (new): ``../input_id`` (parent input),
-      ``../sibling.output_id`` (sibling output)
-    - Legacy (no prefix): ``input_id`` (parent input),
-      ``sibling.output_id`` (sibling output)
-    """
-
-    def _error(message: str) -> list[SemanticError]:
-        return [SemanticError("INVALID_FROM_REF", message, node_path)]
-
-    # Strip ../ prefix if present
-    ref = from_ref
-    if ref.startswith("../"):
-        ref = ref[3:]
-
-    parts = ref.split(".")
-    if len(parts) == 1:
-        if ref not in parent_input_ids:
-            return _error(f"from reference '{from_ref}' not found in parent inputs")
-        return []
-
-    if len(parts) == 2:
-        sibling_id, output_id = parts
-        if sibling_id == current_node_id:
-            return _error(f"from reference '{from_ref}' cannot reference own outputs")
-        if sibling_id not in sibling_analyses:
-            return _error(
-                f"from reference '{from_ref}' points to non-existent sibling '{sibling_id}'",
-            )
-        sibling_outputs = sibling_analyses[sibling_id].get("outputs") or []
-        sibling_output_ids = {o.get("id") for o in sibling_outputs if o.get("id")}
-        if output_id not in sibling_output_ids:
-            return _error(
-                f"from reference '{from_ref}' points to non-existent output "
-                f"'{output_id}' in sibling '{sibling_id}'"
-            )
-        return []
-
-    return _error(
-        f"from reference '{from_ref}' has invalid format "
-        "(expected '[../]input_id' or '[../]sibling.output_id')"
-    )
-
-
-def _validate_constraint_ref(
-    ref: str,
-    decisions: dict[str, Any],
-    option_path: str,
-) -> list[SemanticError]:
-    """Validate a constraint reference (decision.option format)."""
-    parts = ref.split(".")
-    if len(parts) != 2:
-        return [
-            SemanticError(
-                "INVALID_CONSTRAINT_FORMAT",
-                f"Constraint '{ref}' should be in 'decision.option' format",
-                option_path,
-            ),
-        ]
-
-    decision_id, option_id = parts
-
-    if decision_id not in decisions:
-        return [
-            SemanticError(
-                "INVALID_CONSTRAINT_REF",
-                f"Constraint ref '{ref}' points to non-existent decision '{decision_id}'",
-                option_path,
-            ),
-        ]
-
-    if option_id not in decisions[decision_id].get("options", {}):
-        return [
-            SemanticError(
-                "INVALID_CONSTRAINT_REF",
-                f"Constraint ref '{ref}' points to non-existent option '{option_id}'",
-                option_path,
-            ),
-        ]
-
-    return []
-
-
-def validate_universe(
-    universe_data: dict[str, Any],
-    analysis_data: dict[str, Any],
-) -> list[SemanticError]:
-    """Validate a universe against an analysis specification.
-
-    Universe mirrors the analysis tree: root-level decisions + recursive analyses.
-
-    Checks:
-    - All decisions in the analysis have a selection in the universe
-    - All selections point to valid options
-    - No constraint violations (requires, incompatible_with)
-
-    Args:
-        universe_data: The universe data as a dict.
-        analysis_data: The analysis data as a dict.
-
-    Returns:
-        List of semantic errors (empty if valid).
-    """
-    return _validate_universe_node(
-        universe_data,
-        analysis_data,
-        path_prefix="",
-        parent_universe_decisions={},
-    )
-
-
-def _validate_universe_node(
-    universe_node: dict[str, Any],
-    analysis_node: dict[str, Any],
-    path_prefix: str,
-    parent_universe_decisions: dict[str, str],
-) -> list[SemanticError]:
-    """Recursively validate a universe node against an analysis node.
-
-    Validates decisions at this level, checks for unknown/missing analyses,
-    then recurses into sub-analyses. Decisions with ``from:`` references are
-    skipped (they inherit their value from the parent universe).
-    """
-    errors: list[SemanticError] = []
-
-    # Validate decisions at this level
-    analysis_decisions = _collect_node_decisions(analysis_node)
-    # Also get all decisions including from: references for detecting what the
-    # universe should/shouldn't contain
-    all_analysis_decisions = analysis_node.get("decisions") or {}
-    universe_decisions = universe_node.get("decisions") or {}
-    decisions_path = f"{path_prefix}.decisions" if path_prefix else "decisions"
-
-    # Identify from: reference decisions (these are resolved from parent, not set in universe)
-    from_decision_ids = set()
-    for decision_id, decision in all_analysis_decisions.items():
-        if isinstance(decision, dict) and decision.get("from"):
-            from_decision_ids.add(decision_id)
-
-    # Check for unknown decisions in universe
-    for decision_id, option_id in universe_decisions.items():
-        if decision_id in from_decision_ids:
-            errors.append(
-                SemanticError(
-                    "FROM_DECISION_IN_UNIVERSE",
-                    f"Universe should not set decision '{decision_id}' "
-                    f"(it uses 'from:' to reference a parent decision)",
-                    f"{decisions_path}.{decision_id}",
-                )
-            )
-            continue
-
-        if decision_id not in analysis_decisions:
-            errors.append(
-                SemanticError(
-                    "UNKNOWN_DECISION",
-                    f"Universe references unknown decision '{decision_id}'",
-                    f"{decisions_path}.{decision_id}",
-                )
-            )
-            continue
-
-        options = analysis_decisions[decision_id].get("options", {})
-        if option_id not in options:
-            errors.append(
-                SemanticError(
-                    "UNKNOWN_OPTION",
-                    f"Universe selects unknown option '{option_id}' for decision '{decision_id}'",
-                    f"{decisions_path}.{decision_id}",
-                )
-            )
-
-        # Check option is not excluded
-        if option_id in options:
-            selected_option = options[option_id]
-            if selected_option.get("excluded", False):
-                errors.append(
-                    SemanticError(
-                        "EXCLUDED_OPTION_SELECTED",
-                        f"Universe selects excluded option '{option_id}' "
-                        f"for decision '{decision_id}'",
-                        f"{decisions_path}.{decision_id}",
-                    )
-                )
-
-    # Merge current and parent universe decisions for condition evaluation
-    all_universe_decisions = dict(parent_universe_decisions)
-    all_universe_decisions.update(universe_decisions)
-
-    # Check all locally-defined analysis decisions are covered
-    # (skip from: references -- they get their value from the parent universe)
-    for decision_id in analysis_decisions:
-        if decision_id in from_decision_ids:
-            continue  # from: decisions are inherited, not set locally
-
-        decision = analysis_decisions[decision_id]
-        when = decision.get("when")
-
-        # If conditional, check if the condition is met
-        if when:
-            if not is_condition_met(when, all_universe_decisions):
-                # Condition not met -- this decision should NOT be in the universe
-                if decision_id in universe_decisions:
-                    errors.append(
-                        SemanticError(
-                            "INACTIVE_DECISION",
-                            f"Universe specifies decision '{decision_id}' but its condition "
-                            f"'{when}' is not met",
-                            f"{decisions_path}.{decision_id}",
-                        )
-                    )
-                continue  # Skip the missing check
-
-        if decision_id not in universe_decisions:
+    # Check completeness: every non-delegated decision needs a selection
+    for dec_id in all_decisions:
+        if dec_id not in sel_map:
             errors.append(
                 SemanticError(
                     "MISSING_DECISION",
-                    f"Universe missing decision '{decision_id}'",
-                    f"{decisions_path}.{decision_id}",
+                    f"Universe '{universe_name}' missing selection for decision '{dec_id}'",
+                    path=f"universe/{universe_name}",
+                )
+            )
+
+    # Check each selection
+    for dec_id, opt_id in sel_map.items():
+        # Validate option exists
+        entity = crate.crate.dereference(opt_id)
+        if not entity and "/" in opt_id:
+            # Cross-crate reference — skip for now (would need subcrate loading)
+            pass
+        elif not entity:
+            errors.append(
+                SemanticError(
+                    "INVALID_OPTION",
+                    f"Universe '{universe_name}' selects non-existent option '{opt_id}'",
+                    path=f"universe/{universe_name}",
+                )
+            )
+            continue
+
+        # Check excluded
+        if entity and entity.get(PROP_IS_EXCLUDED):
+            errors.append(
+                SemanticError(
+                    "EXCLUDED_OPTION",
+                    f"Universe '{universe_name}' selects excluded option '{opt_id}'",
+                    path=f"universe/{universe_name}",
                 )
             )
 
     # Check constraints
-    # Build effective decisions: local selections + from: resolved from parent
-    effective_decisions = dict(universe_decisions)
-    for decision_id in from_decision_ids:
-        from_ref = all_analysis_decisions[decision_id].get("from", "")
-        if from_ref.startswith("../"):
-            parent_decision_id = from_ref[3:]
-            if parent_decision_id in parent_universe_decisions:
-                effective_decisions[decision_id] = parent_universe_decisions[parent_decision_id]
-
-    # Build effective analysis decisions for constraint checking (include resolved from:)
-    effective_analysis_decisions = dict(analysis_decisions)
-    for decision_id in from_decision_ids:
-        from_ref = all_analysis_decisions[decision_id].get("from", "")
-        if from_ref.startswith("../"):
-            parent_decision_id = from_ref[3:]
-            # The constraint scope uses the parent's decision definition
-            # (This is already in analysis_decisions if _collect_node_decisions handled it)
-
-    errors.extend(
-        _validate_node_universe_constraints(
-            effective_decisions,
-            effective_analysis_decisions,
-            decisions_path,
-        )
-    )
-
-    # Recurse into sub-analyses
-    analysis_sub = analysis_node.get("analyses") or {}
-    universe_sub = universe_node.get("analyses") or {}
-    analyses_prefix = f"{path_prefix}.analyses" if path_prefix else "analyses"
-
-    for analysis_id in universe_sub:
-        if analysis_id not in analysis_sub:
-            errors.append(
-                SemanticError(
-                    "UNKNOWN_ANALYSIS",
-                    f"Universe references unknown analysis: {analysis_id}",
-                    f"{analyses_prefix}.{analysis_id}",
-                )
-            )
-
-    for analysis_id, sub_analysis_node in analysis_sub.items():
-        sub_universe = universe_sub.get(analysis_id, {})
-
-        # Handle universe: reference on universe nodes
-        # (The actual loading of external universe files is done by the caller/resolver;
-        # here we just validate the structure we have)
-
-        errors.extend(
-            _validate_universe_node(
-                sub_universe,
-                sub_analysis_node,
-                path_prefix=f"{analyses_prefix}.{analysis_id}",
-                parent_universe_decisions=universe_decisions,
-            )
-        )
+    _check_universe_constraints(universe_name, sel_map, crate, errors)
 
     return errors
 
 
-def _parse_constraint_ref(ref: str) -> tuple[str, str] | None:
-    """Parse a constraint reference into (decision_id, option_id)."""
-    parts = ref.split(".")
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return None
+def validate_universe_file(universe_name: str, crate_dir: str | Path) -> list[SemanticError]:
+    """Load a crate and validate a universe."""
+    crate = ASTRACrate.load(crate_dir)
+    return validate_universe(universe_name, crate)
 
 
-def _validate_node_universe_constraints(
-    universe_decisions: dict[str, str],
-    analysis_decisions: dict[str, Any],
-    path_prefix: str,
-) -> list[SemanticError]:
-    """Validate that decision selections respect constraints at one node."""
-    errors: list[SemanticError] = []
+# ---------------------------------------------------------------------------
+# Internal validation helpers
+# ---------------------------------------------------------------------------
 
-    for decision_id, option_id in universe_decisions.items():
-        decision = analysis_decisions.get(decision_id)
-        if not decision:
+
+_ID_RE = re.compile(ID_PATTERN)
+_WHEN_RE = re.compile(WHEN_PATTERN)
+
+
+def _check_unique_ids(
+    inputs: list[ContextEntity],
+    outputs: list[ContextEntity],
+    errors: list[SemanticError],
+    prefix: str,
+) -> None:
+    """Check that input and output IDs are unique and well-formed."""
+    seen: set[str] = set()
+    for inp in inputs:
+        name = parse_entity_name(inp.id)
+        if not _ID_RE.match(name):
+            errors.append(
+                SemanticError("INVALID_ID", f"Invalid input ID: '{name}'", path=f"{prefix}inputs")
+            )
+        if name in seen:
+            errors.append(
+                SemanticError(
+                    "DUPLICATE_INPUT", f"Duplicate input ID: '{name}'", path=f"{prefix}inputs"
+                )
+            )
+        seen.add(name)
+
+    seen = set()
+    for out in outputs:
+        name = parse_entity_name(out.id)
+        if not _ID_RE.match(name):
+            errors.append(
+                SemanticError("INVALID_ID", f"Invalid output ID: '{name}'", path=f"{prefix}outputs")
+            )
+        if name in seen:
+            errors.append(
+                SemanticError(
+                    "DUPLICATE_OUTPUT", f"Duplicate output ID: '{name}'", path=f"{prefix}outputs"
+                )
+            )
+        seen.add(name)
+
+
+def _check_decisions(
+    crate: ASTRACrate,
+    decisions: list[ContextEntity],
+    errors: list[SemanticError],
+    prefix: str,
+) -> None:
+    """Validate decisions and their options."""
+    for dec in decisions:
+        dec_name = parse_entity_name(dec.id)
+        dec_path = f"{prefix}decisions/{dec_name}"
+
+        # Delegated decisions must not have label/options/default
+        if dec.get(PROP_DELEGATES_TO):
+            has_local = (
+                dec.get(SCHEMA_ALTERNATE_NAME)
+                or dec.get(PROP_HAS_OPTION)
+                or dec.get(PROP_DEFAULT_OPTION)
+            )
+            if has_local:
+                errors.append(
+                    SemanticError(
+                        "DELEGATED_WITH_LOCAL_FIELDS",
+                        "Delegated decision must not have label, options, or default",
+                        path=dec_path,
+                    )
+                )
             continue
 
-        option = decision.get("options", {}).get(option_id)
-        if not option:
+        # Check activeWhen format
+        when = dec.get(PROP_ACTIVE_WHEN)
+        if when:
+            for cond in as_list(when):
+                if not _WHEN_RE.match(cond):
+                    errors.append(
+                        SemanticError(
+                            "INVALID_WHEN_FORMAT",
+                            f"Invalid activeWhen condition: '{cond}'",
+                            path=dec_path,
+                        )
+                    )
+
+        # Check default exists in options
+        default_ref = dec.get(PROP_DEFAULT_OPTION)
+        if default_ref:
+            opt_refs = as_list(dec.get(PROP_HAS_OPTION))
+            opt_ids = {id_of(r) for r in opt_refs}
+            if id_of(default_ref) not in opt_ids:
+                errors.append(
+                    SemanticError(
+                        "INVALID_DEFAULT",
+                        f"Default option '{id_of(default_ref)}' not in options",
+                        path=dec_path,
+                    )
+                )
+
+            # Check default is not excluded
+            default_entity = crate.crate.dereference(id_of(default_ref))
+            if default_entity and default_entity.get(PROP_IS_EXCLUDED):
+                errors.append(
+                    SemanticError(
+                        "EXCLUDED_DEFAULT",
+                        "Default option is excluded",
+                        path=dec_path,
+                    )
+                )
+
+        for opt in crate.get_options(dec_name):
+            opt_name = parse_entity_name(opt.id)
+            opt_path = f"{dec_path}/options/{opt_name}"
+
+            # Excluded requires reason
+            if opt.get(PROP_IS_EXCLUDED) and not opt.get(PROP_EXCLUDED_REASON):
+                errors.append(
+                    SemanticError(
+                        "EXCLUDED_NO_REASON",
+                        "Excluded option missing excluded_reason",
+                        path=opt_path,
+                    )
+                )
+
+            # excluded_reason without excluded
+            if opt.get(PROP_EXCLUDED_REASON) and not opt.get(PROP_IS_EXCLUDED):
+                errors.append(
+                    SemanticError(
+                        "ORPHAN_EXCLUDED_REASON",
+                        "excluded_reason set but isExcluded is not true",
+                        path=opt_path,
+                    )
+                )
+
+            # Validate constraint references
+            for constraint_ref in as_list(opt.get(PROP_INCOMPATIBLE_WITH)):
+                ref_id = id_of(constraint_ref)
+                if not crate.crate.dereference(ref_id):
+                    errors.append(
+                        SemanticError(
+                            "INVALID_CONSTRAINT_REF",
+                            f"incompatibleWith references non-existent option '{ref_id}'",
+                            path=opt_path,
+                        )
+                    )
+
+            for constraint_ref in as_list(opt.get(PROP_REQUIRES_OPTION)):
+                ref_id = id_of(constraint_ref)
+                if not crate.crate.dereference(ref_id):
+                    errors.append(
+                        SemanticError(
+                            "INVALID_CONSTRAINT_REF",
+                            f"requiresOption references non-existent option '{ref_id}'",
+                            path=opt_path,
+                        )
+                    )
+
+            # Validate insight references
+            for insight_ref in as_list(opt.get(PROP_SUPPORTS_INSIGHT)):
+                ref_id = id_of(insight_ref)
+                if not crate.crate.dereference(ref_id):
+                    errors.append(
+                        SemanticError(
+                            "INVALID_INSIGHT_REF",
+                            f"supportsInsight references non-existent insight '{ref_id}'",
+                            path=opt_path,
+                        )
+                    )
+
+
+def _check_outputs(
+    outputs: list[ContextEntity],
+    errors: list[SemanticError],
+    prefix: str,
+) -> None:
+    """Validate output properties."""
+    for out in outputs:
+        out_name = parse_entity_name(out.id)
+        out_path = f"{prefix}outputs/{out_name}"
+
+        # Validate output type
+        otype = out.get(PROP_OUTPUT_TYPE)
+        if otype and otype not in OUTPUT_TYPES:
+            errors.append(
+                SemanticError(
+                    "INVALID_OUTPUT_TYPE",
+                    f"Invalid output type: '{otype}'",
+                    path=out_path,
+                )
+            )
+
+
+def _check_inputs(
+    inputs: list[ContextEntity],
+    errors: list[SemanticError],
+    prefix: str,
+) -> None:
+    """Validate input properties."""
+    for inp in inputs:
+        inp_name = parse_entity_name(inp.id)
+        inp_path = f"{prefix}inputs/{inp_name}"
+
+        itype = inp.get(PROP_INPUT_TYPE)
+        if itype and itype not in INPUT_TYPES:
+            errors.append(
+                SemanticError(
+                    "INVALID_INPUT_TYPE",
+                    f"Invalid input type: '{itype}'",
+                    path=inp_path,
+                )
+            )
+
+
+def _check_recipes(
+    crate: ASTRACrate,
+    outputs: list[ContextEntity],
+    errors: list[SemanticError],
+    prefix: str,
+) -> None:
+    """Validate recipe dependencies and check for cycles."""
+    deps = crate.get_output_dependencies(outputs)
+    output_names = {parse_entity_name(o.id) for o in outputs}
+
+    for out_name, dep_names in deps.items():
+        for dep in dep_names:
+            if dep not in output_names:
+                errors.append(
+                    SemanticError(
+                        "INVALID_RECIPE_INPUT",
+                        f"Recipe for '{out_name}' references non-existent output '{dep}'",
+                        path=f"{prefix}outputs/{out_name}/recipe",
+                    )
+                )
+
+    # Cycle detection
+    visited: set[str] = set()
+    rec_stack: set[str] = set()
+
+    def has_cycle(node: str) -> bool:
+        visited.add(node)
+        rec_stack.add(node)
+        for neighbor in deps.get(node, []):
+            if neighbor not in visited:
+                if has_cycle(neighbor):
+                    return True
+            elif neighbor in rec_stack:
+                return True
+        rec_stack.discard(node)
+        return False
+
+    for node in deps:
+        if node not in visited:
+            if has_cycle(node):
+                errors.append(
+                    SemanticError(
+                        "RECIPE_CYCLE",
+                        "Cycle detected in recipe dependency graph",
+                        path=f"{prefix}recipes",
+                    )
+                )
+                break
+
+
+def _check_insights(
+    crate: ASTRACrate,
+    outputs: list[ContextEntity],
+    errors: list[SemanticError],
+    prefix: str,
+) -> None:
+    """Validate insight evidence references and constraints."""
+    output_ids = {o.id for o in outputs}
+
+    for insight in crate.get_prior_insights() + crate.get_findings():
+        insight_name = parse_entity_name(insight.id)
+        insight_path = f"{prefix}insights/{insight_name}"
+        ev_refs = as_list(insight.get(PROP_HAS_EVIDENCE))
+
+        # Insight must have at least one evidence item
+        if not ev_refs:
+            errors.append(
+                SemanticError(
+                    "MISSING_EVIDENCE",
+                    "Insight must have at least one evidence",
+                    path=insight_path,
+                )
+            )
+
+        for ev_ref in ev_refs:
+            ev = crate.crate.dereference(id_of(ev_ref))
+            if not ev:
+                continue
+
+            has_doi = bool(ev.get(SCHEMA_IDENTIFIER))
+            has_artifact = bool(ev.get(SCHEMA_IS_BASED_ON))
+            ev_name = parse_entity_name(ev.id)
+            ev_path = f"{insight_path}/evidence/{ev_name}"
+
+            # Exactly one of doi or artifact
+            if has_doi == has_artifact:
+                errors.append(
+                    SemanticError(
+                        "EVIDENCE_SOURCE",
+                        "Evidence must have exactly one of 'identifier' (DOI) "
+                        "or 'isBasedOn' (artifact)",
+                        path=ev_path,
+                    )
+                )
+
+            # Literature evidence requires at least one content selector
+            if has_doi and not (ev.get("quote") or ev.get("figure") or ev.get("table")):
+                errors.append(
+                    SemanticError(
+                        "MISSING_SELECTOR",
+                        "Literature evidence must have at least one content "
+                        "selector (quote, figure, or table)",
+                        path=ev_path,
+                    )
+                )
+
+            # Artifact refs must point to valid outputs
+            if has_artifact:
+                ref_id = id_of(ev.get(SCHEMA_IS_BASED_ON))
+                if ref_id not in output_ids:
+                    errors.append(
+                        SemanticError(
+                            "INVALID_ARTIFACT_REF",
+                            f"Evidence artifact references non-existent output '{ref_id}'",
+                            path=ev_path,
+                        )
+                    )
+
+
+def _check_success_criteria(
+    crate: ASTRACrate,
+    outputs: list[ContextEntity],
+    errors: list[SemanticError],
+    prefix: str,
+) -> None:
+    """Validate success criteria."""
+    output_ids = {parse_entity_name(o.id) for o in outputs}
+
+    for criterion in crate.get_success_criteria():
+        c_path = f"{prefix}criteria/{criterion.id}"
+
+        # condition requires output
+        if criterion.get(PROP_CONDITION) and not criterion.get(SCHEMA_OBJECT):
+            errors.append(
+                SemanticError(
+                    "CONDITION_WITHOUT_OUTPUT",
+                    "Success criterion with 'condition' must also specify an 'output'",
+                    path=c_path,
+                )
+            )
+
+        # output must reference a valid output
+        output_ref = criterion.get(SCHEMA_OBJECT)
+        if output_ref:
+            ref_name = parse_entity_name(id_of(output_ref))
+            if ref_name not in output_ids:
+                errors.append(
+                    SemanticError(
+                        "INVALID_CRITERION_OUTPUT",
+                        f"Success criterion references non-existent output '{ref_name}'",
+                        path=c_path,
+                    )
+                )
+
+
+def _collect_all_decisions(crate: ASTRACrate) -> set[str]:
+    """Collect all non-delegated decision @ids across the tree."""
+    return {dec_id for dec_id, _dec in crate.walk_local_decisions()}
+
+
+def _check_universe_constraints(
+    universe_name: str,
+    sel_map: dict[str, str],
+    crate: ASTRACrate,
+    errors: list[SemanticError],
+) -> None:
+    """Check incompatible_with and requires constraints in a universe."""
+    selected_options: set[str] = set(sel_map.values())
+
+    for dec_id, opt_id in sel_map.items():
+        opt_entity = crate.crate.dereference(opt_id)
+        if not opt_entity:
             continue
 
-        path = f"{path_prefix}.{decision_id}"
-
-        # Check incompatible_with
-        for ref in option.get("incompatible_with") or []:
-            parsed = _parse_constraint_ref(ref)
-            if parsed and universe_decisions.get(parsed[0]) == parsed[1]:
+        # incompatible_with
+        for incompat_ref in as_list(opt_entity.get(PROP_INCOMPATIBLE_WITH)):
+            incompat_id = id_of(incompat_ref)
+            if incompat_id in selected_options:
                 errors.append(
                     SemanticError(
                         "INCOMPATIBLE_OPTIONS",
-                        f"Option '{decision_id}.{option_id}' is incompatible with '{ref}'",
-                        path,
+                        f"Option '{opt_id}' is incompatible with '{incompat_id}', "
+                        f"but both selected in universe '{universe_name}'",
+                        path=f"universe/{universe_name}",
                     )
                 )
 
-        # Check requires
-        for ref in option.get("requires") or []:
-            parsed = _parse_constraint_ref(ref)
-            if parsed and universe_decisions.get(parsed[0]) != parsed[1]:
-                actual = universe_decisions.get(parsed[0], "(not set)")
+        # requires
+        for req_ref in as_list(opt_entity.get(PROP_REQUIRES_OPTION)):
+            req_id = id_of(req_ref)
+            if req_id not in selected_options:
                 errors.append(
                     SemanticError(
                         "MISSING_REQUIRED_OPTION",
-                        f"Option '{decision_id}.{option_id}' requires '{ref}' but got '{actual}'",
-                        path,
+                        f"Option '{opt_id}' requires '{req_id}', "
+                        f"but it is not selected in universe '{universe_name}'",
+                        path=f"universe/{universe_name}",
                     )
                 )
-
-    return errors
-
-
-def validate_analysis_file(path: str | Path) -> list[SemanticError]:
-    """Load and validate an analysis file."""
-    path = Path(path)
-    data = load_yaml(path)
-    return validate_analysis(data, base_path=path.parent)
-
-
-def validate_universe_file(
-    universe_path: str | Path,
-    analysis_path: str | Path,
-) -> list[SemanticError]:
-    """Load and validate a universe file against an analysis."""
-    analysis_data = load_yaml(analysis_path)
-    universe_data = load_yaml(universe_path)
-    return validate_universe(universe_data, analysis_data)
