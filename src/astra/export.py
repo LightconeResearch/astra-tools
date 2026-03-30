@@ -186,9 +186,7 @@ def _populate_subcrate(crate: ASTRACrate, data: dict[str, Any]) -> None:
             )
 
 
-def _add_insight(
-    crate: ASTRACrate, name: str, data: dict[str, Any], *, is_finding: bool
-) -> None:
+def _add_insight(crate: ASTRACrate, name: str, data: dict[str, Any], *, is_finding: bool) -> None:
     """Add an insight to the crate."""
     evidence_list = []
     for ev in data.get("evidence") or []:

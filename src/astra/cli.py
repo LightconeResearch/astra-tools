@@ -5,36 +5,91 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 from rich.console import Console
 from rich.tree import Tree
 
-from astra.crate import ASTRACrate
-from astra.vocabulary import (
-    PROP_INPUT_TYPE,
-    PROP_OUTPUT_TYPE,
-    SCHEMA_ALTERNATE_NAME,
-    SCHEMA_DESCRIPTION,
-    SCHEMA_NAME,
-    parse_entity_name,
-)
-
 console = Console()
 
 
-def find_crate_dir(start: Path | None = None) -> Path:
-    """Find the nearest directory containing ro-crate-metadata.json."""
-    current = start or Path.cwd()
-    while True:
-        if (current / "ro-crate-metadata.json").exists():
-            return current
-        parent = current.parent
-        if parent == current:
-            break
-        current = parent
-    click.echo("Error: No ro-crate-metadata.json found in current or parent directories.", err=True)
-    sys.exit(1)
+def _find_dir(start: Path | None = None) -> tuple[Path, str]:
+    """Find nearest analysis directory and its format."""
+    from astra.loader import find_analysis_dir
+
+    try:
+        return find_analysis_dir(start)
+    except FileNotFoundError:
+        click.echo("Error: No astra.yaml or ro-crate-metadata.json found.", err=True)
+        sys.exit(1)
+
+
+def _load(directory: str | None) -> tuple[dict[str, Any], str]:
+    """Load analysis data from a directory, detecting format."""
+    dir_path = Path(directory) if directory else None
+    if dir_path and (dir_path / "astra.yaml").exists():
+        path, fmt = dir_path, "yaml"
+    elif dir_path and (dir_path / "ro-crate-metadata.json").exists():
+        path, fmt = dir_path, "rocrate"
+    else:
+        path, fmt = _find_dir(dir_path)
+
+    if fmt == "yaml":
+        from astra.loader import load_yaml
+
+        return load_yaml(path), fmt
+    else:
+        # Load RO-Crate and convert to dict-like structure for display
+        from astra.crate import ASTRACrate
+        from astra.vocabulary import (
+            PROP_OUTPUT_TYPE,
+            SCHEMA_ALTERNATE_NAME,
+            SCHEMA_DESCRIPTION,
+            parse_entity_name,
+        )
+
+        crate = ASTRACrate.load(path)
+        # Build a minimal dict for display purposes
+        data: dict[str, Any] = {
+            "name": crate.name,
+            "description": crate.description,
+            "astra_version": crate.astra_version,
+            "inputs": [
+                {
+                    "name": parse_entity_name(i.id),
+                    "type": i.get("inputType", ""),
+                    "description": i.get(SCHEMA_DESCRIPTION, ""),
+                }
+                for i in crate.get_inputs()
+            ],
+            "outputs": [
+                {
+                    "name": parse_entity_name(o.id),
+                    "type": o.get(PROP_OUTPUT_TYPE, ""),
+                    "description": o.get(SCHEMA_DESCRIPTION, ""),
+                }
+                for o in crate.get_outputs()
+            ],
+            "decisions": {},
+            "universes": {},
+        }
+        for dec in crate.get_decisions():
+            dname = parse_entity_name(dec.id)
+            opts = {}
+            for opt in crate.get_options(dname):
+                oname = parse_entity_name(opt.id)
+                opts[oname] = {"name": oname, "label": opt.get(SCHEMA_ALTERNATE_NAME, "")}
+            data["decisions"][dname] = {
+                "name": dname,
+                "label": dec.get(SCHEMA_ALTERNATE_NAME, ""),
+                "options": opts,
+            }
+        for u in crate.get_universes():
+            data["universes"][u.get("name", u.id)] = {
+                "description": u.get(SCHEMA_DESCRIPTION, ""),
+            }
+        return data, fmt
 
 
 @click.group()
@@ -51,36 +106,62 @@ def main() -> None:
 @main.command()
 @click.argument("directory", default=".")
 def init(directory: str) -> None:
-    """Create a new ASTRA analysis (RO-Crate)."""
+    """Create a new ASTRA analysis."""
     target = Path(directory)
-    if (target / "ro-crate-metadata.json").exists():
-        click.echo(f"Error: {target / 'ro-crate-metadata.json'} already exists.", err=True)
+    if (target / "astra.yaml").exists():
+        click.echo(f"Error: {target / 'astra.yaml'} already exists.", err=True)
         sys.exit(1)
 
-    crate = ASTRACrate(
-        name=target.resolve().name,
-        version="1.0",
-        description="A new ASTRA analysis.",
-    )
-    crate.add_input("data", "data", description="Input dataset")
-    crate.add_output("result", "metric", description="Analysis result")
-    crate.add_decision(
-        "method",
-        "Method",
-        {"a": {"label": "Option A"}, "b": {"label": "Option B"}},
-        default="a",
-    )
-    crate.generate_default_universe("baseline", description="Default configuration")
+    analysis_name = target.resolve().name
+    content = f"""\
+name: {analysis_name}
+astra_version: "1.0"
+label: {analysis_name.replace("_", " ").title()}
+description: A new ASTRA analysis.
+
+inputs:
+  - name: data
+    type: data
+    description: Input dataset
+
+outputs:
+  - name: result
+    type: metric
+    description: Analysis result
+    recipe:
+      command: python src/run.py
+
+decisions:
+  method:
+    name: method
+    label: Method
+    default: a
+    options:
+      a:
+        name: a
+        label: Option A
+      b:
+        name: b
+        label: Option B
+
+universes:
+  baseline:
+    name: baseline
+    description: Default configuration
+    selections:
+      - decision: method
+        option: a
+"""
 
     target.mkdir(parents=True, exist_ok=True)
     (target / "src").mkdir(exist_ok=True)
     (target / "outputs").mkdir(exist_ok=True)
+    (target / "astra.yaml").write_text(content)
 
     gitignore = target / ".gitignore"
     if not gitignore.exists():
         gitignore.write_text("outputs/\n__pycache__/\n*.pyc\n.venv/\n")
 
-    crate.write(target)
     console.print(f"[green]Created ASTRA analysis in {target}/[/green]")
 
 
@@ -92,19 +173,31 @@ def init(directory: str) -> None:
 @main.command()
 @click.argument("directory", required=False)
 def validate(directory: str | None) -> None:
-    """Validate an ASTRA crate."""
-    from astra.validation.semantic import validate_analysis
+    """Validate an ASTRA analysis."""
+    data, fmt = _load(directory)
 
-    crate_dir = Path(directory) if directory else find_crate_dir()
-    crate = ASTRACrate.load(crate_dir)
-    errors = validate_analysis(crate)
+    if fmt == "yaml":
+        from astra.loader import validate_yaml
 
-    if errors:
-        console.print(f"[red]Validation failed with {len(errors)} error(s):[/red]")
-        for e in errors:
-            console.print(f"  [red]•[/red] {e}")
-        sys.exit(1)
+        errors = validate_yaml(data)
+        if errors:
+            console.print(f"[red]Schema validation failed ({len(errors)} error(s)):[/red]")
+            for e in errors:
+                console.print(f"  [red]•[/red] {e}")
+            sys.exit(1)
+        console.print("[green]Validation passed.[/green]")
     else:
+        from astra.crate import ASTRACrate
+        from astra.validation.semantic import validate_analysis
+
+        dir_path = Path(directory) if directory else _find_dir()[0]
+        crate = ASTRACrate.load(dir_path)
+        errors = validate_analysis(crate)
+        if errors:
+            console.print(f"[red]Validation failed ({len(errors)} error(s)):[/red]")
+            for e in errors:
+                console.print(f"  [red]•[/red] {e}")
+            sys.exit(1)
         console.print("[green]Validation passed.[/green]")
 
 
@@ -114,9 +207,9 @@ def validate(directory: str | None) -> None:
 
 
 @main.command()
-@click.option("-d", "--decisions", "show_decisions", is_flag=True, help="Show decisions")
-@click.option("-i", "--inputs", "show_inputs", is_flag=True, help="Show inputs")
-@click.option("-o", "--outputs", "show_outputs", is_flag=True, help="Show outputs")
+@click.option("-d", "--decisions", "show_decisions", is_flag=True)
+@click.option("-i", "--inputs", "show_inputs", is_flag=True)
+@click.option("-o", "--outputs", "show_outputs", is_flag=True)
 @click.argument("directory", required=False)
 def info(
     directory: str | None,
@@ -125,50 +218,42 @@ def info(
     show_outputs: bool,
 ) -> None:
     """Display analysis metadata."""
-    crate_dir = Path(directory) if directory else find_crate_dir()
-    crate = ASTRACrate.load(crate_dir)
+    data, _ = _load(directory)
     show_all = not (show_decisions or show_inputs or show_outputs)
 
-    console.print(f"[bold]{crate.name}[/bold]")
-    if crate.description:
-        console.print(f"  {crate.description}")
-    console.print(f"  Version: {crate.astra_version}")
+    console.print(f"[bold]{data.get('label', data.get('name', ''))}[/bold]")
+    if data.get("description"):
+        console.print(f"  {data['description'].strip()}")
+    console.print(f"  Version: {data.get('astra_version', '?')}")
     console.print()
 
     if show_all or show_inputs:
         console.print("[bold]Inputs:[/bold]")
-        for inp in crate.get_inputs():
-            name = parse_entity_name(inp.id)
-            itype = inp.get(PROP_INPUT_TYPE, "")
-            desc = inp.get(SCHEMA_DESCRIPTION, "")
-            console.print(f"  • {name} ({itype}) {desc}")
+        for inp in data.get("inputs") or []:
+            console.print(f"  • {inp['name']} ({inp.get('type', '')}) {inp.get('description', '')}")
         console.print()
 
     if show_all or show_outputs:
         console.print("[bold]Outputs:[/bold]")
-        for out in crate.get_outputs():
-            name = parse_entity_name(out.id)
-            otype = out.get(PROP_OUTPUT_TYPE, "")
-            desc = out.get(SCHEMA_DESCRIPTION, "")
-            console.print(f"  • {name} ({otype}) {desc}")
+        for out in data.get("outputs") or []:
+            console.print(f"  • {out['name']} ({out.get('type', '')}) {out.get('description', '')}")
         console.print()
 
     if show_all or show_decisions:
         console.print("[bold]Decisions:[/bold]")
-        for dec in crate.get_decisions():
-            name = parse_entity_name(dec.id)
-            label = dec.get(SCHEMA_ALTERNATE_NAME, "")
-            opts = crate.get_options(name)
-            console.print(f"  • {name}: {label}")
-            for opt in opts:
-                console.print(f"    - {parse_entity_name(opt.id)}")
+        for dec_name, dec in (data.get("decisions") or {}).items():
+            label = dec.get("label", "")
+            console.print(f"  • {dec_name}: {label}")
+            for opt_name in dec.get("options") or {}:
+                console.print(f"    - {opt_name}")
         console.print()
 
-    universes = crate.get_universes()
+    universes = data.get("universes") or {}
     if universes:
         console.print("[bold]Universes:[/bold]")
-        for u in universes:
-            console.print(f"  • {u.get(SCHEMA_NAME, u.id)}: {u.get(SCHEMA_DESCRIPTION, '')}")
+        for name, uni in universes.items():
+            desc = uni.get("description", "")
+            console.print(f"  • {name}: {desc}")
 
 
 # ---------------------------------------------------------------------------
@@ -187,15 +272,20 @@ def universe() -> None:
 @click.argument("directory", required=False)
 def universe_generate(name: str, description: str | None, directory: str | None) -> None:
     """Generate a default universe from analysis defaults."""
-    crate_dir = Path(directory) if directory else find_crate_dir()
-    crate = ASTRACrate.load(crate_dir)
+    from astra.helpers import generate_default_universe
+    from astra.loader import load_yaml, save_yaml
 
-    if crate.get_universe(name):
+    dir_path = Path(directory) if directory else _find_dir()[0]
+    data = load_yaml(dir_path)
+
+    universes = data.setdefault("universes", {})
+    if name in universes:
         click.echo(f"Error: Universe '{name}' already exists.", err=True)
         sys.exit(1)
 
-    crate.generate_default_universe(name, description=description)
-    crate.write(crate_dir)
+    universe_data = generate_default_universe(data, name, description)
+    universes[name] = universe_data
+    save_yaml(data, dir_path / "astra.yaml")
     console.print(f"[green]Generated universe '{name}'[/green]")
 
 
@@ -204,19 +294,14 @@ def universe_generate(name: str, description: str | None, directory: str | None)
 @click.argument("directory", required=False)
 def universe_check(name: str, directory: str | None) -> None:
     """Validate a universe against the analysis."""
-    from astra.validation.semantic import validate_universe
+    from astra.helpers import get_universe
 
-    crate_dir = Path(directory) if directory else find_crate_dir()
-    crate = ASTRACrate.load(crate_dir)
-    errors = validate_universe(name, crate)
-
-    if errors:
-        console.print(f"[red]Universe '{name}' has {len(errors)} error(s):[/red]")
-        for e in errors:
-            console.print(f"  [red]•[/red] {e}")
+    data, _ = _load(directory)
+    u = get_universe(data, name)
+    if not u:
+        console.print(f"[red]Universe '{name}' not found.[/red]")
         sys.exit(1)
-    else:
-        console.print(f"[green]Universe '{name}' is valid.[/green]")
+    console.print(f"[green]Universe '{name}' is valid.[/green]")
 
 
 # ---------------------------------------------------------------------------
@@ -228,50 +313,76 @@ def universe_check(name: str, directory: str | None) -> None:
 @click.argument("directory", required=False)
 def viz(directory: str | None) -> None:
     """Visualize analysis structure as a tree."""
-    crate_dir = Path(directory) if directory else find_crate_dir()
-    crate = ASTRACrate.load(crate_dir)
-
-    tree = Tree(f"[bold]{crate.name}[/bold]")
-    _build_tree(tree, crate, crate_dir)
+    data, _ = _load(directory)
+    label = data.get("label", data.get("name", "Analysis"))
+    tree = Tree(f"[bold]{label}[/bold]")
+    _build_tree(tree, data)
     console.print(tree)
 
 
-def _build_tree(tree: Tree, crate: ASTRACrate, crate_dir: Path) -> None:
-    """Recursively build a Rich tree from an ASTRA crate."""
-    inputs = crate.get_inputs()
+def _build_tree(tree: Tree, data: dict[str, Any]) -> None:
+    """Recursively build a Rich tree from analysis data."""
+    inputs = data.get("inputs") or []
     if inputs:
-        inp_branch = tree.add("[cyan]inputs[/cyan]")
+        branch = tree.add("[cyan]inputs[/cyan]")
         for inp in inputs:
-            name = parse_entity_name(inp.id)
-            inp_branch.add(f"{name} ({inp.get(PROP_INPUT_TYPE, '')})")
+            branch.add(f"{inp['name']} ({inp.get('type', '')})")
 
-    outputs = crate.get_outputs()
+    outputs = data.get("outputs") or []
     if outputs:
-        out_branch = tree.add("[green]outputs[/green]")
+        branch = tree.add("[green]outputs[/green]")
         for out in outputs:
-            name = parse_entity_name(out.id)
-            out_branch.add(f"{name} ({out.get(PROP_OUTPUT_TYPE, '')})")
+            branch.add(f"{out['name']} ({out.get('type', '')})")
 
-    decisions = crate.get_decisions()
+    decisions = data.get("decisions") or {}
     if decisions:
-        dec_branch = tree.add("[yellow]decisions[/yellow]")
-        for dec in decisions:
-            name = parse_entity_name(dec.id)
-            opts = crate.get_options(name)
-            dec_node = dec_branch.add(f"{name}: {dec.get(SCHEMA_ALTERNATE_NAME, '')}")
-            for opt in opts:
-                dec_node.add(parse_entity_name(opt.id))
+        branch = tree.add("[yellow]decisions[/yellow]")
+        for dec_name, dec in decisions.items():
+            label = dec.get("label", "")
+            node = branch.add(f"{dec_name}: {label}")
+            for opt_name in dec.get("options") or {}:
+                node.add(opt_name)
 
-    # Subcrate directories
-    for sub_name in sorted(crate_dir.iterdir()):
-        if sub_name.is_dir() and (sub_name / "ro-crate-metadata.json").exists():
-            sub_crate = ASTRACrate.load(sub_name)
-            sub_branch = tree.add(f"[magenta]{sub_name.name}/[/magenta]")
-            _build_tree(sub_branch, sub_crate, sub_name)
+    for sub_name, sub_data in (data.get("analyses") or {}).items():
+        sub_branch = tree.add(f"[magenta]{sub_name}/[/magenta]")
+        _build_tree(sub_branch, sub_data)
 
 
 # ---------------------------------------------------------------------------
-# paper commands (preserved from v1)
+# export
+# ---------------------------------------------------------------------------
+
+
+@main.group()
+def export() -> None:
+    """Export analysis to other formats."""
+
+
+@export.command("rocrate")
+@click.option("-o", "--output", default=None, help="Output directory")
+@click.argument("directory", required=False)
+def export_rocrate_cmd(output: str | None, directory: str | None) -> None:
+    """Export analysis as RO-Crate."""
+    from astra.export import export_rocrate
+    from astra.loader import load_yaml, validate_yaml
+
+    dir_path = Path(directory) if directory else _find_dir()[0]
+    data = load_yaml(dir_path)
+
+    errors = validate_yaml(data)
+    if errors:
+        console.print("[red]Validation failed, cannot export:[/red]")
+        for e in errors:
+            console.print(f"  [red]•[/red] {e}")
+        sys.exit(1)
+
+    output_dir = Path(output) if output else dir_path
+    export_rocrate(data, output_dir)
+    console.print(f"[green]Exported RO-Crate to {output_dir}/[/green]")
+
+
+# ---------------------------------------------------------------------------
+# paper commands (preserved)
 # ---------------------------------------------------------------------------
 
 
@@ -283,7 +394,7 @@ def paper() -> None:
 @paper.command("add")
 @click.argument("doi")
 @click.option("--version", type=int, default=None, help="arXiv version")
-@click.option("--pdf", type=click.Path(exists=True), default=None, help="Local PDF file")
+@click.option("--pdf", type=click.Path(exists=True), default=None)
 def paper_add(doi: str, version: int | None, pdf: str | None) -> None:
     """Download and cache a paper by DOI."""
     from astra.papers.download import download_paper_to_cache
@@ -295,7 +406,7 @@ def paper_add(doi: str, version: int | None, pdf: str | None) -> None:
         cache.add_from_file(doi, Path(pdf), version=version)
         console.print(f"[green]Cached paper from {pdf}[/green]")
     else:
-        path, result = download_paper_to_cache(doi, version=version)
+        _, result = download_paper_to_cache(doi, version=version)
         if result.success:
             console.print(f"[green]Downloaded and cached: {doi}[/green]")
             if result.title:
