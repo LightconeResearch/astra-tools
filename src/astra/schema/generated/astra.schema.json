@@ -1,0 +1,1575 @@
+{
+    "$defs": {
+        "Analysis": {
+            "additionalProperties": false,
+            "description": "Root entity of an ASTRA analysis. Self-similar: can contain sub-analyses with the same structure.",
+            "properties": {
+                "analyses": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/Analysis__identifier_optional"
+                            },
+                            {
+                                "description": "ASTRA specification version",
+                                "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "description": "Sub-analyses (self-similar nesting)",
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "astra_version": {
+                    "description": "ASTRA specification version",
+                    "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+                    "type": "string"
+                },
+                "authors": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "container": {
+                    "description": "Default container image for recipes",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "decisions": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/Decision__identifier_optional"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "findings": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/Insight__identifier_optional"
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "inputs": {
+                    "items": {
+                        "$ref": "#/$defs/Input"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "outputs": {
+                    "items": {
+                        "$ref": "#/$defs/Output"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "prior_insights": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/Insight__identifier_optional"
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "success_criteria": {
+                    "items": {
+                        "$ref": "#/$defs/SuccessCriterion"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "tags": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "universes": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/Universe__identifier_optional"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "astra_version",
+                "name"
+            ],
+            "title": "Analysis",
+            "type": "object"
+        },
+        "Analysis__identifier_optional": {
+            "additionalProperties": false,
+            "description": "Root entity of an ASTRA analysis. Self-similar: can contain sub-analyses with the same structure.",
+            "properties": {
+                "analyses": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/Analysis__identifier_optional"
+                            },
+                            {
+                                "description": "ASTRA specification version",
+                                "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "description": "Sub-analyses (self-similar nesting)",
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "astra_version": {
+                    "description": "ASTRA specification version",
+                    "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+                    "type": "string"
+                },
+                "authors": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "container": {
+                    "description": "Default container image for recipes",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "decisions": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/Decision__identifier_optional"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "findings": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/Insight__identifier_optional"
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "inputs": {
+                    "items": {
+                        "$ref": "#/$defs/Input"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "outputs": {
+                    "items": {
+                        "$ref": "#/$defs/Output"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "prior_insights": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/Insight__identifier_optional"
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "success_criteria": {
+                    "items": {
+                        "$ref": "#/$defs/SuccessCriterion"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "tags": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "universes": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/Universe__identifier_optional"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "astra_version"
+            ],
+            "title": "Analysis",
+            "type": "object"
+        },
+        "Checksum": {
+            "additionalProperties": false,
+            "description": "Data integrity checksum",
+            "properties": {
+                "algorithm": {
+                    "$ref": "#/$defs/ChecksumAlgorithm"
+                },
+                "value": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "algorithm",
+                "value"
+            ],
+            "title": "Checksum",
+            "type": "object"
+        },
+        "ChecksumAlgorithm": {
+            "description": "",
+            "enum": [
+                "sha256",
+                "sha512",
+                "md5"
+            ],
+            "title": "ChecksumAlgorithm",
+            "type": "string"
+        },
+        "Decision": {
+            "additionalProperties": false,
+            "description": "A choice point with multiple options",
+            "if": {
+                "properties": {
+                    "delegates_to": {}
+                },
+                "required": [
+                    "delegates_to"
+                ]
+            },
+            "properties": {
+                "active_when": {
+                    "description": "Conditions for this decision to be active",
+                    "items": {
+                        "pattern": "^~?[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "default": {
+                    "description": "ID of the default option",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "delegates_to": {
+                    "description": "Parent decision reference (e.g. ../random_seed)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "options": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/Option__identifier_optional"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "rationale": {
+                    "description": "Why this decision exists (alias for description)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "tags": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "then": {
+                "not": {
+                    "required": [
+                        "options",
+                        "default"
+                    ]
+                },
+                "properties": {
+                    "default": {},
+                    "options": {}
+                }
+            },
+            "title": "Decision",
+            "type": "object"
+        },
+        "Decision__identifier_optional": {
+            "additionalProperties": false,
+            "description": "A choice point with multiple options",
+            "if": {
+                "properties": {
+                    "delegates_to": {}
+                },
+                "required": [
+                    "delegates_to"
+                ]
+            },
+            "properties": {
+                "active_when": {
+                    "description": "Conditions for this decision to be active",
+                    "items": {
+                        "pattern": "^~?[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "default": {
+                    "description": "ID of the default option",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "delegates_to": {
+                    "description": "Parent decision reference (e.g. ../random_seed)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "options": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/Option__identifier_optional"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "rationale": {
+                    "description": "Why this decision exists (alias for description)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "tags": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [],
+            "then": {
+                "not": {
+                    "required": [
+                        "options",
+                        "default"
+                    ]
+                },
+                "properties": {
+                    "default": {},
+                    "options": {}
+                }
+            },
+            "title": "Decision",
+            "type": "object"
+        },
+        "Evidence": {
+            "additionalProperties": false,
+            "description": "Evidence source with content selectors",
+            "properties": {
+                "artifact": {
+                    "description": "Output ID for artifact evidence",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "checksum": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Checksum"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "doi": {
+                    "description": "DOI for literature evidence",
+                    "pattern": "^10\\.\\d{4,}/.*$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "figure": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/FigureSelector"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "id": {
+                    "type": "string"
+                },
+                "location": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/LocationSelector"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "quote": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/QuoteSelector"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "snapshot": {
+                    "description": "Path to immutable artifact copy",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "source_commit": {
+                    "description": "Git commit that produced the artifact",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "table": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/TableSelector"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "version": {
+                    "description": "Version number (e.g. arXiv version)",
+                    "minimum": 1,
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "id"
+            ],
+            "title": "Evidence",
+            "type": "object"
+        },
+        "FigureSelector": {
+            "additionalProperties": false,
+            "description": "Reference to a figure in a document",
+            "properties": {
+                "caption": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Figure label (e.g. Figure 3a)",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "label"
+            ],
+            "title": "FigureSelector",
+            "type": "object"
+        },
+        "Input": {
+            "additionalProperties": false,
+            "description": "An input to the analysis (data source or analysis reference)",
+            "properties": {
+                "based_on": {
+                    "description": "Reference to another analysis",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "checksum": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Checksum"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "input_from": {
+                    "description": "Parent input or sibling output reference",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "ref_version": {
+                    "description": "Version of the referenced analysis",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "source": {
+                    "description": "Path or URI for data inputs",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "type": {
+                    "$ref": "#/$defs/InputTypeEnum"
+                },
+                "use_outputs": {
+                    "description": "Specific output IDs from the referenced analysis",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "type",
+                "name"
+            ],
+            "title": "Input",
+            "type": "object"
+        },
+        "InputTypeEnum": {
+            "description": "",
+            "enum": [
+                "data",
+                "analysis"
+            ],
+            "title": "InputTypeEnum",
+            "type": "string"
+        },
+        "Insight": {
+            "additionalProperties": false,
+            "description": "Scientific claim backed by evidence",
+            "properties": {
+                "claim": {
+                    "description": "The claim text (1-2 sentences)",
+                    "type": "string"
+                },
+                "created_at": {
+                    "format": "date-time",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "evidence": {
+                    "items": {
+                        "$ref": "#/$defs/Evidence"
+                    },
+                    "type": "array"
+                },
+                "is_derived": {
+                    "description": "Whether this insight is synthesized/inferred",
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "notes": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "scope": {
+                    "description": "Applicability conditions",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "tags": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "claim",
+                "evidence",
+                "name"
+            ],
+            "title": "Insight",
+            "type": "object"
+        },
+        "Insight__identifier_optional": {
+            "additionalProperties": false,
+            "description": "Scientific claim backed by evidence",
+            "properties": {
+                "claim": {
+                    "description": "The claim text (1-2 sentences)",
+                    "type": "string"
+                },
+                "created_at": {
+                    "format": "date-time",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "evidence": {
+                    "items": {
+                        "$ref": "#/$defs/Evidence"
+                    },
+                    "type": "array"
+                },
+                "is_derived": {
+                    "description": "Whether this insight is synthesized/inferred",
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "notes": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "scope": {
+                    "description": "Applicability conditions",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "tags": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "claim",
+                "evidence"
+            ],
+            "title": "Insight",
+            "type": "object"
+        },
+        "LocationSelector": {
+            "additionalProperties": false,
+            "description": "Location hint (page number)",
+            "properties": {
+                "page": {
+                    "description": "1-indexed page number",
+                    "minimum": 1,
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                }
+            },
+            "title": "LocationSelector",
+            "type": "object"
+        },
+        "Option": {
+            "additionalProperties": false,
+            "description": "One selectable choice within a decision",
+            "properties": {
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "excluded_reason": {
+                    "description": "Why this option was excluded",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "incompatible_with": {
+                    "description": "decision.option pairs that conflict",
+                    "items": {
+                        "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "insights": {
+                    "description": "Insight IDs that support this option",
+                    "items": {
+                        "pattern": "^[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "is_excluded": {
+                    "description": "Whether this option was considered and rejected",
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "requires": {
+                    "description": "decision.option pairs that must coexist",
+                    "items": {
+                        "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "title": "Option",
+            "type": "object"
+        },
+        "Option__identifier_optional": {
+            "additionalProperties": false,
+            "description": "One selectable choice within a decision",
+            "properties": {
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "excluded_reason": {
+                    "description": "Why this option was excluded",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "incompatible_with": {
+                    "description": "decision.option pairs that conflict",
+                    "items": {
+                        "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "insights": {
+                    "description": "Insight IDs that support this option",
+                    "items": {
+                        "pattern": "^[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "is_excluded": {
+                    "description": "Whether this option was considered and rejected",
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "requires": {
+                    "description": "decision.option pairs that must coexist",
+                    "items": {
+                        "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [],
+            "title": "Option",
+            "type": "object"
+        },
+        "Output": {
+            "additionalProperties": false,
+            "description": "A declared output of the analysis",
+            "properties": {
+                "active_when": {
+                    "description": "Conditions for this output to be active",
+                    "items": {
+                        "pattern": "^~?[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Human-readable label",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": "string"
+                },
+                "output_from": {
+                    "description": "Sub-analysis output reference (e.g. classification.accuracy)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "recipe": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Recipe"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "Build rule for producing this output"
+                },
+                "type": {
+                    "$ref": "#/$defs/OutputTypeEnum"
+                }
+            },
+            "required": [
+                "type",
+                "name"
+            ],
+            "title": "Output",
+            "type": "object"
+        },
+        "OutputTypeEnum": {
+            "description": "",
+            "enum": [
+                "metric",
+                "figure",
+                "table",
+                "data",
+                "report"
+            ],
+            "title": "OutputTypeEnum",
+            "type": "string"
+        },
+        "QuoteSelector": {
+            "additionalProperties": false,
+            "description": "W3C TextQuoteSelector",
+            "properties": {
+                "exact": {
+                    "description": "Exact quoted text",
+                    "type": "string"
+                },
+                "prefix": {
+                    "description": "Text before the quote for disambiguation",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "suffix": {
+                    "description": "Text after the quote for disambiguation",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "exact"
+            ],
+            "title": "QuoteSelector",
+            "type": "object"
+        },
+        "Recipe": {
+            "additionalProperties": false,
+            "description": "Build rule for producing an output",
+            "properties": {
+                "command": {
+                    "description": "Shell command to execute",
+                    "type": "string"
+                },
+                "container": {
+                    "description": "Container image override",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "depends_on": {
+                    "description": "Output IDs this recipe depends on",
+                    "items": {
+                        "pattern": "^[a-z][a-z0-9_]*$",
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "resources": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Resources"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "command"
+            ],
+            "title": "Recipe",
+            "type": "object"
+        },
+        "Resources": {
+            "additionalProperties": false,
+            "description": "Compute resource requirements",
+            "properties": {
+                "cpus": {
+                    "minimum": 1,
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "gpus": {
+                    "minimum": 0,
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "memory": {
+                    "description": "Memory requirement (e.g. 8GB)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "time_limit": {
+                    "description": "Time limit (e.g. 2h, 30m)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "title": "Resources",
+            "type": "object"
+        },
+        "SuccessCriterion": {
+            "additionalProperties": false,
+            "description": "Testable success condition",
+            "if": {
+                "properties": {
+                    "condition": {}
+                },
+                "required": [
+                    "condition"
+                ]
+            },
+            "properties": {
+                "claim": {
+                    "description": "Human-readable statement of the criterion",
+                    "type": "string"
+                },
+                "condition": {
+                    "description": "Testable condition expression (e.g. value > 0.95)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "output": {
+                    "description": "Output ID to check",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "claim"
+            ],
+            "then": {
+                "properties": {
+                    "output": {}
+                },
+                "required": [
+                    "output"
+                ]
+            },
+            "title": "SuccessCriterion",
+            "type": "object"
+        },
+        "TableSelector": {
+            "additionalProperties": false,
+            "description": "Reference to a table in a document",
+            "properties": {
+                "caption": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "label": {
+                    "description": "Table label (e.g. Table 2)",
+                    "type": "string"
+                },
+                "region": {
+                    "description": "Specific region (e.g. row 3, accuracy column)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "label"
+            ],
+            "title": "TableSelector",
+            "type": "object"
+        },
+        "Universe": {
+            "additionalProperties": false,
+            "description": "One complete set of decision selections",
+            "properties": {
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_-]*$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "selections": {
+                    "description": "List of decision=option bindings. In YAML authoring format, can also be written as a flat dict {decision: option} which the loader normalizes to this list form.",
+                    "items": {
+                        "$ref": "#/$defs/UniverseSelection"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "title": "Universe",
+            "type": "object"
+        },
+        "UniverseSelection": {
+            "additionalProperties": false,
+            "description": "One decision=option binding in a universe",
+            "properties": {
+                "decision": {
+                    "type": "string"
+                },
+                "option": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "decision",
+                "option"
+            ],
+            "title": "UniverseSelection",
+            "type": "object"
+        },
+        "Universe__identifier_optional": {
+            "additionalProperties": false,
+            "description": "One complete set of decision selections",
+            "properties": {
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "pattern": "^[a-z][a-z0-9_-]*$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "selections": {
+                    "description": "List of decision=option bindings. In YAML authoring format, can also be written as a flat dict {decision: option} which the loader normalizes to this list form.",
+                    "items": {
+                        "$ref": "#/$defs/UniverseSelection"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [],
+            "title": "Universe",
+            "type": "object"
+        }
+    },
+    "$id": "https://w3id.org/astra/schema",
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "additionalProperties": true,
+    "description": "Root entity of an ASTRA analysis. Self-similar: can contain sub-analyses with the same structure.",
+    "metamodel_version": "1.7.0",
+    "properties": {
+        "analyses": {
+            "additionalProperties": {
+                "anyOf": [
+                    {
+                        "$ref": "#/$defs/Analysis__identifier_optional"
+                    },
+                    {
+                        "description": "ASTRA specification version",
+                        "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+                        "type": "string"
+                    }
+                ]
+            },
+            "description": "Sub-analyses (self-similar nesting)",
+            "type": [
+                "object",
+                "null"
+            ]
+        },
+        "astra_version": {
+            "description": "ASTRA specification version",
+            "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+            "type": "string"
+        },
+        "authors": {
+            "items": {
+                "type": "string"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
+        },
+        "container": {
+            "description": "Default container image for recipes",
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "decisions": {
+            "additionalProperties": {
+                "anyOf": [
+                    {
+                        "$ref": "#/$defs/Decision__identifier_optional"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "type": [
+                "object",
+                "null"
+            ]
+        },
+        "description": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "findings": {
+            "additionalProperties": {
+                "$ref": "#/$defs/Insight__identifier_optional"
+            },
+            "type": [
+                "object",
+                "null"
+            ]
+        },
+        "inputs": {
+            "items": {
+                "$ref": "#/$defs/Input"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
+        },
+        "label": {
+            "description": "Human-readable label",
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "name": {
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+        },
+        "outputs": {
+            "items": {
+                "$ref": "#/$defs/Output"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
+        },
+        "prior_insights": {
+            "additionalProperties": {
+                "$ref": "#/$defs/Insight__identifier_optional"
+            },
+            "type": [
+                "object",
+                "null"
+            ]
+        },
+        "success_criteria": {
+            "items": {
+                "$ref": "#/$defs/SuccessCriterion"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
+        },
+        "tags": {
+            "items": {
+                "type": "string"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
+        },
+        "universes": {
+            "additionalProperties": {
+                "anyOf": [
+                    {
+                        "$ref": "#/$defs/Universe__identifier_optional"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "type": [
+                "object",
+                "null"
+            ]
+        }
+    },
+    "required": [
+        "astra_version",
+        "name"
+    ],
+    "title": "astra",
+    "type": "object",
+    "version": "1.0"
+}
+

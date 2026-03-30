@@ -1,0 +1,586 @@
+id: https://w3id.org/astra/schema
+name: astra
+title: "ASTRA: Agentic Schema for Transparent Research Analysis"
+description: >-
+  Declarative specification format for scientific analyses.
+  Defines the structure for analyses with inputs, outputs, decisions,
+  insights, universes, and self-similar sub-analyses.
+license: https://creativecommons.org/licenses/by/4.0/
+version: "1.0"
+
+prefixes:
+  astra: https://w3id.org/astra/terms/
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+
+default_prefix: astra
+default_range: string
+
+imports:
+  - linkml:types
+
+# ---------------------------------------------------------------------------
+# Custom types
+# ---------------------------------------------------------------------------
+
+types:
+  AstraId:
+    typeof: string
+    pattern: "^[a-z][a-z0-9_]*$"
+    description: "Lowercase identifier (letters, digits, underscores)"
+
+  UniverseId:
+    typeof: string
+    pattern: "^[a-z][a-z0-9_-]*$"
+    description: "Lowercase identifier (letters, digits, underscores, hyphens)"
+
+  SemVer:
+    typeof: string
+    pattern: "^\\d+\\.\\d+(\\.\\d+)?$"
+    description: "Semantic version string (e.g. 1.0, 1.0.0)"
+
+  DoiString:
+    typeof: string
+    pattern: "^10\\.\\d{4,}/.*$"
+    description: "DOI identifier (e.g. 10.1234/example)"
+
+  ConstraintRef:
+    typeof: string
+    pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+    description: "Constraint reference in decision.option format"
+
+  WhenCondition:
+    typeof: string
+    pattern: "^~?[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+    description: "Condition in [~]decision.option format"
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+enums:
+  OutputTypeEnum:
+    permissible_values:
+      metric:
+        description: "Numeric or categorical measurement"
+      figure:
+        description: "Visualization"
+      table:
+        description: "Structured tabular data"
+      data:
+        description: "Processed data files"
+      report:
+        description: "Text document or synthesis"
+
+  InputTypeEnum:
+    permissible_values:
+      data:
+        description: "Raw data input"
+      analysis:
+        description: "Reference to a previous analysis"
+
+  ChecksumAlgorithm:
+    permissible_values:
+      sha256: {}
+      sha512: {}
+      md5: {}
+
+# ---------------------------------------------------------------------------
+# Mixins
+# ---------------------------------------------------------------------------
+
+classes:
+
+  # Mixin providing schema.org Thing properties
+  NamedEntity:
+    mixin: true
+    class_uri: schema:Thing
+    attributes:
+      name:
+        slot_uri: schema:name
+        identifier: true
+        range: AstraId
+        required: true
+      label:
+        slot_uri: schema:alternateName
+        range: string
+        description: "Human-readable label"
+      description:
+        slot_uri: schema:description
+        range: string
+
+  # -----------------------------------------------------------------------
+  # Root: Analysis
+  # -----------------------------------------------------------------------
+
+  Analysis:
+    tree_root: true
+    class_uri: astra:Analysis
+    description: >-
+      Root entity of an ASTRA analysis. Self-similar: can contain
+      sub-analyses with the same structure.
+    mixins:
+      - NamedEntity
+    attributes:
+      astra_version:
+        slot_uri: astra:astraVersion
+        range: SemVer
+        required: true
+        description: "ASTRA specification version"
+      authors:
+        slot_uri: schema:author
+        range: string
+        multivalued: true
+      tags:
+        slot_uri: schema:keywords
+        range: string
+        multivalued: true
+      container:
+        range: string
+        description: "Default container image for recipes"
+      inputs:
+        range: Input
+        multivalued: true
+        inlined_as_list: true
+      outputs:
+        range: Output
+        multivalued: true
+        inlined_as_list: true
+      decisions:
+        slot_uri: astra:hasDecision
+        range: Decision
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+      prior_insights:
+        slot_uri: astra:hasPriorInsight
+        range: Insight
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+      findings:
+        slot_uri: astra:hasFinding
+        range: Insight
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+      success_criteria:
+        range: SuccessCriterion
+        multivalued: true
+        inlined_as_list: true
+      analyses:
+        description: "Sub-analyses (self-similar nesting)"
+        range: Analysis
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+      universes:
+        range: Universe
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+
+  # -----------------------------------------------------------------------
+  # Input
+  # -----------------------------------------------------------------------
+
+  Input:
+    class_uri: astra:Input
+    description: "An input to the analysis (data source or analysis reference)"
+    mixins:
+      - NamedEntity
+    attributes:
+      type:
+        slot_uri: astra:inputType
+        range: InputTypeEnum
+        required: true
+      source:
+        slot_uri: schema:identifier
+        range: string
+        description: "Path or URI for data inputs"
+      based_on:
+        slot_uri: schema:isBasedOn
+        range: string
+        description: "Reference to another analysis"
+      ref_version:
+        slot_uri: schema:version
+        range: string
+        description: "Version of the referenced analysis"
+      use_outputs:
+        slot_uri: astra:useOutputs
+        range: string
+        multivalued: true
+        description: "Specific output IDs from the referenced analysis"
+      input_from:
+        slot_uri: astra:inputFrom
+        range: string
+        description: "Parent input or sibling output reference"
+      checksum:
+        range: Checksum
+        inlined: true
+
+  # -----------------------------------------------------------------------
+  # Output
+  # -----------------------------------------------------------------------
+
+  Output:
+    class_uri: astra:Output
+    description: "A declared output of the analysis"
+    mixins:
+      - NamedEntity
+    attributes:
+      type:
+        slot_uri: astra:outputType
+        range: OutputTypeEnum
+        required: true
+      recipe:
+        range: Recipe
+        inlined: true
+        description: "Build rule for producing this output"
+      active_when:
+        slot_uri: astra:activeWhen
+        range: WhenCondition
+        multivalued: true
+        description: "Conditions for this output to be active"
+      output_from:
+        slot_uri: astra:outputFrom
+        range: string
+        description: "Sub-analysis output reference (e.g. classification.accuracy)"
+
+  # -----------------------------------------------------------------------
+  # Recipe
+  # -----------------------------------------------------------------------
+
+  Recipe:
+    class_uri: astra:Recipe
+    description: "Build rule for producing an output"
+    attributes:
+      command:
+        range: string
+        required: true
+        description: "Shell command to execute"
+      depends_on:
+        range: AstraId
+        multivalued: true
+        description: "Output IDs this recipe depends on"
+      container:
+        range: string
+        description: "Container image override"
+      resources:
+        range: Resources
+        inlined: true
+
+  # -----------------------------------------------------------------------
+  # Resources
+  # -----------------------------------------------------------------------
+
+  Resources:
+    class_uri: astra:Resources
+    description: "Compute resource requirements"
+    attributes:
+      cpus:
+        slot_uri: astra:cpus
+        range: integer
+        minimum_value: 1
+      memory:
+        slot_uri: astra:memory
+        range: string
+        description: "Memory requirement (e.g. 8GB)"
+      gpus:
+        slot_uri: astra:gpus
+        range: integer
+        minimum_value: 0
+      time_limit:
+        slot_uri: astra:timeLimit
+        range: string
+        description: "Time limit (e.g. 2h, 30m)"
+
+  # -----------------------------------------------------------------------
+  # Decision & Option
+  # -----------------------------------------------------------------------
+
+  Decision:
+    class_uri: astra:Decision
+    description: "A choice point with multiple options"
+    mixins:
+      - NamedEntity
+    attributes:
+      options:
+        slot_uri: astra:hasOption
+        range: Option
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+      default:
+        slot_uri: astra:defaultOption
+        range: AstraId
+        description: "ID of the default option"
+      rationale:
+        range: string
+        description: "Why this decision exists (alias for description)"
+      active_when:
+        slot_uri: astra:activeWhen
+        range: WhenCondition
+        multivalued: true
+        description: "Conditions for this decision to be active"
+      delegates_to:
+        slot_uri: astra:delegatesTo
+        range: string
+        description: "Parent decision reference (e.g. ../random_seed)"
+      tags:
+        slot_uri: schema:keywords
+        range: string
+        multivalued: true
+    rules:
+      - description: "Delegated decisions must not have options or default"
+        preconditions:
+          slot_conditions:
+            delegates_to:
+              required: true
+        postconditions:
+          slot_conditions:
+            options:
+              value_presence: ABSENT
+            default:
+              value_presence: ABSENT
+
+  Option:
+    class_uri: astra:Option
+    description: "One selectable choice within a decision"
+    mixins:
+      - NamedEntity
+    attributes:
+      insights:
+        slot_uri: astra:supportsInsight
+        range: AstraId
+        multivalued: true
+        description: "Insight IDs that support this option"
+      incompatible_with:
+        slot_uri: astra:incompatibleWith
+        range: ConstraintRef
+        multivalued: true
+        description: "decision.option pairs that conflict"
+      requires:
+        slot_uri: astra:requiresOption
+        range: ConstraintRef
+        multivalued: true
+        description: "decision.option pairs that must coexist"
+      is_excluded:
+        slot_uri: astra:isExcluded
+        range: boolean
+        description: "Whether this option was considered and rejected"
+      excluded_reason:
+        slot_uri: astra:excludedReason
+        range: string
+        description: "Why this option was excluded"
+
+  # -----------------------------------------------------------------------
+  # Insight & Evidence
+  # -----------------------------------------------------------------------
+
+  Insight:
+    class_uri: astra:Insight
+    description: "Scientific claim backed by evidence"
+    mixins:
+      - NamedEntity
+    attributes:
+      claim:
+        slot_uri: schema:text
+        range: string
+        required: true
+        description: "The claim text (1-2 sentences)"
+      created_at:
+        slot_uri: schema:dateCreated
+        range: datetime
+      evidence:
+        slot_uri: astra:hasEvidence
+        range: Evidence
+        multivalued: true
+        inlined_as_list: true
+        required: true
+      is_derived:
+        slot_uri: astra:isDerived
+        range: boolean
+        description: "Whether this insight is synthesized/inferred"
+      scope:
+        slot_uri: astra:scope
+        range: string
+        description: "Applicability conditions"
+      notes:
+        slot_uri: schema:comment
+        range: string
+      tags:
+        slot_uri: schema:keywords
+        range: string
+        multivalued: true
+
+  Evidence:
+    class_uri: astra:Evidence
+    description: "Evidence source with content selectors"
+    attributes:
+      id:
+        identifier: true
+        range: string
+        required: true
+      doi:
+        range: DoiString
+        description: "DOI for literature evidence"
+      version:
+        range: integer
+        description: "Version number (e.g. arXiv version)"
+        minimum_value: 1
+      artifact:
+        range: AstraId
+        description: "Output ID for artifact evidence"
+      source_commit:
+        slot_uri: astra:sourceCommit
+        range: string
+        description: "Git commit that produced the artifact"
+      snapshot:
+        range: string
+        description: "Path to immutable artifact copy"
+      checksum:
+        range: Checksum
+        inlined: true
+      quote:
+        range: QuoteSelector
+        inlined: true
+      figure:
+        range: FigureSelector
+        inlined: true
+      table:
+        range: TableSelector
+        inlined: true
+      location:
+        range: LocationSelector
+        inlined: true
+
+  # -----------------------------------------------------------------------
+  # W3C Selectors
+  # -----------------------------------------------------------------------
+
+  QuoteSelector:
+    description: "W3C TextQuoteSelector"
+    attributes:
+      exact:
+        range: string
+        required: true
+        description: "Exact quoted text"
+      prefix:
+        range: string
+        description: "Text before the quote for disambiguation"
+      suffix:
+        range: string
+        description: "Text after the quote for disambiguation"
+
+  FigureSelector:
+    description: "Reference to a figure in a document"
+    attributes:
+      label:
+        range: string
+        required: true
+        description: "Figure label (e.g. Figure 3a)"
+      caption:
+        range: string
+
+  TableSelector:
+    description: "Reference to a table in a document"
+    attributes:
+      label:
+        range: string
+        required: true
+        description: "Table label (e.g. Table 2)"
+      caption:
+        range: string
+      region:
+        range: string
+        description: "Specific region (e.g. row 3, accuracy column)"
+
+  LocationSelector:
+    description: "Location hint (page number)"
+    attributes:
+      page:
+        range: integer
+        minimum_value: 1
+        description: "1-indexed page number"
+
+  # -----------------------------------------------------------------------
+  # Checksum
+  # -----------------------------------------------------------------------
+
+  Checksum:
+    class_uri: astra:Checksum
+    description: "Data integrity checksum"
+    attributes:
+      algorithm:
+        range: ChecksumAlgorithm
+        required: true
+      value:
+        range: string
+        required: true
+
+  # -----------------------------------------------------------------------
+  # Universe
+  # -----------------------------------------------------------------------
+
+  Universe:
+    class_uri: astra:Universe
+    description: "One complete set of decision selections"
+    attributes:
+      name:
+        identifier: true
+        range: UniverseId
+      description:
+        range: string
+      selections:
+        slot_uri: astra:hasSelection
+        range: UniverseSelection
+        multivalued: true
+        inlined_as_list: true
+        description: >-
+          List of decision=option bindings. In YAML authoring format,
+          can also be written as a flat dict {decision: option} which
+          the loader normalizes to this list form.
+
+  UniverseSelection:
+    class_uri: astra:UniverseSelection
+    description: "One decision=option binding in a universe"
+    attributes:
+      decision:
+        slot_uri: astra:selectsDecision
+        range: string
+        required: true
+      option:
+        slot_uri: astra:selectsOption
+        range: string
+        required: true
+
+  # -----------------------------------------------------------------------
+  # Success Criterion
+  # -----------------------------------------------------------------------
+
+  SuccessCriterion:
+    class_uri: astra:SuccessCriterion
+    description: "Testable success condition"
+    attributes:
+      claim:
+        range: string
+        required: true
+        description: "Human-readable statement of the criterion"
+      output:
+        range: AstraId
+        description: "Output ID to check"
+      condition:
+        slot_uri: astra:condition
+        range: string
+        description: "Testable condition expression (e.g. value > 0.95)"
+    rules:
+      - description: "condition requires output"
+        preconditions:
+          slot_conditions:
+            condition:
+              required: true
+        postconditions:
+          slot_conditions:
+            output:
+              required: true
