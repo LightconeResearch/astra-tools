@@ -14,12 +14,16 @@ from rich.tree import Tree
 console = Console()
 
 
-def _find_dir(start: Path | None = None) -> tuple[Path, str]:
-    """Find nearest analysis directory and its format."""
+def _resolve_dir(directory: str | None) -> tuple[Path, str]:
+    """Resolve a directory argument to an analysis path and format.
+
+    Checks the given directory first, then walks up the tree via find_analysis_dir.
+    """
     from astra.loader import find_analysis_dir
 
+    dir_path = Path(directory) if directory else None
     try:
-        return find_analysis_dir(start)
+        return find_analysis_dir(dir_path)
     except FileNotFoundError:
         click.echo("Error: No astra.yaml or ro-crate-metadata.json found.", err=True)
         sys.exit(1)
@@ -27,80 +31,74 @@ def _find_dir(start: Path | None = None) -> tuple[Path, str]:
 
 def _load(directory: str | None) -> tuple[dict[str, Any], str]:
     """Load analysis data from a directory, detecting format."""
-    dir_path = Path(directory) if directory else None
-    if dir_path and (dir_path / "astra.yaml").exists():
-        path, fmt = dir_path, "yaml"
-    elif dir_path and (dir_path / "ro-crate-metadata.json").exists():
-        path, fmt = dir_path, "rocrate"
-    else:
-        path, fmt = _find_dir(dir_path)
+    path, fmt = _resolve_dir(directory)
 
     if fmt == "yaml":
         from astra.loader import load_yaml
 
         return load_yaml(path), fmt
-    else:
-        # Load RO-Crate and convert to dict-like structure for display
-        from astra.crate import ASTRACrate
-        from astra.vocabulary import (
-            PROP_OUTPUT_TYPE,
-            SCHEMA_ALTERNATE_NAME,
-            SCHEMA_DESCRIPTION,
-            parse_entity_name,
-        )
 
-        crate = ASTRACrate.load(path)
-        # Build a minimal dict for display purposes
-        data: dict[str, Any] = {
-            "name": crate.name,
-            "description": crate.description,
-            "astra_version": crate.astra_version,
-            "inputs": [
-                {
-                    "name": parse_entity_name(i.id),
-                    "type": i.get("inputType", ""),
-                    "description": i.get(SCHEMA_DESCRIPTION, ""),
-                }
-                for i in crate.get_inputs()
-            ],
-            "outputs": [
-                {
-                    "name": parse_entity_name(o.id),
-                    "type": o.get(PROP_OUTPUT_TYPE, ""),
-                    "description": o.get(SCHEMA_DESCRIPTION, ""),
-                }
-                for o in crate.get_outputs()
-            ],
-            "decisions": {},
-            "universes": {},
+    # Load RO-Crate and convert to dict-like structure for display
+    return _rocrate_to_dict(path), fmt
+
+
+def _rocrate_to_dict(path: Path) -> dict[str, Any]:
+    """Load an RO-Crate and convert to a dict for display commands."""
+    from astra.crate import ASTRACrate
+    from astra.vocabulary import (
+        PROP_INPUT_TYPE,
+        PROP_OUTPUT_TYPE,
+        SCHEMA_ALTERNATE_NAME,
+        SCHEMA_DESCRIPTION,
+        parse_entity_name,
+    )
+
+    crate = ASTRACrate.load(path)
+    data: dict[str, Any] = {
+        "name": crate.name,
+        "description": crate.description,
+        "astra_version": crate.astra_version,
+        "inputs": [
+            {
+                "name": parse_entity_name(i.id),
+                "type": i.get(PROP_INPUT_TYPE, ""),
+                "description": i.get(SCHEMA_DESCRIPTION, ""),
+            }
+            for i in crate.get_inputs()
+        ],
+        "outputs": [
+            {
+                "name": parse_entity_name(o.id),
+                "type": o.get(PROP_OUTPUT_TYPE, ""),
+                "description": o.get(SCHEMA_DESCRIPTION, ""),
+            }
+            for o in crate.get_outputs()
+        ],
+        "decisions": {},
+        "universes": {},
+    }
+    for dec in crate.get_decisions():
+        dname = parse_entity_name(dec.id)
+        opts = {}
+        for opt in crate.get_options(dname):
+            oname = parse_entity_name(opt.id)
+            opts[oname] = {"name": oname, "label": opt.get(SCHEMA_ALTERNATE_NAME, "")}
+        data["decisions"][dname] = {
+            "name": dname,
+            "label": dec.get(SCHEMA_ALTERNATE_NAME, ""),
+            "options": opts,
         }
-        for dec in crate.get_decisions():
-            dname = parse_entity_name(dec.id)
-            opts = {}
-            for opt in crate.get_options(dname):
-                oname = parse_entity_name(opt.id)
-                opts[oname] = {"name": oname, "label": opt.get(SCHEMA_ALTERNATE_NAME, "")}
-            data["decisions"][dname] = {
-                "name": dname,
-                "label": dec.get(SCHEMA_ALTERNATE_NAME, ""),
-                "options": opts,
-            }
-        for u in crate.get_universes():
-            data["universes"][u.get("name", u.id)] = {
-                "description": u.get(SCHEMA_DESCRIPTION, ""),
-            }
-        return data, fmt
+    for u in crate.get_universes():
+        data["universes"][u.get("name", u.id)] = {
+            "description": u.get(SCHEMA_DESCRIPTION, ""),
+        }
+    return data
 
 
 @click.group()
 @click.version_option(package_name="astra")
 def main() -> None:
     """ASTRA - Agentic Schema for Transparent Research Analysis."""
-
-
-# ---------------------------------------------------------------------------
-# init
-# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -165,45 +163,35 @@ universes:
     console.print(f"[green]Created ASTRA analysis in {target}/[/green]")
 
 
-# ---------------------------------------------------------------------------
-# validate
-# ---------------------------------------------------------------------------
-
-
 @main.command()
 @click.argument("directory", required=False)
 def validate(directory: str | None) -> None:
     """Validate an ASTRA analysis."""
-    data, fmt = _load(directory)
+    path, fmt = _resolve_dir(directory)
 
     if fmt == "yaml":
-        from astra.loader import validate_yaml
+        from astra.loader import load_yaml, validate_yaml
 
+        data = load_yaml(path)
         errors = validate_yaml(data)
         if errors:
             console.print(f"[red]Schema validation failed ({len(errors)} error(s)):[/red]")
             for e in errors:
                 console.print(f"  [red]•[/red] {e}")
             sys.exit(1)
-        console.print("[green]Validation passed.[/green]")
     else:
         from astra.crate import ASTRACrate
         from astra.validation.semantic import validate_analysis
 
-        dir_path = Path(directory) if directory else _find_dir()[0]
-        crate = ASTRACrate.load(dir_path)
+        crate = ASTRACrate.load(path)
         errors = validate_analysis(crate)
         if errors:
             console.print(f"[red]Validation failed ({len(errors)} error(s)):[/red]")
             for e in errors:
                 console.print(f"  [red]•[/red] {e}")
             sys.exit(1)
-        console.print("[green]Validation passed.[/green]")
 
-
-# ---------------------------------------------------------------------------
-# info
-# ---------------------------------------------------------------------------
+    console.print("[green]Validation passed.[/green]")
 
 
 @main.command()
@@ -256,11 +244,6 @@ def info(
             console.print(f"  • {name}: {desc}")
 
 
-# ---------------------------------------------------------------------------
-# universe
-# ---------------------------------------------------------------------------
-
-
 @main.group()
 def universe() -> None:
     """Universe management commands."""
@@ -275,7 +258,7 @@ def universe_generate(name: str, description: str | None, directory: str | None)
     from astra.helpers import generate_default_universe
     from astra.loader import load_yaml, save_yaml
 
-    dir_path = Path(directory) if directory else _find_dir()[0]
+    dir_path, _ = _resolve_dir(directory)
     data = load_yaml(dir_path)
 
     universes = data.setdefault("universes", {})
@@ -302,11 +285,6 @@ def universe_check(name: str, directory: str | None) -> None:
         console.print(f"[red]Universe '{name}' not found.[/red]")
         sys.exit(1)
     console.print(f"[green]Universe '{name}' is valid.[/green]")
-
-
-# ---------------------------------------------------------------------------
-# viz
-# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -348,11 +326,6 @@ def _build_tree(tree: Tree, data: dict[str, Any]) -> None:
         _build_tree(sub_branch, sub_data)
 
 
-# ---------------------------------------------------------------------------
-# export
-# ---------------------------------------------------------------------------
-
-
 @main.group()
 def export() -> None:
     """Export analysis to other formats."""
@@ -366,7 +339,7 @@ def export_rocrate_cmd(output: str | None, directory: str | None) -> None:
     from astra.export import export_rocrate
     from astra.loader import load_yaml, validate_yaml
 
-    dir_path = Path(directory) if directory else _find_dir()[0]
+    dir_path, _ = _resolve_dir(directory)
     data = load_yaml(dir_path)
 
     errors = validate_yaml(data)
@@ -379,11 +352,6 @@ def export_rocrate_cmd(output: str | None, directory: str | None) -> None:
     output_dir = Path(output) if output else dir_path
     export_rocrate(data, output_dir)
     console.print(f"[green]Exported RO-Crate to {output_dir}/[/green]")
-
-
-# ---------------------------------------------------------------------------
-# paper commands (preserved)
-# ---------------------------------------------------------------------------
 
 
 @main.group()

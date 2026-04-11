@@ -883,26 +883,9 @@ class ASTRACrate:
         Returns:
             True if all conditions are met (or when is None).
         """
-        if when is None:
-            return True
+        from astra.helpers import is_condition_met
 
-        conditions = [when] if isinstance(when, str) else when
-
-        for cond in conditions:
-            negated = cond.startswith("~")
-            if negated:
-                cond = cond[1:]
-            parts = cond.split(".", 1)
-            if len(parts) != 2:
-                return False
-            dec_name, opt_name = parts
-            selected = universe_decisions.get(dec_name)
-            matches = selected == opt_name
-            if negated:
-                matches = not matches
-            if not matches:
-                return False
-        return True
+        return is_condition_met(when, universe_decisions)
 
     # -------------------------------------------------------------------
     # Internal helpers
