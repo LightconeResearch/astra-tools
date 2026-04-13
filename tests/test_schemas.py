@@ -56,12 +56,12 @@ class TestUniverseValidation:
     def test_valid_universe_passes(self):
         data = {
             "id": "baseline",
-            "decisions": [{"decision_id": "method", "option_id": "a"}],
+            "decisions": {"method": "a"},
         }
         errors = validate_universe_data(data)
         assert errors == []
 
     def test_missing_id_caught(self):
-        data = {"decisions": [{"decision_id": "method", "option_id": "a"}]}
+        data = {"decisions": {"method": "a"}}
         errors = validate_universe_data(data)
         assert any("id" in e for e in errors)

@@ -4,11 +4,7 @@ id: missing-required
 description: "Violates requires constraint"
 
 decisions:
-  - decision_id: preprocessing
-    option_id: none
-  - decision_id: model
-    option_id: svm
-  - decision_id: test_split
-    option_id: split_20
-  - decision_id: seed
-    option_id: seed_42
+  preprocessing: none
+  model: svm
+  test_split: split_20
+  seed: seed_42

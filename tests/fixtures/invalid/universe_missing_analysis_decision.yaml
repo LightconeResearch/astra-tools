@@ -2,12 +2,10 @@ id: incomplete
 description: "Universe missing a sub-analysis decision"
 
 decisions:
-  - decision_id: cosmology_model
-    option_id: flat_lcdm
+  cosmology_model: flat_lcdm
 
 analyses:
   build_mocks:
     decisions:
-      - decision_id: noise_model
-        option_id: heteroscedastic
+      noise_model: heteroscedastic
   # train_network decisions are missing entirely

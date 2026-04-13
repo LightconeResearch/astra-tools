@@ -14,7 +14,6 @@ from astra.helpers import (
     is_condition_met,
     load_yaml,
     resolve_analysis_tree,
-    universe_decisions_as_dict,
 )
 
 
@@ -816,7 +815,7 @@ def _validate_universe_node(
     # Also get all decisions including from: references for detecting what the
     # universe should/shouldn't contain
     all_analysis_decisions = analysis_node.get("decisions") or {}
-    universe_decisions = universe_decisions_as_dict(universe_node.get("decisions"))
+    universe_decisions = universe_node.get("decisions") or {}
     decisions_path = f"{path_prefix}.decisions" if path_prefix else "decisions"
 
     # Identify from: reference decisions (these are resolved from parent, not set in universe)

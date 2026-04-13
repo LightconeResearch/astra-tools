@@ -22,7 +22,6 @@ from astra.helpers import (
     get_outputs,
     load_yaml,
     save_yaml,
-    universe_decisions_as_dict,
 )
 from astra.validation.schema import (
     validate_analysis_schema,
@@ -186,8 +185,7 @@ id: baseline
 description: "Default configuration using standard practices"
 
 decisions:
-  - decision_id: example_method
-    option_id: option_a
+  example_method: option_a
 """
     (directory / "universes" / "baseline.yaml").write_text(baseline_universe)
 
@@ -553,7 +551,7 @@ def _check_missing_defaults(node: dict[str, Any], missing: list[str], prefix: st
 
 def _print_universe_decisions(uni: dict[str, Any], indent: str = "  ") -> None:
     """Recursively print universe decisions."""
-    for d_id, opt_id in universe_decisions_as_dict(uni.get("decisions")).items():
+    for d_id, opt_id in (uni.get("decisions") or {}).items():
         console.print(f"{indent}{d_id}: {opt_id}")
     for analysis_id, sub in (uni.get("analyses") or {}).items():
         console.print(f"{indent}[magenta]{analysis_id}:[/magenta]")

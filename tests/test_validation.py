@@ -551,11 +551,11 @@ class TestConditionalOutputsUniverse:
         analysis_data = load_yaml(valid_dir / "decision_list_when.yaml")
         universe_data = {
             "id": "bad",
-            "decisions": [
-                {"decision_id": "mode", "option_id": "basic"},
-                {"decision_id": "backend", "option_id": "cpu"},
-                {"decision_id": "gpu_optimization", "option_id": "tensor_cores"},
-            ],
+            "decisions": {
+                "mode": "basic",
+                "backend": "cpu",
+                "gpu_optimization": "tensor_cores",
+            },
         }
         errors = validate_universe(universe_data, analysis_data)
         assert any(e.code == "INACTIVE_DECISION" for e in errors)
@@ -618,17 +618,17 @@ class TestDefaultUniverseConditional:
 
     def test_defaults_with_list_when(self, valid_dir: Path):
         """Conditional decision with list when should be included when conditions are met."""
-        from astra.helpers import get_default_universe, universe_decisions_as_dict
+        from astra.helpers import get_default_universe
 
         data = load_yaml(valid_dir / "decision_list_when.yaml")
         defaults = get_default_universe(data)
-        decisions = universe_decisions_as_dict(defaults["decisions"])
+        decisions = defaults["decisions"]
         # mode=advanced, backend=gpu -> gpu_optimization should be included
         assert decisions["gpu_optimization"] == "tensor_cores"
 
     def test_defaults_skip_unmet_list_when(self):
         """Conditional decision with unmet list when should be skipped."""
-        from astra.helpers import get_default_universe, universe_decisions_as_dict
+        from astra.helpers import get_default_universe
 
         data = {
             "decisions": {
@@ -657,6 +657,6 @@ class TestDefaultUniverseConditional:
             }
         }
         defaults = get_default_universe(data)
-        decisions = universe_decisions_as_dict(defaults["decisions"])
+        decisions = defaults["decisions"]
         # mode=basic -> condition not met, gpu_opt should NOT be included
         assert "gpu_opt" not in decisions
