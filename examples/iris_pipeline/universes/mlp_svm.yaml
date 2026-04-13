@@ -1,17 +1,20 @@
-$schema: "https://astra-spec.org/v1/universe.schema.json"
-
 id: mlp_svm
 description: "MLP encoder features with SVM classifier — tests whether learned features help"
 
 decisions:
-  test_split: twenty_pct
-  random_seed: seed_42
+  - decision_id: test_split
+    option_id: twenty_pct
+  - decision_id: random_seed
+    option_id: seed_42
 
 analyses:
   feature_extraction:
     decisions:
-      method: mlp_encoder
-      n_components: two
+      - decision_id: method
+        option_id: mlp_encoder
+      - decision_id: n_components
+        option_id: two
   classification:
     decisions:
-      classifier: svm
+      - decision_id: classifier
+        option_id: svm

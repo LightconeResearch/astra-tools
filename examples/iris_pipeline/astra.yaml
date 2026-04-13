@@ -1,4 +1,3 @@
-$schema: "https://astra-spec.org/v1/schema.json"
 version: "1.0"
 name: "Iris Two-Stage Classification"
 description: |

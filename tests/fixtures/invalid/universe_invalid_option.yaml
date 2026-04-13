@@ -3,7 +3,11 @@ id: invalid-option
 description: "Invalid option selection"
 
 decisions:
-  preprocessing: standard
-  model: nonexistent_model
-  test_split: split_20
-  seed: seed_42
+  - decision_id: preprocessing
+    option_id: standard
+  - decision_id: model
+    option_id: nonexistent_model
+  - decision_id: test_split
+    option_id: split_20
+  - decision_id: seed
+    option_id: seed_42

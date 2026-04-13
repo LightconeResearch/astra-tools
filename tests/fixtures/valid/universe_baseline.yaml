@@ -2,7 +2,11 @@ id: baseline
 description: "Baseline configuration"
 
 decisions:
-  preprocessing: standard
-  model: rf
-  test_split: split_20
-  seed: seed_42
+  - decision_id: preprocessing
+    option_id: standard
+  - decision_id: model
+    option_id: rf
+  - decision_id: test_split
+    option_id: split_20
+  - decision_id: seed
+    option_id: seed_42

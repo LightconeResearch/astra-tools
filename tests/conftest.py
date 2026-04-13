@@ -97,5 +97,5 @@ def baseline_universe_data() -> dict[str, Any]:
     return {
         "id": "baseline",
         "description": "Test baseline",
-        "decisions": {"method": "a"},
+        "decisions": [{"decision_id": "method", "option_id": "a"}],
     }

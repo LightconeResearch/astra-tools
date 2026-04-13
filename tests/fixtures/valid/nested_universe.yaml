@@ -2,12 +2,15 @@ id: baseline
 description: "Standard pipeline configuration"
 
 decisions:
-  cosmology_model: flat_lcdm
+  - decision_id: cosmology_model
+    option_id: flat_lcdm
 
 analyses:
   build_mocks:
     decisions:
-      noise_model: heteroscedastic
+      - decision_id: noise_model
+        option_id: heteroscedastic
   train_network:
     decisions:
-      architecture: maf
+      - decision_id: architecture
+        option_id: maf

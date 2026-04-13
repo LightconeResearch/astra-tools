@@ -3,5 +3,6 @@ id: incomplete
 description: "Missing decisions"
 
 decisions:
-  preprocessing: standard
+  - decision_id: preprocessing
+    option_id: standard
   # Missing: model, test_split, seed

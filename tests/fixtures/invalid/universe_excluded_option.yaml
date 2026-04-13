@@ -3,8 +3,13 @@ id: bad_excluded
 description: "Selects an excluded option"
 
 decisions:
-  preprocessing: deprecated_method
-  model: rf
-  svm_kernel: rbf
-  test_split: split_20
-  seed: seed_42
+  - decision_id: preprocessing
+    option_id: deprecated_method
+  - decision_id: model
+    option_id: rf
+  - decision_id: svm_kernel
+    option_id: rbf
+  - decision_id: test_split
+    option_id: split_20
+  - decision_id: seed
+    option_id: seed_42

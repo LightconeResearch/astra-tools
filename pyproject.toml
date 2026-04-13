@@ -1,7 +1,7 @@
 [project]
 name = "astra"
 dynamic = ["version"]
-description = "Agentic Schema for Transparent Research Analysis - A declarative specification format for scientific analyses"
+description = "Python CLI and SDK for working with ASTRA analysis specifications"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -20,10 +20,9 @@ classifiers = [
 ]
 
 dependencies = [
+    "astra-spec @ git+https://github.com/LightconeResearch/astra-spec",
     "click>=8.0",
     "pyyaml>=6.0",
-    "jsonschema>=4.0",
-    "pydantic>=2.0",
     "rich>=13.0",
     "pypdf>=4.0",
     "httpx>=0.27",
@@ -37,7 +36,6 @@ dev = [
     "ruff",
     "mypy",
     "types-PyYAML",
-    "types-jsonschema",
 ]
 
 [project.scripts]
@@ -47,18 +45,17 @@ astra = "astra.cli:main"
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.version]
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/astra"]
 
-# Automatically bundle spec/draft/ into the package as astra/spec/
-[tool.hatch.build.targets.wheel.force-include]
-"spec/draft" = "astra/spec"
-
 [tool.hatch.build.targets.sdist]
-include = ["src/astra", "spec/draft"]
+include = ["src/astra"]
 
 [tool.ruff]
 target-version = "py311"

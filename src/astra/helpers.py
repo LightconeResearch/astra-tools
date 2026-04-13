@@ -15,6 +15,26 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
+def universe_decisions_as_dict(
+    decisions: list[dict[str, str]] | dict[str, str] | None,
+) -> dict[str, str]:
+    """Convert universe decisions to dict format for internal use.
+
+    Accepts both the astra-spec list format ``[{decision_id, option_id}, ...]``
+    and the legacy compact dict format ``{decision_id: option_id, ...}``.
+    """
+    if decisions is None:
+        return {}
+    if isinstance(decisions, dict):
+        return decisions
+    return {d["decision_id"]: d["option_id"] for d in decisions}
+
+
+def universe_decisions_as_list(decisions: dict[str, str]) -> list[dict[str, str]]:
+    """Convert universe decisions from dict to the astra-spec list format."""
+    return [{"decision_id": k, "option_id": v} for k, v in decisions.items()]
+
+
 def is_condition_met(
     when: str | list[str] | None,
     universe_decisions: dict[str, str],
@@ -310,7 +330,7 @@ def _get_node_defaults(node: dict[str, Any]) -> dict[str, Any]:
                     changed = True
 
     if decisions:
-        result["decisions"] = decisions
+        result["decisions"] = universe_decisions_as_list(decisions)
     sub_analyses = node.get("analyses") or {}
     if sub_analyses:
         analyses_defaults: dict[str, Any] = {}

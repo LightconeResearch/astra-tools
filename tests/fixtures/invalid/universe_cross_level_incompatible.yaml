@@ -2,9 +2,11 @@ id: cross_level_violation
 description: "Universe violates cross-level incompatible_with constraint"
 
 decisions:
-  cosmology_model: wcdm
+  - decision_id: cosmology_model
+    option_id: wcdm
 
 analyses:
   build_mocks:
     decisions:
-      noise_model: homoscedastic
+      - decision_id: noise_model
+        option_id: homoscedastic

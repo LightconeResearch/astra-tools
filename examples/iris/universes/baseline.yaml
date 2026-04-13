@@ -1,10 +1,12 @@
-$schema: "https://astra-spec.org/v1/universe.schema.json"
-
 id: baseline
 description: "Default configuration using standard practices"
 
 decisions:
-  scaling: standard
-  model: random_forest
-  test_size: small
-  random_seed: seed_42
+  - decision_id: scaling
+    option_id: standard
+  - decision_id: model
+    option_id: random_forest
+  - decision_id: test_size
+    option_id: small
+  - decision_id: random_seed
+    option_id: seed_42

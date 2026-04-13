@@ -1,130 +1,115 @@
-"""JSON Schema validation for ASTRA specifications.
+"""Schema validation for ASTRA specifications.
 
-This module validates ASTRA YAML files against bundled JSON schemas.
-Schemas are loaded from the astra.spec package (populated from spec/draft/
-at build time), or directly from spec/draft/ during development.
+Validates ASTRA YAML files using the Pydantic models from astra-spec.
+Dict keys are injected as ``id`` fields before validation, since ASTRA YAML
+uses keyed dicts (e.g., ``decisions: {scaling: ...}``) while the Pydantic
+models expect an explicit ``id`` on each object.
 """
 
 from __future__ import annotations
 
-import json
-from importlib.resources import files
+import copy
 from pathlib import Path
 from typing import Any
 
-import jsonschema
+from astra.datamodel.astra_pydantic import Analysis, Universe
+from pydantic import ValidationError as PydanticValidationError
 
 from astra.helpers import load_yaml
 
 
-class ValidationError(Exception):
-    """Raised when validation fails."""
-
-    def __init__(self, message: str, errors: list[str] | None = None):
-        super().__init__(message)
-        self.errors = errors or []
+def _remap_from_field(obj: dict[str, Any]) -> None:
+    """Rename ``from`` to ``from_ref`` since ``from`` is a Python keyword."""
+    if "from" in obj:
+        obj.setdefault("from_ref", obj.pop("from"))
 
 
-def _find_repo_root() -> Path | None:
-    """Find the repository root by looking for spec/draft/."""
-    # Start from this file's location and walk up
-    current = Path(__file__).resolve().parent
-    for _ in range(5):  # Don't go too far up
-        if (current / "spec" / "draft").is_dir():
-            return current
-        current = current.parent
-    return None
+def _inject_ids_inplace(data: dict[str, Any]) -> None:
+    """Prepare a raw YAML dict for Pydantic validation.
 
-
-def _load_bundled_schema(name: str) -> dict[str, Any]:
-    """Load a JSON schema from bundled package or spec/draft/ in development.
-
-    Args:
-        name: Schema filename (e.g., "analysis.schema.json").
-
-    Returns:
-        The loaded JSON schema as a dict.
+    - Injects dict keys as ``id`` fields (ASTRA YAML uses keyed dicts).
+    - Renames ``from`` to ``from_ref`` (Python keyword).
     """
-    # Try bundled schemas first (installed package)
-    try:
-        schema_text = files("astra.spec").joinpath(name).read_text()
-        schema: dict[str, Any] = json.loads(schema_text)
-        return schema
-    except (FileNotFoundError, TypeError, ModuleNotFoundError):
-        pass
+    _remap_from_field(data)
 
-    # Fall back to spec/draft/ for development
-    repo_root = _find_repo_root()
-    if repo_root:
-        schema_path = repo_root / "spec" / "draft" / name
-        if schema_path.exists():
-            schema = json.loads(schema_path.read_text())
-            return schema
+    for inp in data.get("inputs") or []:
+        if isinstance(inp, dict):
+            _remap_from_field(inp)
 
-    raise FileNotFoundError(
-        f"Schema {name} not found. Run 'python tools/generate_schemas.py' to generate schemas."
-    )
+    for out in data.get("outputs") or []:
+        if isinstance(out, dict):
+            _remap_from_field(out)
 
-
-def get_analysis_schema() -> dict[str, Any]:
-    """Get the JSON Schema for analysis specifications."""
-    return _load_bundled_schema("analysis.schema.json")
-
-
-def get_universe_schema() -> dict[str, Any]:
-    """Get the JSON Schema for universe specifications."""
-    return _load_bundled_schema("universe.schema.json")
+    for field in ("decisions", "analyses", "prior_insights", "findings"):
+        mapping = data.get(field)
+        if not isinstance(mapping, dict):
+            continue
+        for key, value in mapping.items():
+            if not isinstance(value, dict):
+                continue
+            value.setdefault("id", key)
+            _remap_from_field(value)
+            if field == "decisions":
+                if isinstance(value.get("options"), dict):
+                    for okey, ovalue in value["options"].items():
+                        if isinstance(ovalue, dict):
+                            ovalue.setdefault("id", okey)
+            if field == "analyses":
+                _inject_ids_inplace(value)
 
 
-def get_insights_schema() -> dict[str, Any]:
-    """Get the JSON Schema for standalone insight collections."""
-    return _load_bundled_schema("insights.schema.json")
-
-
-def validate_against_schema(
-    data: dict[str, Any],
-    schema: dict[str, Any],
-) -> list[str]:
-    """Validate data against a JSON schema.
-
-    Returns a list of error messages (empty if valid).
-    """
-    validator = jsonschema.Draft7Validator(schema)
-    errors = []
-
-    for error in sorted(validator.iter_errors(data), key=lambda e: e.path):
-        path = ".".join(str(p) for p in error.path) if error.path else "(root)"
-        errors.append(f"{path}: {error.message}")
-
+def _format_pydantic_errors(exc: PydanticValidationError) -> list[str]:
+    """Convert Pydantic validation errors to simple error strings."""
+    errors: list[str] = []
+    for err in exc.errors():
+        path = ".".join(str(p) for p in err["loc"]) if err["loc"] else "(root)"
+        errors.append(f"{path}: {err['msg']}")
     return errors
 
 
 def validate_analysis_schema(path: str | Path) -> list[str]:
     """Validate an analysis YAML file against the schema.
 
-    Args:
-        path: Path to the analysis YAML file.
-
-    Returns:
-        List of validation errors (empty if valid).
+    Returns a list of error messages (empty if valid).
     """
     data = load_yaml(path)
-    schema = get_analysis_schema()
-    return validate_against_schema(data, schema)
+    return validate_analysis_data(data)
+
+
+def validate_analysis_data(data: dict[str, Any]) -> list[str]:
+    """Validate analysis data dict against the schema.
+
+    Returns a list of error messages (empty if valid).
+    """
+    preprocessed = copy.deepcopy(data)
+    preprocessed.setdefault("id", "_root")  # root analysis has no id in YAML
+    _inject_ids_inplace(preprocessed)
+    try:
+        Analysis.model_validate(preprocessed)
+        return []
+    except PydanticValidationError as exc:
+        return _format_pydantic_errors(exc)
 
 
 def validate_universe_schema(path: str | Path) -> list[str]:
     """Validate a universe YAML file against the schema.
 
-    Args:
-        path: Path to the universe YAML file.
-
-    Returns:
-        List of validation errors (empty if valid).
+    Returns a list of error messages (empty if valid).
     """
     data = load_yaml(path)
-    schema = get_universe_schema()
-    return validate_against_schema(data, schema)
+    return validate_universe_data(data)
+
+
+def validate_universe_data(data: dict[str, Any]) -> list[str]:
+    """Validate universe data dict against the schema.
+
+    Returns a list of error messages (empty if valid).
+    """
+    try:
+        Universe.model_validate(data)
+        return []
+    except PydanticValidationError as exc:
+        return _format_pydantic_errors(exc)
 
 
 def is_valid_analysis(path: str | Path) -> bool:

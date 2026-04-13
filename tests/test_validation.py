@@ -354,10 +354,10 @@ class TestSuccessCriteriaValidation:
         errors = validate_analysis_file(valid_dir / "success_criteria.yaml")
         assert errors == []
 
-    def test_valid_success_criteria_schema(self, valid_dir: Path):
-        """Structured success criteria should pass schema validation."""
+    def test_success_criteria_schema_rejects_unknown_field(self, valid_dir: Path):
+        """success_criteria is not in the astra-spec schema (spec gap)."""
         errors = validate_analysis_schema(valid_dir / "success_criteria.yaml")
-        assert errors == []
+        assert any("success_criteria" in e for e in errors)
 
     def test_condition_without_output(self, invalid_dir: Path):
         """Condition set without output should fail semantic validation."""
@@ -551,11 +551,11 @@ class TestConditionalOutputsUniverse:
         analysis_data = load_yaml(valid_dir / "decision_list_when.yaml")
         universe_data = {
             "id": "bad",
-            "decisions": {
-                "mode": "basic",
-                "backend": "cpu",
-                "gpu_optimization": "tensor_cores",  # inactive: mode != advanced
-            },
+            "decisions": [
+                {"decision_id": "mode", "option_id": "basic"},
+                {"decision_id": "backend", "option_id": "cpu"},
+                {"decision_id": "gpu_optimization", "option_id": "tensor_cores"},
+            ],
         }
         errors = validate_universe(universe_data, analysis_data)
         assert any(e.code == "INACTIVE_DECISION" for e in errors)
@@ -618,16 +618,17 @@ class TestDefaultUniverseConditional:
 
     def test_defaults_with_list_when(self, valid_dir: Path):
         """Conditional decision with list when should be included when conditions are met."""
-        from astra.helpers import get_default_universe
+        from astra.helpers import get_default_universe, universe_decisions_as_dict
 
         data = load_yaml(valid_dir / "decision_list_when.yaml")
         defaults = get_default_universe(data)
+        decisions = universe_decisions_as_dict(defaults["decisions"])
         # mode=advanced, backend=gpu -> gpu_optimization should be included
-        assert defaults["decisions"]["gpu_optimization"] == "tensor_cores"
+        assert decisions["gpu_optimization"] == "tensor_cores"
 
     def test_defaults_skip_unmet_list_when(self):
         """Conditional decision with unmet list when should be skipped."""
-        from astra.helpers import get_default_universe
+        from astra.helpers import get_default_universe, universe_decisions_as_dict
 
         data = {
             "decisions": {
@@ -656,5 +657,6 @@ class TestDefaultUniverseConditional:
             }
         }
         defaults = get_default_universe(data)
+        decisions = universe_decisions_as_dict(defaults["decisions"])
         # mode=basic -> condition not met, gpu_opt should NOT be included
-        assert "gpu_opt" not in defaults["decisions"]
+        assert "gpu_opt" not in decisions

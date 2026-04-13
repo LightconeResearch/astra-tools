@@ -5,24 +5,18 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-A declarative specification format for scientific analyses that can be executed by AI agents.
+Python CLI and SDK for working with ASTRA analysis specifications.
 
 ## What is ASTRA?
 
-ASTRA is the **core specification** for describing scientific analyses. It separates **what** you want to learn from **how** to compute it:
+ASTRA is a declarative specification format for scientific analyses. This package provides the **tooling layer** -- validation, CLI, paper management, and evidence verification.
 
-- **Inputs** - Data, previous analyses
-- **Outputs** - Metrics, figures, tables, data, reports
-- **Decisions** - The choices that define your analysis
-- **Insights** - Evidence from papers with quote verification
-- **Constraints** - Relationships between decision options
-- **Recipes** - Optional build rules for producing outputs
-
-ASTRA makes no prescription about execution frameworks. The specification defines *what* to compute; execution is handled by the agentic layer.
+The specification itself is defined in [astra-spec](https://github.com/LightconeResearch/astra-spec) using LinkML schemas.
 
 ```
-ASTRA (this package)  =  Schema, validation, insights, evidence verification, CLI
-Prism (agent layer) =  Claude Code skills, project scaffolding, remote/HPC config
+astra-spec            =  LinkML schemas, generated data models
+ASTRA (this package)  =  Validation, CLI, helpers, evidence verification
+Prism (agent layer)   =  Claude Code skills, project scaffolding, remote/HPC config
 ```
 
 ## Key Concepts
@@ -124,7 +118,7 @@ Use `prism init` for full agentic scaffolding (Claude Code config, scripts, HPC 
 
 ## Documentation
 
-- [Format Specification](models/README.md) - Detailed reference for the ASTRA format (field tables, YAML examples, constraints, selectors)
+- [ASTRA Specification](https://github.com/LightconeResearch/astra-spec) - LinkML schema and format reference
 - [Design Document](DESIGN.md) - Architecture, rationale, and design decisions
 
 ## License

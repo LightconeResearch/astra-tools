@@ -189,18 +189,18 @@ class TestSchemaCommands:
         result = runner.invoke(main, ["schema", "export", "-o", str(tmp_path / "schemas")])
         assert result.exit_code == 0
         assert "Exported schemas" in result.output
-        assert (tmp_path / "schemas" / "analysis.schema.json").exists()
-        assert (tmp_path / "schemas" / "universe.schema.json").exists()
+        assert (tmp_path / "schemas" / "analysis.yaml").exists()
+        assert (tmp_path / "schemas" / "universe.yaml").exists()
 
     def test_schema_show_analysis(self, runner: CliRunner):
         result = runner.invoke(main, ["schema", "show", "analysis"])
         assert result.exit_code == 0
-        assert '"$defs"' in result.output or '"properties"' in result.output
+        assert "Analysis" in result.output
 
     def test_schema_show_universe(self, runner: CliRunner):
         result = runner.invoke(main, ["schema", "show", "universe"])
         assert result.exit_code == 0
-        assert '"properties"' in result.output
+        assert "Universe" in result.output
 
 
 class TestVersionOption:
