@@ -18,6 +18,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Configure git for private deps
+        run: git config --global url."https://x-access-token:${{ secrets.ASTRA_SPEC_READ }}@github.com/".insteadOf "https://github.com/"
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
@@ -48,6 +51,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Configure git for private deps
+        run: git config --global url."https://x-access-token:${{ secrets.ASTRA_SPEC_READ }}@github.com/".insteadOf "https://github.com/"
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -61,49 +67,3 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
-
-  snapshot-spec:
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Extract spec version from tag
-        id: version
-        run: |
-          # v1.0.0 -> 1.0, v2.1.3 -> 2.1
-          TAG="${{ github.ref_name }}"
-          SPEC_VERSION=$(echo "$TAG" | sed -E 's/^v([0-9]+\.[0-9]+).*/\1/')
-          echo "spec_version=$SPEC_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Spec version: $SPEC_VERSION"
-
-      - name: Check version does not already exist
-        run: |
-          if [ -d "spec/${{ steps.version.outputs.spec_version }}" ]; then
-            echo "ERROR: spec/${{ steps.version.outputs.spec_version }}/ already exists."
-            echo "Released spec versions are immutable."
-            exit 1
-          fi
-
-      - name: Snapshot spec/draft/ to versioned directory
-        run: |
-          SPEC_DIR="spec/${{ steps.version.outputs.spec_version }}"
-          cp -r spec/draft/ "$SPEC_DIR"
-          echo "# ASTRA Specification v${{ steps.version.outputs.spec_version }}" > "$SPEC_DIR/README.md"
-          echo "" >> "$SPEC_DIR/README.md"
-          echo "Released from tag \`${{ github.ref_name }}\` on $(date -u +%Y-%m-%d)." >> "$SPEC_DIR/README.md"
-          echo "" >> "$SPEC_DIR/README.md"
-          echo "These schemas are **immutable** — they must not be modified after release." >> "$SPEC_DIR/README.md"
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "spec/${{ steps.version.outputs.spec_version }}/"
-          git commit -m "spec: snapshot v${{ steps.version.outputs.spec_version }} schemas from ${{ github.ref_name }}"
-          git push origin main

@@ -54,7 +54,6 @@ ASTRA/
 
 3. **Helpers** (`src/astra/helpers.py`)
    - Dict-based utilities: `load_yaml`, `get_decision`, `get_default_universe`
-   - Universe format conversion: `universe_decisions_as_dict`, `universe_decisions_as_list`
 
 4. **Papers & Verification** (`src/astra/papers/`, `src/astra/verification/`)
    - Paper downloading and caching by DOI
@@ -64,7 +63,7 @@ ASTRA/
 
 ### Setup
 ```bash
-# Install for development (includes linkml, pytest, ruff, mypy)
+# Install for development (includes pytest, ruff, mypy)
 pip install -e ".[dev]"
 ```
 
@@ -105,16 +104,12 @@ defaults = get_default_universe(data)
 ```
 
 ### 3. Universe Format
-Universe decisions use the astra-spec list format:
+Universe decisions use a compact dict (decision ID → option ID):
 ```yaml
 decisions:
-  - decision_id: scaling
-    option_id: standard
-  - decision_id: model
-    option_id: random_forest
+  scaling: standard
+  model: random_forest
 ```
-
-Internally, `universe_decisions_as_dict()` converts to dict for lookups.
 
 ### 4. Namespace Package
 Both `astra-spec` and this package contribute to the `astra` namespace:
