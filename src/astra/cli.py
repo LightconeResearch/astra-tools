@@ -24,10 +24,14 @@ from astra.helpers import (
     save_yaml,
 )
 from astra.validation.schema import (
-    validate_analysis_schema,
-    validate_universe_schema,
+    validate_analysis_data,
+    validate_universe_data,
 )
-from astra.validation.semantic import validate_analysis_file, validate_universe_file
+from astra.validation.semantic import (
+    validate_analysis,
+    validate_universe,
+    validate_universe_file,
+)
 
 console = Console()
 
@@ -260,11 +264,15 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
     console.print(f"Validating [cyan]{file}[/cyan]...")
 
+    # Load files once and reuse the dicts for both validation stages
+    data = load_yaml(file)
+    analysis_data = load_yaml(analysis) if analysis is not None else None
+
     # Schema validation
     if is_universe:
-        schema_errors = validate_universe_schema(file)
+        schema_errors = validate_universe_data(data)
     else:
-        schema_errors = validate_analysis_schema(file)
+        schema_errors = validate_analysis_data(data)
 
     if schema_errors:
         console.print("\n[red]Schema validation errors:[/red]")
@@ -276,10 +284,10 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
     # Semantic validation
     if is_universe:
-        assert analysis is not None
-        semantic_errors = validate_universe_file(file, analysis)
+        assert analysis_data is not None
+        semantic_errors = validate_universe(data, analysis_data)
     else:
-        semantic_errors = validate_analysis_file(file)
+        semantic_errors = validate_analysis(data, base_path=file.parent)
 
     if semantic_errors:
         console.print("\n[red]Semantic validation errors:[/red]")
@@ -291,7 +299,6 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
     # Evidence verification (for analysis files with prior insights)
     if not is_universe and not skip_evidence:
-        data = load_yaml(file)
         prior_insights = data.get("prior_insights", {})
 
         if prior_insights:

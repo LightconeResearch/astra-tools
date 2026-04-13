@@ -24,6 +24,21 @@ def _remap_from_field(obj: dict[str, Any]) -> None:
         obj.setdefault("from_ref", obj.pop("from"))
 
 
+def _inject_nested_analysis_ids(node: dict[str, Any]) -> None:
+    """Inject dict keys as ``id`` fields on nested ``analyses`` dicts.
+
+    Shared by both analysis and universe preprocessing since both
+    use keyed dicts for sub-analyses.
+    """
+    analyses = node.get("analyses")
+    if not isinstance(analyses, dict):
+        return
+    for key, value in analyses.items():
+        if isinstance(value, dict):
+            value.setdefault("id", key)
+            _inject_nested_analysis_ids(value)
+
+
 def _inject_ids_inplace(data: dict[str, Any]) -> None:
     """Prepare a raw YAML dict for Pydantic validation.
 
@@ -40,7 +55,8 @@ def _inject_ids_inplace(data: dict[str, Any]) -> None:
         if isinstance(out, dict):
             _remap_from_field(out)
 
-    for field in ("decisions", "analyses", "prior_insights", "findings"):
+    # Inject IDs into keyed-dict fields
+    for field in ("decisions", "prior_insights", "findings"):
         mapping = data.get(field)
         if not isinstance(mapping, dict):
             continue
@@ -49,12 +65,18 @@ def _inject_ids_inplace(data: dict[str, Any]) -> None:
                 continue
             value.setdefault("id", key)
             _remap_from_field(value)
-            if field == "decisions":
-                if isinstance(value.get("options"), dict):
-                    for okey, ovalue in value["options"].items():
-                        if isinstance(ovalue, dict):
-                            ovalue.setdefault("id", okey)
-            if field == "analyses":
+            if field == "decisions" and isinstance(value.get("options"), dict):
+                for okey, ovalue in value["options"].items():
+                    if isinstance(ovalue, dict):
+                        ovalue.setdefault("id", okey)
+
+    # Handle analyses separately: inject IDs and recurse
+    analyses = data.get("analyses")
+    if isinstance(analyses, dict):
+        for key, value in analyses.items():
+            if isinstance(value, dict):
+                value.setdefault("id", key)
+                _remap_from_field(value)
                 _inject_ids_inplace(value)
 
 
@@ -100,24 +122,13 @@ def validate_universe_schema(path: str | Path) -> list[str]:
     return validate_universe_data(data)
 
 
-def _inject_universe_ids_inplace(node: dict[str, Any]) -> None:
-    """Inject dict keys as ``id`` fields on universe sub-analysis nodes."""
-    analyses = node.get("analyses")
-    if not isinstance(analyses, dict):
-        return
-    for key, value in analyses.items():
-        if isinstance(value, dict):
-            value.setdefault("id", key)
-            _inject_universe_ids_inplace(value)
-
-
 def validate_universe_data(data: dict[str, Any]) -> list[str]:
     """Validate universe data dict against the schema.
 
     Returns a list of error messages (empty if valid).
     """
     preprocessed = copy.deepcopy(data)
-    _inject_universe_ids_inplace(preprocessed)
+    _inject_nested_analysis_ids(preprocessed)
     try:
         Universe.model_validate(preprocessed)
         return []
