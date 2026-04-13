@@ -346,7 +346,6 @@ class TestUniverseNewFeaturesValidation:
         assert any(e.code == "EXCLUDED_OPTION_SELECTED" for e in errors)
 
 
-
 class TestSemanticError:
     """Tests for SemanticError class."""
 

@@ -100,13 +100,26 @@ def validate_universe_schema(path: str | Path) -> list[str]:
     return validate_universe_data(data)
 
 
+def _inject_universe_ids_inplace(node: dict[str, Any]) -> None:
+    """Inject dict keys as ``id`` fields on universe sub-analysis nodes."""
+    analyses = node.get("analyses")
+    if not isinstance(analyses, dict):
+        return
+    for key, value in analyses.items():
+        if isinstance(value, dict):
+            value.setdefault("id", key)
+            _inject_universe_ids_inplace(value)
+
+
 def validate_universe_data(data: dict[str, Any]) -> list[str]:
     """Validate universe data dict against the schema.
 
     Returns a list of error messages (empty if valid).
     """
+    preprocessed = copy.deepcopy(data)
+    _inject_universe_ids_inplace(preprocessed)
     try:
-        Universe.model_validate(data)
+        Universe.model_validate(preprocessed)
         return []
     except PydanticValidationError as exc:
         return _format_pydantic_errors(exc)
