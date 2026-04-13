@@ -106,3 +106,5 @@ jobs:
         run: |
           astra validate examples/iris/astra.yaml
           astra validate examples/iris/universes/baseline.yaml -a examples/iris/astra.yaml
+          astra validate examples/iris_pipeline/astra.yaml
+          astra validate examples/iris_pipeline/universes/baseline.yaml -a examples/iris_pipeline/astra.yaml

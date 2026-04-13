@@ -346,29 +346,6 @@ class TestUniverseNewFeaturesValidation:
         assert any(e.code == "EXCLUDED_OPTION_SELECTED" for e in errors)
 
 
-class TestSuccessCriteriaValidation:
-    """Tests for structured success criteria."""
-
-    def test_valid_success_criteria(self, valid_dir: Path):
-        """Structured criteria with valid output refs should pass."""
-        errors = validate_analysis_file(valid_dir / "success_criteria.yaml")
-        assert errors == []
-
-    def test_success_criteria_schema_rejects_unknown_field(self, valid_dir: Path):
-        """success_criteria is not in the astra-spec schema (spec gap)."""
-        errors = validate_analysis_schema(valid_dir / "success_criteria.yaml")
-        assert any("success_criteria" in e for e in errors)
-
-    def test_condition_without_output(self, invalid_dir: Path):
-        """Condition set without output should fail semantic validation."""
-        errors = validate_analysis_file(invalid_dir / "success_criteria_condition_no_output.yaml")
-        assert any(e.code == "CRITERION_CONDITION_NO_OUTPUT" for e in errors)
-
-    def test_bad_output_reference(self, invalid_dir: Path):
-        """Criterion referencing non-existent output should fail semantic validation."""
-        errors = validate_analysis_file(invalid_dir / "success_criteria_bad_output.yaml")
-        assert any(e.code == "INVALID_CRITERION_OUTPUT" for e in errors)
-
 
 class TestSemanticError:
     """Tests for SemanticError class."""

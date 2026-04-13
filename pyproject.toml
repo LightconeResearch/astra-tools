@@ -22,6 +22,7 @@ classifiers = [
 dependencies = [
     "astra-spec @ git+https://github.com/LightconeResearch/astra-spec",
     "click>=8.0",
+    "pydantic>=2.0",
     "pyyaml>=6.0",
     "rich>=13.0",
     "pypdf>=4.0",

@@ -102,9 +102,6 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
         if out_id:
             output_ids.add(out_id)
 
-    # Validate success criteria output references
-    errors.extend(_validate_success_criteria(data.get("success_criteria"), output_ids, ""))
-
     # Collect all decisions (only locally-defined ones at root)
     root_decisions = _collect_node_decisions(data)
 
@@ -228,10 +225,6 @@ def _validate_analysis_node(
         if out_id:
             node_output_ids.add(out_id)
 
-    # Validate success criteria output references
-    criteria = node.get("success_criteria")
-    errors.extend(_validate_success_criteria(criteria, node_output_ids, node_path))
-
     # Validate decisions
     # Collect only locally-defined decisions (not from: references)
     node_decisions = _collect_node_decisions(node)
@@ -279,47 +272,6 @@ def _validate_analysis_node(
             )
         )
 
-    return errors
-
-
-def _validate_success_criteria(
-    success_criteria: list[Any] | None,
-    output_ids: set[str],
-    path_prefix: str,
-) -> list[SemanticError]:
-    """Validate success criteria output references.
-
-    Structured criteria with an ``output`` field must reference a declared output ID.
-    """
-    errors: list[SemanticError] = []
-    if not success_criteria:
-        return errors
-
-    criteria_prefix = f"{path_prefix}.success_criteria" if path_prefix else "success_criteria"
-    for i, criterion in enumerate(success_criteria):
-        if isinstance(criterion, dict):
-            output_ref = criterion.get("output")
-            condition = criterion.get("condition")
-
-            # condition requires output
-            if condition is not None and output_ref is None:
-                errors.append(
-                    SemanticError(
-                        "CRITERION_CONDITION_NO_OUTPUT",
-                        "Success criterion has 'condition' but no 'output'",
-                        f"{criteria_prefix}[{i}]",
-                    )
-                )
-
-            # output must reference a declared output
-            if output_ref is not None and output_ref not in output_ids:
-                errors.append(
-                    SemanticError(
-                        "INVALID_CRITERION_OUTPUT",
-                        f"Success criterion references non-existent output '{output_ref}'",
-                        f"{criteria_prefix}[{i}]",
-                    )
-                )
     return errors
 
 

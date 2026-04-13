@@ -248,8 +248,6 @@ outputs:
 analyses:
   build_mocks:
     description: "Generate realistic mock catalogs matching survey properties."
-    success_criteria:
-      - claim: "Mock catalog matches observed magnitude distribution"
     inputs:
       - id: survey_data
         type: data
@@ -968,11 +966,6 @@ name: string                      # Required (root): Human-readable name
 description: string               # Optional: Detailed description
 authors: [string]                 # Optional: List of authors
 tags: [string]                    # Optional: Tags for categorization
-
-success_criteria:                 # Optional: Structured criteria for success
-  - claim: string                 # Human-readable statement of the criterion
-    output: string                # Optional: output ID to check against
-    condition: string             # Optional: condition (e.g., "value > 0.95")
 
 inputs:                           # Required (root): List of inputs
   - id: string                    # Unique identifier (pattern: ^[a-z][a-z0-9_]*$)
