@@ -39,7 +39,7 @@ jobs:
           python-version: "3.11"
 
       - name: Configure git for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.ASP_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.ASTRA_SPEC_READ }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install dependencies
         run: |
@@ -65,7 +65,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Configure git for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.ASP_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.ASTRA_SPEC_READ }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install dependencies
         run: |
@@ -95,7 +95,7 @@ jobs:
           python-version: "3.11"
 
       - name: Configure git for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.ASP_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.ASTRA_SPEC_READ }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install dependencies
         run: |
