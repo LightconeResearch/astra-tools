@@ -67,6 +67,16 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = [
+    "astra.datamodel",
+    "astra.datamodel.*",
+]
+follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
