@@ -15,7 +15,6 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-
 def is_condition_met(
     when: str | list[str] | None,
     universe_decisions: dict[str, str],
