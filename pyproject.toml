@@ -6,7 +6,8 @@ readme = "README.md"
 license = { text = "BSD-3-Clause" }
 requires-python = ">=3.11"
 authors = [
-    { name = "EiffL" }
+    { name = "Francois Lanusse", email = "francois.lanusse@cnrs.fr" },
+    { name = "Liam Parker", email = "lhparker@berkeley.edu" },
 ]
 keywords = ["science", "analysis", "specification", "workflow", "reproducibility"]
 classifiers = [
