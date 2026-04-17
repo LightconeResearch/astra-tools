@@ -139,13 +139,9 @@ def _lookup_element(
 ) -> bool:
     """Return True if ``element_id`` exists under ``category`` in ``node``."""
     if category == "inputs":
-        return element_id in {
-            inp.get("id") for inp in (node.get("inputs") or []) if inp.get("id")
-        }
+        return element_id in {inp.get("id") for inp in (node.get("inputs") or []) if inp.get("id")}
     if category == "outputs":
-        return element_id in {
-            out.get("id") for out in (node.get("outputs") or []) if out.get("id")
-        }
+        return element_id in {out.get("id") for out in (node.get("outputs") or []) if out.get("id")}
     if category == "decisions":
         decisions = node.get("decisions") or {}
         if element_id not in decisions:

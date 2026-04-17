@@ -52,9 +52,7 @@ class TestAnchorResolution:
         assert errs[0].code == "BROKEN_NARRATIVE_ANCHOR"
 
     def test_broken_option(self) -> None:
-        data = _minimal_with_narrative(
-            {"abstract": "[missing opt](#decisions.method.options.zz)"}
-        )
+        data = _minimal_with_narrative({"abstract": "[missing opt](#decisions.method.options.zz)"})
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert errs[0].code == "BROKEN_NARRATIVE_ANCHOR"
@@ -109,9 +107,7 @@ class TestAnchorResolution:
 
     def test_accepts_narrative_section_object_form(self) -> None:
         # Simple-dict form accepts both bare string and {content: ...}.
-        data = _minimal_with_narrative(
-            {"abstract": {"content": "[method](#decisions.method)"}}
-        )
+        data = _minimal_with_narrative({"abstract": {"content": "[method](#decisions.method)"}})
         assert validate_narrative_anchors(data) == []
 
     def test_multiple_anchors_one_broken(self) -> None:
@@ -137,9 +133,7 @@ class TestCoverage:
 
     def test_coverage_ignores_inputs_and_options(self) -> None:
         # Only decisions/findings/outputs/analyses are coverage-checked.
-        data = _minimal_with_narrative(
-            {"abstract": "[m](#decisions.method) [o](#outputs.y)"}
-        )
+        data = _minimal_with_narrative({"abstract": "[m](#decisions.method) [o](#outputs.y)"})
         warnings = check_narrative_coverage(data)
         # No warning for inputs.x or decisions.method.options.*.
         assert warnings == []
@@ -182,9 +176,7 @@ class TestCoverage:
         assert "analyses.sub.outputs.z" in paths
 
     def test_from_ref_decision_not_required_to_be_mentioned(self) -> None:
-        data = _minimal_with_narrative(
-            {"abstract": "[d](#decisions.method) [o](#outputs.y)"}
-        )
+        data = _minimal_with_narrative({"abstract": "[d](#decisions.method) [o](#outputs.y)"})
         data["analyses"] = {
             "sub": {
                 "narrative": {"a": "[o](#outputs.y)"},
