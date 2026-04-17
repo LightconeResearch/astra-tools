@@ -23,6 +23,10 @@ from astra.helpers import (
     load_yaml,
     save_yaml,
 )
+from astra.validation.narrative import (
+    check_narrative_coverage_file,
+    validate_narrative_anchors_file,
+)
 from astra.validation.schema import (
     validate_analysis_schema,
     validate_universe_schema,
@@ -139,8 +143,11 @@ def _create_boilerplate_astra_yaml(directory: Path) -> None:
 
 version: "1.0"
 name: "{name}"
-description: |
-  TODO: Describe the goal of this analysis.
+narrative:
+  abstract: |
+    TODO: Describe the goal of this analysis. Markdown supported.
+    Reference other elements with anchor links, e.g.
+    [see scaling decision](#decisions.example_method).
 
 inputs:
   - id: primary_data
@@ -288,6 +295,25 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
     console.print("[green]✓[/green] Semantic validation passed")
 
+    # Narrative validation (analysis files only)
+    if not is_universe:
+        narrative_errors = validate_narrative_anchors_file(file)
+        if narrative_errors:
+            console.print("\n[red]Narrative anchor errors:[/red]")
+            for narrative_err in narrative_errors:
+                console.print(f"  • {narrative_err}")
+            raise SystemExit(1)
+
+        console.print("[green]✓[/green] Narrative anchors resolved")
+
+        narrative_warnings = check_narrative_coverage_file(file)
+        if narrative_warnings:
+            console.print("\n[yellow]Narrative coverage warnings:[/yellow]")
+            for w in narrative_warnings:
+                console.print(f"  • [yellow]{w}[/yellow]")
+        else:
+            console.print("[green]✓[/green] Narrative coverage complete")
+
     # Evidence verification (for analysis files with prior insights)
     if not is_universe and not skip_evidence:
         data = load_yaml(file)
@@ -395,8 +421,9 @@ def info(
     # Header
     console.print(f"\n[bold]{data.get('name', 'Unknown')}[/bold]")
     console.print(f"Version: {data.get('version', 'Unknown')}")
-    if data.get("description"):
-        console.print(f"\n{data['description']}")
+    for section, content in (data.get("narrative") or {}).items():
+        console.print(f"\n[bold]{section}[/bold]")
+        console.print(content)
 
     # Summary stats
     input_list = get_inputs(data)
