@@ -144,10 +144,12 @@ def _create_boilerplate_astra_yaml(directory: Path) -> None:
 version: "1.0"
 name: "{name}"
 narrative:
-  abstract: |
-    TODO: Describe the goal of this analysis. Markdown supported.
-    Reference other elements with anchor links, e.g.
-    [see scaling decision](#decisions.example_method).
+  # Add sections freely. Common ones: abstract, methods, results,
+  # discussion, limitations. Keys are lowercase identifiers.
+  # Content is Markdown; reference other elements with
+  # [anchor text](#category.id) links.
+  todo: |
+    Replace this section (rename the key and write Markdown prose).
 
 inputs:
   - id: primary_data
