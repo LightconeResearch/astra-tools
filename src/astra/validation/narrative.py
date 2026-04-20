@@ -1,14 +1,22 @@
 """Narrative validation for ASTRA specifications.
 
-Two checks layered on top of structural and semantic validation:
+Three checks layered on top of structural and semantic validation:
 
-1. **Anchor resolution** — Markdown links inside ``narrative`` prose of
-   the form ``[text](#target)`` must resolve to a declared element.
-   Broken references are errors.
+1. **Anchor resolution** — Markdown links inside narrative section
+   prose of the form ``[text](#target)`` must resolve to a declared
+   element. Broken references are errors.
 
-2. **Coverage** — each Analysis node's own decisions, findings, outputs,
-   and sub-analyses should be mentioned somewhere in the narrative
-   tree. Unmentioned elements emit warnings (not errors).
+2. **Coverage** — each Analysis node's own decisions, findings,
+   outputs, and sub-analyses should be mentioned somewhere in the
+   narrative tree. References may appear in any of the five narrative
+   sections — coverage is resolved across the whole narrative, not
+   per-section. Unmentioned elements emit warnings (not errors).
+
+3. **Sections** — the narrative has five recommended sections
+   (``summary``, ``findings``, ``methods``, ``inputs``, ``outputs``);
+   missing or empty sections emit warnings. The scaffold produced by
+   ``astra init`` contains all five; authors can delete sections they
+   don't need, accepting the warning.
 
 Anchor grammar is **tree-path-first**, matching the rest of ASTRA's
 reference syntax (``sibling.output_id`` in ``from_ref``). Sub-analyses
@@ -31,6 +39,7 @@ with ``../`` to escape to parent scope (may chain: ``../../``).
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -52,6 +61,9 @@ _CATEGORIES = frozenset(
 # numerous, inputs are often trivially "the data", and prior_insights
 # exist to justify decisions rather than being independently noteworthy.
 _COVERAGE_CATEGORIES = ("decisions", "findings", "outputs", "analyses")
+
+# The five narrative sections, in canonical render order.
+_NARRATIVE_SECTIONS = ("summary", "findings", "methods", "inputs", "outputs")
 
 
 @dataclass
@@ -183,16 +195,38 @@ def _resolve_anchor(
     return (target_path, anchor.category, anchor.element_id, anchor.option_id)
 
 
-def _extract_hrefs(narrative: Any) -> list[str]:
-    """Extract all Markdown link hrefs from a narrative string."""
-    if not isinstance(narrative, str):
-        return []
-    return _HREF_RE.findall(narrative)
+def _iter_sections(narrative: Any) -> Iterator[tuple[str | None, str]]:
+    """Yield ``(section, content)`` pairs for each non-empty section.
+
+    Dict-shaped narratives (the current schema) yield one pair per
+    populated section, in canonical render order. String narratives
+    (legacy or test shorthand) yield a single ``(None, content)`` pair.
+    """
+    if isinstance(narrative, dict):
+        for section in _NARRATIVE_SECTIONS:
+            content = narrative.get(section)
+            if isinstance(content, str) and content:
+                yield section, content
+    elif isinstance(narrative, str) and narrative:
+        yield None, narrative
+
+
+def _extract_section_hrefs(narrative: Any) -> Iterator[tuple[str | None, str]]:
+    """Yield ``(section, href)`` for every Markdown link across sections."""
+    for section, content in _iter_sections(narrative):
+        for href in _HREF_RE.findall(content):
+            yield section, href
 
 
 def _node_path_str(path: tuple[str, ...]) -> str:
     """Render an absolute node path like ``analyses.foo.analyses.bar``."""
     return ".".join(f"analyses.{seg}" for seg in path)
+
+
+def _narrative_report_path(base: str, section: str | None) -> str:
+    """Build the path string used in error/warning reports for a narrative location."""
+    section_suffix = f"narrative.{section}" if section else "narrative"
+    return f"{base}.{section_suffix}" if base else section_suffix
 
 
 def validate_narrative_anchors(
@@ -215,8 +249,8 @@ def _walk_anchors(
     narrative = node.get("narrative")
     if narrative:
         base = _node_path_str(path)
-        narrative_path = f"{base}.narrative" if base else "narrative"
-        for href in _extract_hrefs(narrative):
+        for section, href in _extract_section_hrefs(narrative):
+            narrative_path = _narrative_report_path(base, section)
             if _PARENT_PATH_FORM_RE.match(href):
                 errors.append(
                     SemanticError(
@@ -265,11 +299,9 @@ def check_narrative_coverage(
     """Warn about decisions, findings, outputs, and sub-analyses not
     mentioned in any narrative across the analysis tree.
 
-    A reference anywhere in the tree counts toward the target
-    element's coverage — e.g. the root's narrative mentioning
-    ``#child.decisions.foo`` satisfies coverage for that decision in
-    the child. Mentioning a descendant also implicitly mentions each
-    sub-analysis along the path.
+    A reference anywhere in the tree — and in any section of a node's
+    narrative — counts toward the target element's coverage. Mentioning
+    a descendant implicitly mentions each sub-analysis along the path.
     """
     if base_path is not None:
         data = resolve_analysis_tree(data, base_path)
@@ -288,7 +320,7 @@ def _collect_mentioned(
 ) -> None:
     narrative = node.get("narrative")
     if narrative:
-        for href in _extract_hrefs(narrative):
+        for _section, href in _extract_section_hrefs(narrative):
             if not href.startswith("#"):
                 continue
             raw = href[1:]
@@ -371,6 +403,41 @@ def _walk_coverage(
         _walk_coverage(sub_node, path + (sub_id,), mentioned, warnings)
 
 
+def check_narrative_sections(
+    data: dict[str, Any], base_path: Path | None = None
+) -> list[NarrativeWarning]:
+    """Warn when an analysis's narrative is missing one of the five
+    recommended sections (``summary``, ``findings``, ``methods``,
+    ``inputs``, ``outputs``), or the section is present but empty.
+    """
+    if base_path is not None:
+        data = resolve_analysis_tree(data, base_path)
+    warnings: list[NarrativeWarning] = []
+    _walk_sections(data, (), warnings)
+    return warnings
+
+
+def _walk_sections(
+    node: dict[str, Any],
+    path: tuple[str, ...],
+    warnings: list[NarrativeWarning],
+) -> None:
+    narrative = node.get("narrative")
+    base = _node_path_str(path)
+    for section in _NARRATIVE_SECTIONS:
+        content = narrative.get(section) if isinstance(narrative, dict) else None
+        if not (isinstance(content, str) and content.strip()):
+            warnings.append(
+                NarrativeWarning(
+                    "NARRATIVE_SECTION_MISSING",
+                    f"Narrative section '{section}' is missing or empty",
+                    _narrative_report_path(base, section),
+                )
+            )
+    for sub_id, sub_node in (node.get("analyses") or {}).items():
+        _walk_sections(sub_node, path + (sub_id,), warnings)
+
+
 def validate_narrative_anchors_file(path: str | Path) -> list[SemanticError]:
     """Load and run anchor validation on a YAML file."""
     from astra.helpers import load_yaml
@@ -385,3 +452,11 @@ def check_narrative_coverage_file(path: str | Path) -> list[NarrativeWarning]:
 
     path = Path(path)
     return check_narrative_coverage(load_yaml(path), base_path=path.parent)
+
+
+def check_narrative_sections_file(path: str | Path) -> list[NarrativeWarning]:
+    """Load and run section-presence check on a YAML file."""
+    from astra.helpers import load_yaml
+
+    path = Path(path)
+    return check_narrative_sections(load_yaml(path), base_path=path.parent)

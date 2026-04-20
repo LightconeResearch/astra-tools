@@ -8,9 +8,19 @@ from typing import Any
 from astra.validation.narrative import (
     check_narrative_coverage,
     check_narrative_coverage_file,
+    check_narrative_sections,
     validate_narrative_anchors,
     validate_narrative_anchors_file,
 )
+
+_FULL_SECTIONS = ("summary", "findings", "methods", "inputs", "outputs")
+
+
+def _full_narrative(**overrides: str) -> dict[str, str]:
+    """Build a dict-shape narrative with placeholder prose in every section."""
+    base = {s: f"{s} placeholder." for s in _FULL_SECTIONS}
+    base.update(overrides)
+    return base
 
 
 def _minimal_with_narrative(narrative: Any) -> dict[str, Any]:
@@ -230,3 +240,79 @@ class TestFileHelpers:
         errs = validate_narrative_anchors_file(invalid_dir / "narrative_broken_anchor.yaml")
         assert len(errs) == 2
         assert all(e.code == "BROKEN_NARRATIVE_ANCHOR" for e in errs)
+
+
+class TestSectionedNarrative:
+    """Anchors and coverage work the same when narrative is a dict of sections."""
+
+    def test_anchors_across_sections_resolve(self) -> None:
+        data = _minimal_with_narrative(
+            _full_narrative(
+                methods="[method](#decisions.method) with [option](#decisions.method.options.a)",
+                outputs="See [output](#outputs.y).",
+                inputs="See [input](#inputs.x).",
+            )
+        )
+        assert validate_narrative_anchors(data) == []
+
+    def test_broken_anchor_reports_section_path(self) -> None:
+        data = _minimal_with_narrative(_full_narrative(findings="[bad](#decisions.nope)"))
+        errs = validate_narrative_anchors(data)
+        assert len(errs) == 1
+        assert errs[0].path == "narrative.findings"
+
+    def test_coverage_is_global_across_sections(self) -> None:
+        # Decision cited in summary, output cited in outputs — both count.
+        data = _minimal_with_narrative(
+            _full_narrative(
+                summary="Mentions [method](#decisions.method) up top.",
+                outputs="Produces [y](#outputs.y).",
+            )
+        )
+        assert check_narrative_coverage(data) == []
+
+
+class TestNarrativeSections:
+    """Section-presence check warns when any of the five sections is missing or empty."""
+
+    def test_full_narrative_no_warnings(self) -> None:
+        data = _minimal_with_narrative(_full_narrative())
+        assert check_narrative_sections(data) == []
+
+    def test_missing_section_warns(self) -> None:
+        narrative = _full_narrative()
+        del narrative["findings"]
+        data = _minimal_with_narrative(narrative)
+        warnings = check_narrative_sections(data)
+        codes = {(w.code, w.path) for w in warnings}
+        assert ("NARRATIVE_SECTION_MISSING", "narrative.findings") in codes
+        # Only the deleted section warns.
+        assert len(warnings) == 1
+
+    def test_empty_section_warns(self) -> None:
+        data = _minimal_with_narrative(_full_narrative(methods="   "))
+        warnings = check_narrative_sections(data)
+        paths = {w.path for w in warnings}
+        assert "narrative.methods" in paths
+
+    def test_string_narrative_warns_all_sections(self) -> None:
+        # A legacy string narrative has none of the five sections populated.
+        data = _minimal_with_narrative("just a string")
+        warnings = check_narrative_sections(data)
+        assert {w.path for w in warnings} == {f"narrative.{s}" for s in _FULL_SECTIONS}
+
+    def test_sub_analysis_sections_checked(self) -> None:
+        data = _minimal_with_narrative(_full_narrative())
+        data["analyses"] = {
+            "sub": {
+                "narrative": {"summary": "only summary here"},
+                "inputs": [{"id": "x", "type": "data"}],
+                "outputs": [{"id": "y", "type": "metric"}],
+            }
+        }
+        warnings = check_narrative_sections(data)
+        sub_paths = {w.path for w in warnings if w.path and "analyses.sub" in w.path}
+        # Four missing sections on the sub-analysis (summary is present).
+        assert sub_paths == {
+            f"analyses.sub.narrative.{s}" for s in _FULL_SECTIONS if s != "summary"
+        }

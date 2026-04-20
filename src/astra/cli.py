@@ -25,6 +25,7 @@ from astra.helpers import (
 )
 from astra.validation.narrative import (
     check_narrative_coverage_file,
+    check_narrative_sections_file,
     validate_narrative_anchors_file,
 )
 from astra.validation.schema import (
@@ -143,13 +144,23 @@ def _create_boilerplate_astra_yaml(directory: Path) -> None:
 
 version: "1.0"
 name: "{name}"
-narrative: |
-  TODO: Write the analysis narrative in Markdown. Structure it however
-  suits the artifact — abstract/methods/results, a short memo, a slide
-  outline, whatever. Reference other elements with Markdown anchor
-  links whose href is `#<category>.<id>`; for example, this scaffold
-  mentions the [example method decision](#decisions.example_method)
-  and the [main result output](#outputs.main_result).
+narrative:
+  summary: |
+    TODO: One-paragraph overview of the analysis — its question,
+    scope, and what the reader should take away.
+  findings: |
+    TODO: Prose that frames the analysis's findings. Reference
+    structured findings with `#findings.<id>` anchors once they
+    exist.
+  methods: |
+    TODO: Methodology write-up. Reference decisions and any
+    sub-analyses; this scaffold mentions the
+    [example method decision](#decisions.example_method).
+  inputs: |
+    TODO: Prose that frames the analysis's inputs.
+  outputs: |
+    TODO: Prose that frames the expected outputs; this scaffold
+    mentions the [main result output](#outputs.main_result).
 
 inputs:
   - id: primary_data
@@ -316,6 +327,14 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
         else:
             console.print("[green]✓[/green] Narrative coverage complete")
 
+        section_warnings = check_narrative_sections_file(file)
+        if section_warnings:
+            console.print("\n[yellow]Narrative section warnings:[/yellow]")
+            for w in section_warnings:
+                console.print(f"  • [yellow]{w}[/yellow]")
+        else:
+            console.print("[green]✓[/green] Narrative sections present")
+
     # Evidence verification (for analysis files with prior insights)
     if not is_universe and not skip_evidence:
         data = load_yaml(file)
@@ -424,7 +443,14 @@ def info(
     console.print(f"\n[bold]{data.get('name', 'Unknown')}[/bold]")
     console.print(f"Version: {data.get('version', 'Unknown')}")
     narrative = data.get("narrative")
-    if narrative:
+    if isinstance(narrative, dict):
+        for section in ("summary", "findings", "methods", "inputs", "outputs"):
+            content = narrative.get(section)
+            if isinstance(content, str) and content.strip():
+                console.print()
+                console.print(f"[bold]{section.title()}[/bold]")
+                console.print(content)
+    elif isinstance(narrative, str) and narrative:
         console.print()
         console.print(narrative)
 

@@ -1,7 +1,8 @@
 # Analysis with a decision that has a list-valued when condition
 version: "1.0"
 name: "Decision List When"
-narrative: "Tests list-valued when on decisions"
+narrative:
+  summary: "Tests list-valued when on decisions"
 inputs:
   - id: data
     type: data

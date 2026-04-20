@@ -3,7 +3,8 @@
 $schema: "https://astra-spec.org/v1/schema.json"
 version: "1.0"
 name: "Full Analysis v2"
-narrative: "A comprehensive test analysis with all v2 features"
+narrative:
+  summary: "A comprehensive test analysis with all v2 features"
 authors:
   - "Test Author"
 tags:

@@ -1,10 +1,30 @@
-version: "1.0"
-name: "Iris Classification Study"
-description: |
-  A demonstration analysis that builds a classifier for the classic
-  Iris dataset, exploring different preprocessing and model choices.
+id: iris_classification
+version: "0.1.0"
+name: Iris Classification Study
+narrative:
+  summary: |
+    A demonstration analysis that builds a classifier for the classic
+    Iris dataset, exploring different preprocessing and model choices.
+  methods: |
+    Two main levers shape the classifier: feature [scaling](#decisions.scaling)
+    (none, standard, or minmax) and [model](#decisions.model) choice
+    (SVM, random forest, or logistic regression). A
+    [test_size](#decisions.test_size) decision sets the holdout
+    proportion and [random_seed](#decisions.random_seed) fixes
+    reproducibility.
+  inputs: |
+    The [iris_data](#inputs.iris_data) input is Fisher's 150-sample,
+    3-class dataset loaded from scikit-learn. An optional
+    [preprocessing_study](#inputs.preprocessing_study) input points
+    at a prior scaling-comparison analysis.
+  outputs: |
+    The analysis emits a [trained classifier](#outputs.trained_output),
+    [accuracy](#outputs.accuracy) and [F1 score](#outputs.f1_score)
+    metrics, a [confusion matrix](#outputs.confusion_matrix), a
+    [model_comparison](#outputs.model_comparison) table, and a final
+    [conclusion](#outputs.conclusion) report.
 authors:
-  - "ASTRA Examples"
+  - ASTRA Examples
 tags:
   - classification
   - sklearn
@@ -19,91 +39,88 @@ inputs:
   - id: preprocessing_study
     type: analysis
     ref: "analyses/scaling_comparison_2024"
-    description: "Our previous study on scaling methods"
+    description: Our previous study on scaling methods
 
 outputs:
   - id: trained_output
     type: data
-    description: "Best performing classifier"
+    description: Best performing classifier
     recipe:
       command: python src/train.py
 
   - id: accuracy
     type: metric
-    description: "Classification accuracy on held-out test set"
+    description: Classification accuracy on held-out test set
     recipe:
       command: python src/evaluate.py
       inputs: [trained_output]
 
   - id: f1_score
     type: metric
-    description: "Macro-averaged F1 score"
+    description: Macro-averaged F1 score
     recipe:
       command: python src/evaluate.py
       inputs: [trained_output]
 
   - id: confusion_matrix
     type: figure
-    description: "Confusion matrix heatmap"
+    description: Confusion matrix heatmap
     recipe:
       command: python src/evaluate.py
       inputs: [trained_output]
 
   - id: model_comparison
     type: table
-    description: "Accuracy by model and preprocessing combination"
+    description: Accuracy by model and preprocessing combination
     recipe:
       command: python src/evaluate.py
       inputs: [trained_output]
 
   - id: conclusion
     type: report
-    description: "Summary of classifier performance and suitability for the application"
+    description: Summary of classifier performance and suitability for the application
     recipe:
       command: python src/evaluate.py
       inputs: [trained_output]
 
 decisions:
   scaling:
-    label: "Feature Scaling"
-
-    rationale: "Scaling affects distance-based algorithms like SVM"
+    label: Feature Scaling
+    rationale: Scaling affects distance-based algorithms like SVM
     default: standard
     options:
       none:
-        label: "No Scaling"
-        description: "Use raw feature values"
+        label: No Scaling
+        description: Use raw feature values
       standard:
-        label: "StandardScaler"
-        description: "Z-score normalization (mean=0, std=1)"
+        label: StandardScaler
+        description: Z-score normalization (mean=0, std=1)
       minmax:
-        label: "MinMaxScaler"
-        description: "Scale to [0, 1] range"
+        label: MinMaxScaler
+        description: Scale to [0, 1] range
         incompatible_with:
           - model.svm
 
   model:
-    label: "Classification Model"
-
-    rationale: "Core algorithmic choice affecting accuracy and interpretability"
+    label: Classification Model
+    rationale: Core algorithmic choice affecting accuracy and interpretability
     default: random_forest
     options:
       svm:
-        label: "Support Vector Machine"
-        description: "Maximum margin classifier"
+        label: Support Vector Machine
+        description: Maximum margin classifier
         requires:
           - scaling.standard
       random_forest:
-        label: "Random Forest"
-        description: "Ensemble of decision trees"
+        label: Random Forest
+        description: Ensemble of decision trees
       logistic:
-        label: "Logistic Regression"
-        description: "Linear classifier with probabilistic output"
+        label: Logistic Regression
+        description: Linear classifier with probabilistic output
 
   test_size:
-    label: "Test Set Proportion"
-
-    rationale: "Trade-off between training data and evaluation reliability"
+    label: Test Set Proportion
+    rationale: Trade-off between training data and evaluation reliability
     default: small
     options:
       small:
@@ -112,9 +129,8 @@ decisions:
         label: "30%"
 
   random_seed:
-    label: "Random Seed"
-
-    rationale: "For reproducibility and stability testing"
+    label: Random Seed
+    rationale: For reproducibility and stability testing
     default: seed_42
     options:
       seed_42:
