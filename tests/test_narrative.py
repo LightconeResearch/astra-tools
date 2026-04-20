@@ -34,31 +34,27 @@ def _minimal_with_narrative(narrative: Any) -> dict[str, Any]:
 class TestAnchorResolution:
     def test_resolved_local_anchors(self) -> None:
         data = _minimal_with_narrative(
-            {
-                "abstract": (
-                    "Refs: [method](#decisions.method), "
-                    "[option](#decisions.method.options.a), "
-                    "[output](#outputs.y), "
-                    "[input](#inputs.x)."
-                )
-            }
+            "Refs: [method](#decisions.method), "
+            "[option](#decisions.method.options.a), "
+            "[output](#outputs.y), "
+            "[input](#inputs.x)."
         )
         assert validate_narrative_anchors(data) == []
 
     def test_broken_decision(self) -> None:
-        data = _minimal_with_narrative({"abstract": "[missing](#decisions.nope)"})
+        data = _minimal_with_narrative("[missing](#decisions.nope)")
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert errs[0].code == "BROKEN_NARRATIVE_ANCHOR"
 
     def test_broken_option(self) -> None:
-        data = _minimal_with_narrative({"abstract": "[missing opt](#decisions.method.options.zz)"})
+        data = _minimal_with_narrative("[missing opt](#decisions.method.options.zz)")
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert errs[0].code == "BROKEN_NARRATIVE_ANCHOR"
 
     def test_invalid_grammar_unknown_category(self) -> None:
-        data = _minimal_with_narrative({"abstract": "[bad](#nope.foo)"})
+        data = _minimal_with_narrative("[bad](#nope.foo)")
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
@@ -67,11 +63,11 @@ class TestAnchorResolution:
         # Dotless anchors are skipped as Markdown heading links, even when
         # the segment happens to be a reserved category name. This is a
         # known tradeoff of the silent-skip rule.
-        data = _minimal_with_narrative({"abstract": "[bad](#decisions)"})
+        data = _minimal_with_narrative("[bad](#decisions)")
         assert validate_narrative_anchors(data) == []
 
     def test_sub_analysis_path_anchor(self) -> None:
-        data = _minimal_with_narrative({"abstract": "[s](#sub.decisions.d)"})
+        data = _minimal_with_narrative("[s](#sub.decisions.d)")
         data["analyses"] = {
             "sub": {
                 "inputs": [{"id": "x", "type": "data"}],
@@ -90,10 +86,10 @@ class TestAnchorResolution:
 
     def test_escape_to_parent(self) -> None:
         # Sub-analysis narrative references parent decision via ../.
-        data = _minimal_with_narrative({"abstract": "(placeholder)"})
+        data = _minimal_with_narrative("(placeholder)")
         data["analyses"] = {
             "sub": {
-                "narrative": {"m": "[parent method](#../decisions.method)"},
+                "narrative": "[parent method](#../decisions.method)",
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
             }
@@ -101,32 +97,23 @@ class TestAnchorResolution:
         assert validate_narrative_anchors(data) == []
 
     def test_escape_past_root_fails(self) -> None:
-        data = _minimal_with_narrative({"abstract": "[x](#../decisions.method)"})
+        data = _minimal_with_narrative("[x](#../decisions.method)")
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert errs[0].code == "BROKEN_NARRATIVE_ANCHOR"
 
-    def test_accepts_narrative_section_object_form(self) -> None:
-        # Simple-dict form accepts both bare string and {content: ...}.
-        data = _minimal_with_narrative({"abstract": {"content": "[method](#decisions.method)"}})
-        assert validate_narrative_anchors(data) == []
-
     def test_plain_markdown_heading_anchors_ignored(self) -> None:
         # Dotless anchors are Markdown heading links, not ASTRA refs.
         data = _minimal_with_narrative(
-            {
-                "abstract": (
-                    "## Abstract\n[skip to results](#results) "
-                    "[method](#decisions.method)"
-                ),
-                "results": "## Results\n[back to top](#abstract)",
-            }
+            "## Abstract\n[skip to results](#results) "
+            "[method](#decisions.method)\n\n"
+            "## Results\n[back to top](#abstract)"
         )
         assert validate_narrative_anchors(data) == []
 
     def test_plain_markdown_heading_anchors_dont_count_for_coverage(self) -> None:
         # A dotless anchor must not satisfy coverage for any element.
-        data = _minimal_with_narrative({"abstract": "[bogus](#method) [o](#outputs.y)"})
+        data = _minimal_with_narrative("[bogus](#method) [o](#outputs.y)")
         warnings = check_narrative_coverage(data)
         codes = {w.message for w in warnings}
         assert any("Decision 'method'" in m for m in codes)
@@ -134,14 +121,14 @@ class TestAnchorResolution:
     def test_non_canonical_parent_escape_form_errors(self) -> None:
         # `../` BEFORE `#` is the wrong form. Spec-canonical is `#../...`.
         # Used to silently bypass validation; now flagged.
-        data = _minimal_with_narrative({"abstract": "[bad](../#decisions.method)"})
+        data = _minimal_with_narrative("[bad](../#decisions.method)")
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
         assert "../" in errs[0].message
 
     def test_chained_non_canonical_parent_escape_errors(self) -> None:
-        data = _minimal_with_narrative({"abstract": "[bad](../../#decisions.method)"})
+        data = _minimal_with_narrative("[bad](../../#decisions.method)")
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
@@ -149,18 +136,14 @@ class TestAnchorResolution:
     def test_external_links_ignored(self) -> None:
         # URLs and other non-anchor hrefs are not ASTRA references.
         data = _minimal_with_narrative(
-            {
-                "abstract": (
-                    "See [paper](https://example.com/paper.pdf#page=3) "
-                    "and [other doc](./neighbor.md)."
-                )
-            }
+            "See [paper](https://example.com/paper.pdf#page=3) "
+            "and [other doc](./neighbor.md)."
         )
         assert validate_narrative_anchors(data) == []
 
     def test_multiple_anchors_one_broken(self) -> None:
         data = _minimal_with_narrative(
-            {"abstract": "[ok](#decisions.method) and [bad](#findings.x)"}
+            "[ok](#decisions.method) and [bad](#findings.x)"
         )
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
@@ -173,7 +156,7 @@ class TestCoverage:
         assert warnings == []
 
     def test_empty_narrative_flags_everything(self) -> None:
-        data = _minimal_with_narrative({"abstract": "no refs"})
+        data = _minimal_with_narrative("no refs")
         warnings = check_narrative_coverage(data)
         codes = {(w.code, w.message) for w in warnings}
         assert any("Decision 'method'" in m for _, m in codes)
@@ -181,18 +164,18 @@ class TestCoverage:
 
     def test_coverage_ignores_inputs_and_options(self) -> None:
         # Only decisions/findings/outputs/analyses are coverage-checked.
-        data = _minimal_with_narrative({"abstract": "[m](#decisions.method) [o](#outputs.y)"})
+        data = _minimal_with_narrative("[m](#decisions.method) [o](#outputs.y)")
         warnings = check_narrative_coverage(data)
         # No warning for inputs.x or decisions.method.options.*.
         assert warnings == []
 
     def test_descendant_ref_covers_sub_analysis(self) -> None:
         data = _minimal_with_narrative(
-            {"abstract": "[d](#decisions.method) [o](#outputs.y) [sub](#sub.decisions.d)"}
+            "[d](#decisions.method) [o](#outputs.y) [sub](#sub.decisions.d)"
         )
         data["analyses"] = {
             "sub": {
-                "narrative": {"a": "[d](#decisions.d) [o](#outputs.y)"},
+                "narrative": "[d](#decisions.d) [o](#outputs.y)",
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
                 "decisions": {
@@ -211,7 +194,7 @@ class TestCoverage:
 
     def test_sub_analysis_uncovered_warns_at_sub_path(self) -> None:
         data = _minimal_with_narrative(
-            {"abstract": "[d](#decisions.method) [o](#outputs.y) [sub](#analyses.sub)"}
+            "[d](#decisions.method) [o](#outputs.y) [sub](#analyses.sub)"
         )
         data["analyses"] = {
             "sub": {
@@ -224,10 +207,12 @@ class TestCoverage:
         assert "analyses.sub.outputs.z" in paths
 
     def test_from_ref_decision_not_required_to_be_mentioned(self) -> None:
-        data = _minimal_with_narrative({"abstract": "[d](#decisions.method) [o](#outputs.y)"})
+        data = _minimal_with_narrative(
+            "[d](#decisions.method) [o](#outputs.y) [s](#sub.outputs.y)"
+        )
         data["analyses"] = {
             "sub": {
-                "narrative": {"a": "[o](#outputs.y)"},
+                "narrative": "[o](#outputs.y)",
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
                 "decisions": {
@@ -236,10 +221,6 @@ class TestCoverage:
                 },
             }
         }
-        # Root covers analyses.sub via #analyses.sub? No — root mentions
-        # #decisions.method but not #analyses.sub or any descendant. Add a
-        # reference so sub-analysis coverage is satisfied.
-        data["narrative"]["abstract"] += " [s](#sub.outputs.y)"
         warnings = check_narrative_coverage(data)
         paths = {w.path for w in warnings}
         # The from-ref'd decision must not appear as an uncovered element.

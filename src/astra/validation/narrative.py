@@ -184,19 +184,10 @@ def _resolve_anchor(
 
 
 def _extract_hrefs(narrative: Any) -> list[str]:
-    """Extract all Markdown link hrefs from a narrative dict."""
-    if not isinstance(narrative, dict):
+    """Extract all Markdown link hrefs from a narrative string."""
+    if not isinstance(narrative, str):
         return []
-    hrefs: list[str] = []
-    for section_value in narrative.values():
-        if isinstance(section_value, dict):
-            text = section_value.get("content") or ""
-        elif isinstance(section_value, str):
-            text = section_value
-        else:
-            continue
-        hrefs.extend(_HREF_RE.findall(text))
-    return hrefs
+    return _HREF_RE.findall(narrative)
 
 
 def _node_path_str(path: tuple[str, ...]) -> str:

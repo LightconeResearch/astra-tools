@@ -1,7 +1,6 @@
 version: "1.0"
 name: "Full Analysis"
-narrative:
-  abstract: "A comprehensive test analysis with all features"
+narrative: "A comprehensive test analysis with all features"
 authors:
   - "Test Author"
 tags:

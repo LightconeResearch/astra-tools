@@ -14,5 +14,4 @@ analyses:
     # the sub's own values pre-fix). Both are confusing — must be in the
     # sub's astra.yaml instead.
     name: "Preprocessing override"
-    narrative:
-      abstract: "Parent-side override that does nothing useful."
+    narrative: "Parent-side override that does nothing useful."

@@ -143,13 +143,13 @@ def _create_boilerplate_astra_yaml(directory: Path) -> None:
 
 version: "1.0"
 name: "{name}"
-narrative:
-  # Add sections freely. Common ones: abstract, methods, results,
-  # discussion, limitations. Keys are lowercase identifiers.
-  # Content is Markdown; reference other elements with
-  # [anchor text](#category.id) links.
-  todo: |
-    Replace this section (rename the key and write Markdown prose).
+narrative: |
+  TODO: Write the analysis narrative in Markdown. Structure it however
+  suits the artifact — abstract/methods/results, a short memo, a slide
+  outline, whatever. Reference other elements with Markdown anchor
+  links whose href is `#<category>.<id>`; for example, this scaffold
+  mentions the [example method decision](#decisions.example_method)
+  and the [main result output](#outputs.main_result).
 
 inputs:
   - id: primary_data
@@ -423,9 +423,10 @@ def info(
     # Header
     console.print(f"\n[bold]{data.get('name', 'Unknown')}[/bold]")
     console.print(f"Version: {data.get('version', 'Unknown')}")
-    for section, content in (data.get("narrative") or {}).items():
-        console.print(f"\n[bold]{section}[/bold]")
-        console.print(content)
+    narrative = data.get("narrative")
+    if narrative:
+        console.print()
+        console.print(narrative)
 
     # Summary stats
     input_list = get_inputs(data)
