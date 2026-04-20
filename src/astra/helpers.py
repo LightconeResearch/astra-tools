@@ -63,10 +63,11 @@ def _collect_node_decisions(node: dict[str, Any]) -> dict[str, Any]:
 def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, Any]:
     """Resolve external sub-analysis references in an analysis tree.
 
-    Walks the ``analyses`` dict. For any sub-analysis with a ``path`` field,
-    loads ``<path>/astra.yaml`` and merges its content into the tree.
-    Metadata fields (``name``, ``narrative``) from the parent reference
-    are preserved as overrides.
+    Walks the ``analyses`` dict. For any sub-analysis with a ``path``
+    field, loads ``<path>/astra.yaml`` as that sub-analysis's full
+    content. Sub-analyses are either external (a ``path:``) or inline
+    (content fields at the parent), never both — semantic validation
+    enforces this via ``PATH_FIELD_CONFLICT``.
 
     Args:
         data: The analysis data as a dict.
@@ -90,10 +91,6 @@ def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, An
             sub_yaml_path = resolved_dir / "astra.yaml"
             if sub_yaml_path.exists():
                 sub_data = load_yaml(sub_yaml_path)
-                # Preserve metadata overrides from parent reference
-                for key in ("name", "narrative"):
-                    if analysis_node.get(key):
-                        sub_data[key] = analysis_node[key]
                 # Keep the path field for reference
                 sub_data["path"] = sub_path
                 # Recursively resolve nested sub-analyses

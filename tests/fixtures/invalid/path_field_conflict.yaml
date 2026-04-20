@@ -1,0 +1,18 @@
+version: "1.0"
+name: "Test path/content conflict"
+inputs:
+  - id: data
+    type: data
+outputs:
+  - id: result
+    type: metric
+
+analyses:
+  preprocessing:
+    path: ./preprocessing
+    # The fields below are silently dropped (or were silently overriding
+    # the sub's own values pre-fix). Both are confusing — must be in the
+    # sub's astra.yaml instead.
+    name: "Preprocessing override"
+    narrative:
+      abstract: "Parent-side override that does nothing useful."

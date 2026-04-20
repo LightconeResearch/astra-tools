@@ -31,6 +31,39 @@ class SemanticError:
         return f"[{self.code}] {self.message}"
 
 
+def _check_path_exclusivity(
+    data: dict[str, Any], errors: list[SemanticError], path_prefix: str = ""
+) -> None:
+    """Enforce that any sub-analysis with ``path:`` has no other fields.
+
+    A sub-analysis is either external (a ``path:`` pointing to its own
+    ``astra.yaml``) or inline (content fields declared at the parent),
+    never both. Mixing the two produces a silent override / silent drop
+    failure mode that's confusing to debug.
+    """
+    sub_analyses = data.get("analyses") or {}
+    for sub_id, sub_node in sub_analyses.items():
+        if not isinstance(sub_node, dict):
+            continue
+        full_path = (
+            f"{path_prefix}.analyses.{sub_id}" if path_prefix else f"analyses.{sub_id}"
+        )
+        if sub_node.get("path"):
+            extra = sorted(k for k in sub_node if k != "path")
+            if extra:
+                errors.append(
+                    SemanticError(
+                        "PATH_FIELD_CONFLICT",
+                        f"Sub-analysis '{sub_id}' has 'path:' alongside fields "
+                        f"{extra}; content must come from the referenced file. "
+                        f"Move these fields into the sub's astra.yaml.",
+                        full_path,
+                    )
+                )
+        else:
+            _check_path_exclusivity(sub_node, errors, full_path)
+
+
 def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> list[SemanticError]:
     """Validate an analysis specification semantically.
 
@@ -52,6 +85,11 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
         List of semantic errors (empty if valid).
     """
     errors: list[SemanticError] = []
+
+    # Sub-analyses must be either external (path:) or inline (content fields)
+    # but never both. Run on the raw data before resolve_analysis_tree merges
+    # the external file's content onto the parent reference.
+    _check_path_exclusivity(data, errors)
 
     # Resolve external sub-analysis paths if base_path is provided
     if base_path is not None:
