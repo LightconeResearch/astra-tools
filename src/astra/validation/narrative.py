@@ -38,7 +38,10 @@ from typing import Any
 from astra.helpers import resolve_analysis_tree
 from astra.validation.semantic import SemanticError
 
-_ANCHOR_RE = re.compile(r"\[[^\]]*\]\(#([^)\s]+)\)")
+_HREF_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+# Non-canonical "../" before "#" — the spec-canonical form puts the parent
+# escape inside the fragment (e.g. (#../decisions.foo), not (../#decisions.foo)).
+_PARENT_PATH_FORM_RE = re.compile(r"^(?:\.\./)+#")
 
 _CATEGORIES = frozenset(
     {"inputs", "outputs", "decisions", "findings", "prior_insights", "analyses"}
@@ -180,11 +183,11 @@ def _resolve_anchor(
     return (target_path, anchor.category, anchor.element_id, anchor.option_id)
 
 
-def _extract_anchors(narrative: Any) -> list[str]:
-    """Extract all anchor targets from a narrative dict."""
+def _extract_hrefs(narrative: Any) -> list[str]:
+    """Extract all Markdown link hrefs from a narrative dict."""
     if not isinstance(narrative, dict):
         return []
-    anchors: list[str] = []
+    hrefs: list[str] = []
     for section_value in narrative.values():
         if isinstance(section_value, dict):
             text = section_value.get("content") or ""
@@ -192,8 +195,8 @@ def _extract_anchors(narrative: Any) -> list[str]:
             text = section_value
         else:
             continue
-        anchors.extend(_ANCHOR_RE.findall(text))
-    return anchors
+        hrefs.extend(_HREF_RE.findall(text))
+    return hrefs
 
 
 def _node_path_str(path: tuple[str, ...]) -> str:
@@ -222,7 +225,22 @@ def _walk_anchors(
     if narrative:
         base = _node_path_str(path)
         narrative_path = f"{base}.narrative" if base else "narrative"
-        for raw in _extract_anchors(narrative):
+        for href in _extract_hrefs(narrative):
+            if _PARENT_PATH_FORM_RE.match(href):
+                errors.append(
+                    SemanticError(
+                        "INVALID_NARRATIVE_ANCHOR",
+                        f"Anchor '{href}' uses non-canonical parent escape; "
+                        f"move '../' inside the fragment (e.g. '#../target' "
+                        f"instead of '../#target')",
+                        narrative_path,
+                    )
+                )
+                continue
+            if not href.startswith("#"):
+                # External link (URL, relative file path, etc.) — not an ASTRA ref.
+                continue
+            raw = href[1:]
             if "." not in raw:
                 # Plain Markdown heading anchor (e.g. [back to top](#abstract)),
                 # not an ASTRA reference. Every valid ASTRA anchor has at least
@@ -279,7 +297,10 @@ def _collect_mentioned(
 ) -> None:
     narrative = node.get("narrative")
     if narrative:
-        for raw in _extract_anchors(narrative):
+        for href in _extract_hrefs(narrative):
+            if not href.startswith("#"):
+                continue
+            raw = href[1:]
             if "." not in raw:
                 continue
             parsed = _parse_anchor(raw)

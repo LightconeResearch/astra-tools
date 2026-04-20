@@ -131,6 +131,33 @@ class TestAnchorResolution:
         codes = {w.message for w in warnings}
         assert any("Decision 'method'" in m for m in codes)
 
+    def test_non_canonical_parent_escape_form_errors(self) -> None:
+        # `../` BEFORE `#` is the wrong form. Spec-canonical is `#../...`.
+        # Used to silently bypass validation; now flagged.
+        data = _minimal_with_narrative({"abstract": "[bad](../#decisions.method)"})
+        errs = validate_narrative_anchors(data)
+        assert len(errs) == 1
+        assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
+        assert "../" in errs[0].message
+
+    def test_chained_non_canonical_parent_escape_errors(self) -> None:
+        data = _minimal_with_narrative({"abstract": "[bad](../../#decisions.method)"})
+        errs = validate_narrative_anchors(data)
+        assert len(errs) == 1
+        assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
+
+    def test_external_links_ignored(self) -> None:
+        # URLs and other non-anchor hrefs are not ASTRA references.
+        data = _minimal_with_narrative(
+            {
+                "abstract": (
+                    "See [paper](https://example.com/paper.pdf#page=3) "
+                    "and [other doc](./neighbor.md)."
+                )
+            }
+        )
+        assert validate_narrative_anchors(data) == []
+
     def test_multiple_anchors_one_broken(self) -> None:
         data = _minimal_with_narrative(
             {"abstract": "[ok](#decisions.method) and [bad](#findings.x)"}

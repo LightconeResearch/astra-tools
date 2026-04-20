@@ -82,7 +82,7 @@ def validate_analysis_data(data: dict[str, Any]) -> list[str]:
     Returns a list of error messages (empty if valid).
     """
     preprocessed = copy.deepcopy(data)
-    preprocessed.setdefault("id", "_root")  # root analysis has no id in YAML
+    preprocessed.setdefault("id", "root")  # root analysis has no id in YAML
     _inject_ids_inplace(preprocessed)
     try:
         Analysis.model_validate(preprocessed)
