@@ -25,8 +25,8 @@ from astra.helpers import (
 )
 from astra.validation.narrative import (
     check_narrative_coverage_file,
-    check_narrative_sections_file,
     validate_narrative_anchors_file,
+    validate_narrative_sections_file,
 )
 from astra.validation.schema import (
     validate_analysis_schema,
@@ -319,6 +319,15 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
         console.print("[green]✓[/green] Narrative anchors resolved")
 
+        section_errors = validate_narrative_sections_file(file)
+        if section_errors:
+            console.print("\n[red]Narrative section errors:[/red]")
+            for section_err in section_errors:
+                console.print(f"  • {section_err}")
+            raise SystemExit(1)
+
+        console.print("[green]✓[/green] Narrative sections present")
+
         narrative_warnings = check_narrative_coverage_file(file)
         if narrative_warnings:
             console.print("\n[yellow]Narrative coverage warnings:[/yellow]")
@@ -326,14 +335,6 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
                 console.print(f"  • [yellow]{w}[/yellow]")
         else:
             console.print("[green]✓[/green] Narrative coverage complete")
-
-        section_warnings = check_narrative_sections_file(file)
-        if section_warnings:
-            console.print("\n[yellow]Narrative section warnings:[/yellow]")
-            for w in section_warnings:
-                console.print(f"  • [yellow]{w}[/yellow]")
-        else:
-            console.print("[green]✓[/green] Narrative sections present")
 
     # Evidence verification (for analysis files with prior insights)
     if not is_universe and not skip_evidence:

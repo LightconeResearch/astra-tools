@@ -2,6 +2,9 @@ version: "1.0"
 name: "Full Analysis"
 narrative:
   summary: "A comprehensive test analysis with all features"
+  methods: "Driven by preprocessing, model, test_split, and seed decisions."
+  inputs: "Uses primary_data and an optional reference_study."
+  outputs: "Emits a trained model, accuracy/f1 metrics, a plot, a summary table, and a conclusion."
 authors:
   - "Test Author"
 tags:

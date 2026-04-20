@@ -8,9 +8,9 @@ from typing import Any
 from astra.validation.narrative import (
     check_narrative_coverage,
     check_narrative_coverage_file,
-    check_narrative_sections,
     validate_narrative_anchors,
     validate_narrative_anchors_file,
+    validate_narrative_sections,
 )
 
 _FULL_SECTIONS = ("summary", "findings", "methods", "inputs", "outputs")
@@ -273,35 +273,93 @@ class TestSectionedNarrative:
 
 
 class TestNarrativeSections:
-    """Section-presence check warns when any of the five sections is missing or empty."""
+    """Section-requirement check: a section is required when the
+    corresponding structured data exists on the Analysis node."""
 
-    def test_full_narrative_no_warnings(self) -> None:
+    def test_full_narrative_no_errors(self) -> None:
         data = _minimal_with_narrative(_full_narrative())
-        assert check_narrative_sections(data) == []
+        assert validate_narrative_sections(data) == []
 
-    def test_missing_section_warns(self) -> None:
+    def test_missing_methods_when_decisions_present_errors(self) -> None:
+        narrative = _full_narrative()
+        del narrative["methods"]
+        data = _minimal_with_narrative(narrative)
+        errs = validate_narrative_sections(data)
+        assert len(errs) == 1
+        assert errs[0].code == "NARRATIVE_SECTION_REQUIRED"
+        assert errs[0].path == "narrative.methods"
+        assert "'decisions'" in errs[0].message
+
+    def test_missing_inputs_section_errors(self) -> None:
+        narrative = _full_narrative()
+        del narrative["inputs"]
+        data = _minimal_with_narrative(narrative)
+        errs = validate_narrative_sections(data)
+        assert len(errs) == 1
+        assert errs[0].path == "narrative.inputs"
+
+    def test_empty_section_treated_as_missing(self) -> None:
+        data = _minimal_with_narrative(_full_narrative(outputs="   "))
+        errs = validate_narrative_sections(data)
+        paths = {e.path for e in errs}
+        assert "narrative.outputs" in paths
+
+    def test_summary_always_optional(self) -> None:
+        narrative = _full_narrative()
+        del narrative["summary"]
+        data = _minimal_with_narrative(narrative)
+        assert validate_narrative_sections(data) == []
+
+    def test_missing_findings_section_ok_when_no_findings_declared(self) -> None:
+        # The minimal fixture has no `findings:` key — so narrative.findings
+        # is not required, even though it is absent from the narrative.
         narrative = _full_narrative()
         del narrative["findings"]
         data = _minimal_with_narrative(narrative)
-        warnings = check_narrative_sections(data)
-        codes = {(w.code, w.path) for w in warnings}
-        assert ("NARRATIVE_SECTION_MISSING", "narrative.findings") in codes
-        # Only the deleted section warns.
-        assert len(warnings) == 1
+        assert data.get("findings") is None
+        assert validate_narrative_sections(data) == []
 
-    def test_empty_section_warns(self) -> None:
-        data = _minimal_with_narrative(_full_narrative(methods="   "))
-        warnings = check_narrative_sections(data)
-        paths = {w.path for w in warnings}
-        assert "narrative.methods" in paths
+    def test_findings_section_required_when_finding_declared(self) -> None:
+        narrative = _full_narrative()
+        del narrative["findings"]
+        data = _minimal_with_narrative(narrative)
+        data["findings"] = {
+            "f1": {
+                "id": "f1",
+                "claim": "A finding.",
+                "created_at": "2026-01-01T00:00:00",
+                "evidence": [],
+            }
+        }
+        errs = validate_narrative_sections(data)
+        assert len(errs) == 1
+        assert errs[0].path == "narrative.findings"
 
-    def test_string_narrative_warns_all_sections(self) -> None:
-        # A legacy string narrative has none of the five sections populated.
+    def test_methods_required_when_only_analyses_present(self) -> None:
+        # A parent node with no decisions but with sub-analyses still
+        # requires narrative.methods.
+        data = {
+            "version": "1.0",
+            "name": "Test",
+            "narrative": {"summary": "top"},
+            "analyses": {
+                "sub": {
+                    "narrative": {"summary": "child"},
+                }
+            },
+        }
+        errs = validate_narrative_sections(data)
+        assert any(e.path == "narrative.methods" and "'analyses'" in e.message for e in errs)
+
+    def test_string_narrative_triggers_all_data_backed_sections(self) -> None:
+        # A legacy string narrative populates no sections; each triggered
+        # section errors. Minimal has inputs/outputs/decisions — three errors.
         data = _minimal_with_narrative("just a string")
-        warnings = check_narrative_sections(data)
-        assert {w.path for w in warnings} == {f"narrative.{s}" for s in _FULL_SECTIONS}
+        errs = validate_narrative_sections(data)
+        paths = {e.path for e in errs}
+        assert paths == {"narrative.methods", "narrative.inputs", "narrative.outputs"}
 
-    def test_sub_analysis_sections_checked(self) -> None:
+    def test_sub_analysis_requirements_checked(self) -> None:
         data = _minimal_with_narrative(_full_narrative())
         data["analyses"] = {
             "sub": {
@@ -310,9 +368,8 @@ class TestNarrativeSections:
                 "outputs": [{"id": "y", "type": "metric"}],
             }
         }
-        warnings = check_narrative_sections(data)
-        sub_paths = {w.path for w in warnings if w.path and "analyses.sub" in w.path}
-        # Four missing sections on the sub-analysis (summary is present).
-        assert sub_paths == {
-            f"analyses.sub.narrative.{s}" for s in _FULL_SECTIONS if s != "summary"
-        }
+        errs = validate_narrative_sections(data)
+        sub_paths = {e.path for e in errs if e.path and "analyses.sub" in e.path}
+        # Only inputs and outputs required on the sub-analysis (no decisions,
+        # no child analyses, no findings).
+        assert sub_paths == {"analyses.sub.narrative.inputs", "analyses.sub.narrative.outputs"}

@@ -12,11 +12,14 @@ Three checks layered on top of structural and semantic validation:
    sections — coverage is resolved across the whole narrative, not
    per-section. Unmentioned elements emit warnings (not errors).
 
-3. **Sections** — the narrative has five recommended sections
-   (``summary``, ``findings``, ``methods``, ``inputs``, ``outputs``);
-   missing or empty sections emit warnings. The scaffold produced by
-   ``astra init`` contains all five; authors can delete sections they
-   don't need, accepting the warning.
+3. **Sections** — a narrative section is required (non-empty prose)
+   when the corresponding structured data exists on the Analysis
+   node: ``findings`` when ``Analysis.findings`` has entries;
+   ``methods`` when ``Analysis.decisions`` or ``Analysis.analyses``
+   has entries; ``inputs`` when ``Analysis.inputs`` has entries;
+   ``outputs`` when ``Analysis.outputs`` has entries. ``summary`` is
+   always optional. Violations are errors — authors must narrate
+   what they declare.
 
 Anchor grammar is **tree-path-first**, matching the rest of ASTRA's
 reference syntax (``sibling.output_id`` in ``from_ref``). Sub-analyses
@@ -403,39 +406,64 @@ def _walk_coverage(
         _walk_coverage(sub_node, path + (sub_id,), mentioned, warnings)
 
 
-def check_narrative_sections(
+# Narrative sections triggered by the presence of structured data.
+# Each maps a section name to the Analysis keys that require it.
+_DATA_TRIGGERED_SECTIONS: dict[str, tuple[str, ...]] = {
+    "findings": ("findings",),
+    "methods": ("decisions", "analyses"),
+    "inputs": ("inputs",),
+    "outputs": ("outputs",),
+}
+
+
+def validate_narrative_sections(
     data: dict[str, Any], base_path: Path | None = None
-) -> list[NarrativeWarning]:
-    """Warn when an analysis's narrative is missing one of the five
-    recommended sections (``summary``, ``findings``, ``methods``,
-    ``inputs``, ``outputs``), or the section is present but empty.
+) -> list[SemanticError]:
+    """Require a narrative section when the corresponding structured
+    data exists on the Analysis node. Authors must narrate what they
+    declare.
+
+    - ``narrative.findings`` required when ``Analysis.findings`` has entries.
+    - ``narrative.methods`` required when ``Analysis.decisions`` or
+      ``Analysis.analyses`` has entries.
+    - ``narrative.inputs`` required when ``Analysis.inputs`` has entries.
+    - ``narrative.outputs`` required when ``Analysis.outputs`` has entries.
+    - ``narrative.summary`` is always optional (no structured counterpart).
+
+    A section counts as present only if it holds non-empty prose
+    (whitespace doesn't satisfy the rule).
     """
     if base_path is not None:
         data = resolve_analysis_tree(data, base_path)
-    warnings: list[NarrativeWarning] = []
-    _walk_sections(data, (), warnings)
-    return warnings
+    errors: list[SemanticError] = []
+    _walk_section_requirements(data, (), errors)
+    return errors
 
 
-def _walk_sections(
+def _walk_section_requirements(
     node: dict[str, Any],
     path: tuple[str, ...],
-    warnings: list[NarrativeWarning],
+    errors: list[SemanticError],
 ) -> None:
-    narrative = node.get("narrative")
+    narrative = node.get("narrative") if isinstance(node.get("narrative"), dict) else {}
     base = _node_path_str(path)
-    for section in _NARRATIVE_SECTIONS:
-        content = narrative.get(section) if isinstance(narrative, dict) else None
-        if not (isinstance(content, str) and content.strip()):
-            warnings.append(
-                NarrativeWarning(
-                    "NARRATIVE_SECTION_MISSING",
-                    f"Narrative section '{section}' is missing or empty",
-                    _narrative_report_path(base, section),
-                )
+    for section, trigger_keys in _DATA_TRIGGERED_SECTIONS.items():
+        present_triggers = [key for key in trigger_keys if node.get(key)]
+        if not present_triggers:
+            continue
+        content = narrative.get(section)
+        if isinstance(content, str) and content.strip():
+            continue
+        triggers_str = " and ".join(f"'{k}'" for k in present_triggers)
+        errors.append(
+            SemanticError(
+                "NARRATIVE_SECTION_REQUIRED",
+                f"Narrative section '{section}' is required because {triggers_str} has entries",
+                _narrative_report_path(base, section),
             )
+        )
     for sub_id, sub_node in (node.get("analyses") or {}).items():
-        _walk_sections(sub_node, path + (sub_id,), warnings)
+        _walk_section_requirements(sub_node, path + (sub_id,), errors)
 
 
 def validate_narrative_anchors_file(path: str | Path) -> list[SemanticError]:
@@ -454,9 +482,9 @@ def check_narrative_coverage_file(path: str | Path) -> list[NarrativeWarning]:
     return check_narrative_coverage(load_yaml(path), base_path=path.parent)
 
 
-def check_narrative_sections_file(path: str | Path) -> list[NarrativeWarning]:
-    """Load and run section-presence check on a YAML file."""
+def validate_narrative_sections_file(path: str | Path) -> list[SemanticError]:
+    """Load and run section-requirement check on a YAML file."""
     from astra.helpers import load_yaml
 
     path = Path(path)
-    return check_narrative_sections(load_yaml(path), base_path=path.parent)
+    return validate_narrative_sections(load_yaml(path), base_path=path.parent)
