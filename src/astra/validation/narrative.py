@@ -223,6 +223,11 @@ def _walk_anchors(
         base = _node_path_str(path)
         narrative_path = f"{base}.narrative" if base else "narrative"
         for raw in _extract_anchors(narrative):
+            if "." not in raw:
+                # Plain Markdown heading anchor (e.g. [back to top](#abstract)),
+                # not an ASTRA reference. Every valid ASTRA anchor has at least
+                # `category.element_id`, so a dotless anchor cannot resolve.
+                continue
             parsed = _parse_anchor(raw)
             if parsed is None:
                 errors.append(
@@ -275,6 +280,8 @@ def _collect_mentioned(
     narrative = node.get("narrative")
     if narrative:
         for raw in _extract_anchors(narrative):
+            if "." not in raw:
+                continue
             parsed = _parse_anchor(raw)
             if parsed is None:
                 continue

@@ -63,11 +63,12 @@ class TestAnchorResolution:
         assert len(errs) == 1
         assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
 
-    def test_invalid_grammar_category_without_id(self) -> None:
+    def test_dotless_category_treated_as_heading_link(self) -> None:
+        # Dotless anchors are skipped as Markdown heading links, even when
+        # the segment happens to be a reserved category name. This is a
+        # known tradeoff of the silent-skip rule.
         data = _minimal_with_narrative({"abstract": "[bad](#decisions)"})
-        errs = validate_narrative_anchors(data)
-        assert len(errs) == 1
-        assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
+        assert validate_narrative_anchors(data) == []
 
     def test_sub_analysis_path_anchor(self) -> None:
         data = _minimal_with_narrative({"abstract": "[s](#sub.decisions.d)"})
@@ -109,6 +110,26 @@ class TestAnchorResolution:
         # Simple-dict form accepts both bare string and {content: ...}.
         data = _minimal_with_narrative({"abstract": {"content": "[method](#decisions.method)"}})
         assert validate_narrative_anchors(data) == []
+
+    def test_plain_markdown_heading_anchors_ignored(self) -> None:
+        # Dotless anchors are Markdown heading links, not ASTRA refs.
+        data = _minimal_with_narrative(
+            {
+                "abstract": (
+                    "## Abstract\n[skip to results](#results) "
+                    "[method](#decisions.method)"
+                ),
+                "results": "## Results\n[back to top](#abstract)",
+            }
+        )
+        assert validate_narrative_anchors(data) == []
+
+    def test_plain_markdown_heading_anchors_dont_count_for_coverage(self) -> None:
+        # A dotless anchor must not satisfy coverage for any element.
+        data = _minimal_with_narrative({"abstract": "[bogus](#method) [o](#outputs.y)"})
+        warnings = check_narrative_coverage(data)
+        codes = {w.message for w in warnings}
+        assert any("Decision 'method'" in m for m in codes)
 
     def test_multiple_anchors_one_broken(self) -> None:
         data = _minimal_with_narrative(
