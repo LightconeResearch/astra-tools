@@ -45,9 +45,7 @@ def _check_path_exclusivity(
     for sub_id, sub_node in sub_analyses.items():
         if not isinstance(sub_node, dict):
             continue
-        full_path = (
-            f"{path_prefix}.analyses.{sub_id}" if path_prefix else f"analyses.{sub_id}"
-        )
+        full_path = f"{path_prefix}.analyses.{sub_id}" if path_prefix else f"analyses.{sub_id}"
         if sub_node.get("path"):
             extra = sorted(k for k in sub_node if k != "path")
             if extra:

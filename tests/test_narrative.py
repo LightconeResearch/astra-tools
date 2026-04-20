@@ -136,15 +136,12 @@ class TestAnchorResolution:
     def test_external_links_ignored(self) -> None:
         # URLs and other non-anchor hrefs are not ASTRA references.
         data = _minimal_with_narrative(
-            "See [paper](https://example.com/paper.pdf#page=3) "
-            "and [other doc](./neighbor.md)."
+            "See [paper](https://example.com/paper.pdf#page=3) and [other doc](./neighbor.md)."
         )
         assert validate_narrative_anchors(data) == []
 
     def test_multiple_anchors_one_broken(self) -> None:
-        data = _minimal_with_narrative(
-            "[ok](#decisions.method) and [bad](#findings.x)"
-        )
+        data = _minimal_with_narrative("[ok](#decisions.method) and [bad](#findings.x)")
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert "findings.x" in errs[0].message
@@ -207,9 +204,7 @@ class TestCoverage:
         assert "analyses.sub.outputs.z" in paths
 
     def test_from_ref_decision_not_required_to_be_mentioned(self) -> None:
-        data = _minimal_with_narrative(
-            "[d](#decisions.method) [o](#outputs.y) [s](#sub.outputs.y)"
-        )
+        data = _minimal_with_narrative("[d](#decisions.method) [o](#outputs.y) [s](#sub.outputs.y)")
         data["analyses"] = {
             "sub": {
                 "narrative": "[o](#outputs.y)",
