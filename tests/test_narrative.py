@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from astra.validation.narrative import (
     check_narrative_coverage,
@@ -17,13 +16,16 @@ _FULL_SECTIONS = ("summary", "findings", "methods", "inputs", "outputs")
 
 
 def _full_narrative(**overrides: str) -> dict[str, str]:
-    """Build a dict-shape narrative with placeholder prose in every section."""
+    """Build a narrative with placeholder prose in every section."""
     base = {s: f"{s} placeholder." for s in _FULL_SECTIONS}
     base.update(overrides)
     return base
 
 
-def _minimal_with_narrative(narrative: Any) -> dict[str, Any]:
+def _minimal_with_narrative(narrative: dict[str, str] | str) -> dict[str, object]:
+    """Build a minimal analysis. Shorthand: a bare string is placed in ``summary``."""
+    if isinstance(narrative, str):
+        narrative = {"summary": narrative}
     return {
         "version": "1.0",
         "name": "Test",
@@ -99,7 +101,7 @@ class TestAnchorResolution:
         data = _minimal_with_narrative("(placeholder)")
         data["analyses"] = {
             "sub": {
-                "narrative": "[parent method](#../decisions.method)",
+                "narrative": {"summary": "[parent method](#../decisions.method)"},
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
             }
@@ -182,7 +184,7 @@ class TestCoverage:
         )
         data["analyses"] = {
             "sub": {
-                "narrative": "[d](#decisions.d) [o](#outputs.y)",
+                "narrative": {"summary": "[d](#decisions.d) [o](#outputs.y)"},
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
                 "decisions": {
@@ -213,11 +215,11 @@ class TestCoverage:
         paths = {w.path for w in warnings}
         assert "analyses.sub.outputs.z" in paths
 
-    def test_from_ref_decision_not_required_to_be_mentioned(self) -> None:
+    def test_from_decision_not_required_to_be_mentioned(self) -> None:
         data = _minimal_with_narrative("[d](#decisions.method) [o](#outputs.y) [s](#sub.outputs.y)")
         data["analyses"] = {
             "sub": {
-                "narrative": "[o](#outputs.y)",
+                "narrative": {"summary": "[o](#outputs.y)"},
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
                 "decisions": {
@@ -228,7 +230,7 @@ class TestCoverage:
         }
         warnings = check_narrative_coverage(data)
         paths = {w.path for w in warnings}
-        # The from-ref'd decision must not appear as an uncovered element.
+        # A parent-referenced decision must not appear as an uncovered element.
         assert "analyses.sub.decisions.method" not in paths
 
 
@@ -350,14 +352,6 @@ class TestNarrativeSections:
         }
         errs = validate_narrative_sections(data)
         assert any(e.path == "narrative.methods" and "'analyses'" in e.message for e in errs)
-
-    def test_string_narrative_triggers_all_data_backed_sections(self) -> None:
-        # A legacy string narrative populates no sections; each triggered
-        # section errors. Minimal has inputs/outputs/decisions — three errors.
-        data = _minimal_with_narrative("just a string")
-        errs = validate_narrative_sections(data)
-        paths = {e.path for e in errs}
-        assert paths == {"narrative.methods", "narrative.inputs", "narrative.outputs"}
 
     def test_sub_analysis_requirements_checked(self) -> None:
         data = _minimal_with_narrative(_full_narrative())

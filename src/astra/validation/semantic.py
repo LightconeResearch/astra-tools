@@ -84,9 +84,8 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
     """
     errors: list[SemanticError] = []
 
-    # Sub-analyses must be either external (path:) or inline (content fields)
-    # but never both. Run on the raw data before resolve_analysis_tree merges
-    # the external file's content onto the parent reference.
+    # Run on the raw data before resolve_analysis_tree merges the
+    # external file's content onto the parent reference.
     _check_path_exclusivity(data, errors)
 
     # Resolve external sub-analysis paths if base_path is provided
@@ -219,7 +218,7 @@ def _validate_analysis_node(
         ref = decision.get("from")
         if ref:
             errors.extend(
-                _validate_decision_from_ref(
+                _validate_decision_from(
                     decision_id,
                     ref,
                     parent_decisions,
@@ -237,7 +236,7 @@ def _validate_analysis_node(
         ref = inp.get("from")
         if ref:
             errors.extend(
-                _validate_from_ref(
+                _validate_from(
                     ref,
                     parent_input_ids,
                     sibling_analyses,
@@ -269,7 +268,7 @@ def _validate_analysis_node(
     for decision_id, decision in node_all_decisions.items():
         ref = decision.get("from")
         if ref and ref.startswith("../"):
-            parent_decision_id = ref[3:]  # strip ../
+            parent_decision_id = ref[3:]
             if parent_decision_id in parent_decisions:
                 constraint_scope[decision_id] = parent_decisions[parent_decision_id]
     errors.extend(_validate_decisions(node_decisions, prior_insights, node_path, constraint_scope))
@@ -631,7 +630,7 @@ def _detect_output_cycle(dep_graph: dict[str, list[str]]) -> list[str] | None:
     return None
 
 
-def _validate_decision_from_ref(
+def _validate_decision_from(
     decision_id: str,
     ref: str,
     parent_decisions: dict[str, Any],
@@ -644,14 +643,14 @@ def _validate_decision_from_ref(
     """
 
     def _error(message: str) -> list[SemanticError]:
-        return [SemanticError("INVALID_DECISION_FROM_REF", message, decision_path)]
+        return [SemanticError("INVALID_DECISION_FROM", message, decision_path)]
 
     if not ref.startswith("../"):
         return _error(
             f"Decision from reference '{ref}' must use '../' prefix to reference parent scope"
         )
 
-    parent_decision_id = ref[3:]  # strip ../
+    parent_decision_id = ref[3:]
     if not parent_decision_id:
         return _error(f"Decision from reference '{ref}' is empty after '../'")
 
@@ -664,7 +663,7 @@ def _validate_decision_from_ref(
     return []
 
 
-def _validate_from_ref(
+def _validate_from(
     ref: str,
     parent_input_ids: set[str],
     sibling_analyses: dict[str, Any],
@@ -681,7 +680,7 @@ def _validate_from_ref(
     """
 
     def _error(message: str) -> list[SemanticError]:
-        return [SemanticError("INVALID_FROM_REF", message, node_path)]
+        return [SemanticError("INVALID_FROM", message, node_path)]
 
     # Strip ../ prefix if present
     tail = ref

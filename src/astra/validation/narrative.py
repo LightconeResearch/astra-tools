@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from astra.helpers import resolve_analysis_tree
+from astra.helpers import load_yaml, resolve_analysis_tree
 from astra.validation.semantic import SemanticError
 
 _HREF_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
@@ -59,11 +59,17 @@ _CATEGORIES = frozenset(
     {"inputs", "outputs", "decisions", "findings", "prior_insights", "analyses"}
 )
 
-# Categories whose elements are coverage-checked. Options, inputs, and
-# prior_insights are intentionally excluded: options are typically
-# numerous, inputs are often trivially "the data", and prior_insights
-# exist to justify decisions rather than being independently noteworthy.
-_COVERAGE_CATEGORIES = ("decisions", "findings", "outputs", "analyses")
+# Categories whose elements are coverage-checked, with the human-readable
+# label used in warnings. Options, inputs, and prior_insights are
+# intentionally excluded: options are typically numerous, inputs are
+# often trivially "the data", and prior_insights exist to justify
+# decisions rather than being independently noteworthy.
+_COVERAGE_CATEGORY_LABELS: dict[str, str] = {
+    "decisions": "Decision",
+    "findings": "Finding",
+    "outputs": "Output",
+    "analyses": "Sub-analysis",
+}
 
 # The five narrative sections, in canonical render order.
 _NARRATIVE_SECTIONS = ("summary", "findings", "methods", "inputs", "outputs")
@@ -198,23 +204,20 @@ def _resolve_anchor(
     return (target_path, anchor.category, anchor.element_id, anchor.option_id)
 
 
-def _iter_sections(narrative: Any) -> Iterator[tuple[str | None, str]]:
-    """Yield ``(section, content)`` pairs for each non-empty section.
-
-    Dict-shaped narratives (the current schema) yield one pair per
-    populated section, in canonical render order. String narratives
-    (legacy or test shorthand) yield a single ``(None, content)`` pair.
+def _iter_sections(narrative: Any) -> Iterator[tuple[str, str]]:
+    """Yield ``(section, content)`` pairs for each non-empty section,
+    in canonical render order. Non-dict narratives yield nothing —
+    the spec's ``Narrative`` is a dict of five optional section fields.
     """
-    if isinstance(narrative, dict):
-        for section in _NARRATIVE_SECTIONS:
-            content = narrative.get(section)
-            if isinstance(content, str) and content:
-                yield section, content
-    elif isinstance(narrative, str) and narrative:
-        yield None, narrative
+    if not isinstance(narrative, dict):
+        return
+    for section in _NARRATIVE_SECTIONS:
+        content = narrative.get(section)
+        if isinstance(content, str) and content:
+            yield section, content
 
 
-def _extract_section_hrefs(narrative: Any) -> Iterator[tuple[str | None, str]]:
+def _extract_section_hrefs(narrative: Any) -> Iterator[tuple[str, str]]:
     """Yield ``(section, href)`` for every Markdown link across sections."""
     for section, content in _iter_sections(narrative):
         for href in _HREF_RE.findall(content):
@@ -226,10 +229,9 @@ def _node_path_str(path: tuple[str, ...]) -> str:
     return ".".join(f"analyses.{seg}" for seg in path)
 
 
-def _narrative_report_path(base: str, section: str | None) -> str:
+def _narrative_report_path(base: str, section: str) -> str:
     """Build the path string used in error/warning reports for a narrative location."""
-    section_suffix = f"narrative.{section}" if section else "narrative"
-    return f"{base}.{section_suffix}" if base else section_suffix
+    return f"{base}.narrative.{section}" if base else f"narrative.{section}"
 
 
 def validate_narrative_anchors(
@@ -344,6 +346,23 @@ def _collect_mentioned(
         _collect_mentioned(sub_node, path + (sub_id,), root, mentioned)
 
 
+def _iter_coverage_ids(node: dict[str, Any], category: str) -> Iterator[str]:
+    """Yield element IDs for a coverage-checked category on a single node."""
+    if category == "decisions":
+        for did, decision in (node.get("decisions") or {}).items():
+            # Pure references to parent decisions aren't local elements.
+            if isinstance(decision, dict) and decision.get("from"):
+                continue
+            yield did
+    elif category == "outputs":
+        for out in node.get("outputs") or []:
+            oid = out.get("id")
+            if oid:
+                yield oid
+    else:  # "findings" or "analyses"
+        yield from (node.get(category) or {})
+
+
 def _walk_coverage(
     node: dict[str, Any],
     path: tuple[str, ...],
@@ -351,57 +370,18 @@ def _walk_coverage(
     warnings: list[NarrativeWarning],
 ) -> None:
     base = _node_path_str(path)
-
-    for did, decision in (node.get("decisions") or {}).items():
-        # Pure references to parent decisions aren't local elements.
-        if isinstance(decision, dict) and decision.get("from"):
-            continue
-        if (path, "decisions", did) not in mentioned:
-            p = f"{base}.decisions.{did}" if base else f"decisions.{did}"
+    for category, label in _COVERAGE_CATEGORY_LABELS.items():
+        for eid in _iter_coverage_ids(node, category):
+            if (path, category, eid) in mentioned:
+                continue
+            element_path = f"{base}.{category}.{eid}" if base else f"{category}.{eid}"
             warnings.append(
                 NarrativeWarning(
                     "NARRATIVE_UNMENTIONED",
-                    f"Decision '{did}' is not mentioned in any narrative",
-                    p,
+                    f"{label} '{eid}' is not mentioned in any narrative",
+                    element_path,
                 )
             )
-
-    for fid in node.get("findings") or {}:
-        if (path, "findings", fid) not in mentioned:
-            p = f"{base}.findings.{fid}" if base else f"findings.{fid}"
-            warnings.append(
-                NarrativeWarning(
-                    "NARRATIVE_UNMENTIONED",
-                    f"Finding '{fid}' is not mentioned in any narrative",
-                    p,
-                )
-            )
-
-    for out in node.get("outputs") or []:
-        oid = out.get("id")
-        if not oid:
-            continue
-        if (path, "outputs", oid) not in mentioned:
-            p = f"{base}.outputs.{oid}" if base else f"outputs.{oid}"
-            warnings.append(
-                NarrativeWarning(
-                    "NARRATIVE_UNMENTIONED",
-                    f"Output '{oid}' is not mentioned in any narrative",
-                    p,
-                )
-            )
-
-    for sub_id in node.get("analyses") or {}:
-        if (path, "analyses", sub_id) not in mentioned:
-            p = f"{base}.analyses.{sub_id}" if base else f"analyses.{sub_id}"
-            warnings.append(
-                NarrativeWarning(
-                    "NARRATIVE_UNMENTIONED",
-                    f"Sub-analysis '{sub_id}' is not mentioned in any narrative",
-                    p,
-                )
-            )
-
     for sub_id, sub_node in (node.get("analyses") or {}).items():
         _walk_coverage(sub_node, path + (sub_id,), mentioned, warnings)
 
@@ -469,23 +449,17 @@ def _walk_section_requirements(
 
 def validate_narrative_anchors_file(path: str | Path) -> list[SemanticError]:
     """Load and run anchor validation on a YAML file."""
-    from astra.helpers import load_yaml
-
     path = Path(path)
     return validate_narrative_anchors(load_yaml(path), base_path=path.parent)
 
 
 def check_narrative_coverage_file(path: str | Path) -> list[NarrativeWarning]:
     """Load and run coverage check on a YAML file."""
-    from astra.helpers import load_yaml
-
     path = Path(path)
     return check_narrative_coverage(load_yaml(path), base_path=path.parent)
 
 
 def validate_narrative_sections_file(path: str | Path) -> list[SemanticError]:
     """Load and run section-requirement check on a YAML file."""
-    from astra.helpers import load_yaml
-
     path = Path(path)
     return validate_narrative_sections(load_yaml(path), base_path=path.parent)
