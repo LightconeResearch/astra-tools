@@ -445,7 +445,8 @@ def _walk_section_requirements(
     path: tuple[str, ...],
     errors: list[SemanticError],
 ) -> None:
-    narrative = node.get("narrative") if isinstance(node.get("narrative"), dict) else {}
+    raw_narrative = node.get("narrative")
+    narrative = raw_narrative if isinstance(raw_narrative, dict) else {}
     base = _node_path_str(path)
     for section, trigger_keys in _DATA_TRIGGERED_SECTIONS.items():
         present_triggers = [key for key in trigger_keys if node.get(key)]
