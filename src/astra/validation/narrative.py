@@ -22,7 +22,7 @@ Three checks layered on top of structural and semantic validation:
    what they declare.
 
 Anchor grammar is **tree-path-first**, matching the rest of ASTRA's
-reference syntax (``sibling.output_id`` in ``from_ref``). Sub-analyses
+reference syntax (``sibling.output_id`` in ``from``). Sub-analyses
 are traversed before the category::
 
     #inputs.<id>
@@ -354,7 +354,7 @@ def _walk_coverage(
 
     for did, decision in (node.get("decisions") or {}).items():
         # Pure references to parent decisions aren't local elements.
-        if isinstance(decision, dict) and decision.get("from_ref"):
+        if isinstance(decision, dict) and decision.get("from"):
             continue
         if (path, "decisions", did) not in mentioned:
             p = f"{base}.decisions.{did}" if base else f"decisions.{did}"
