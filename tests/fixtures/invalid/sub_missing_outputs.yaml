@@ -13,5 +13,5 @@ analyses:
     inputs:
       - id: sub_data
         type: data
-        from_ref: data
+        from: data
     # outputs is missing

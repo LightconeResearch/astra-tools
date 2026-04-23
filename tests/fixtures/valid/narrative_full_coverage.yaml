@@ -60,7 +60,7 @@ analyses:
     inputs:
       - id: raw
         type: data
-        from_ref: primary_data
+        from: primary_data
     outputs:
       - id: scaled
         type: data

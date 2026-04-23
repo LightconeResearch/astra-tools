@@ -222,6 +222,7 @@ class TestCoverage:
                 "outputs": [{"id": "y", "type": "metric"}],
                 "decisions": {
                     # Pure reference to parent — shouldn't require local mention.
+                    # Uses canonical `from_ref` since this bypasses `load_yaml` normalization.
                     "method": {"from_ref": "../method"}
                 },
             }

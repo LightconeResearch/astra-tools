@@ -120,6 +120,24 @@ def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, An
     return result
 
 
+def _normalize_from_keys(node: Any) -> None:
+    """Rename ``from`` keys to ``from_ref`` in place, recursively.
+
+    ``from`` is the user-facing YAML form; ``from_ref`` is the spec's
+    canonical name (``from`` is a Python reserved keyword, so astra-spec's
+    generated Pydantic model exposes it as ``from_ref``). Normalizing at
+    load time lets every downstream consumer use one name.
+    """
+    if isinstance(node, dict):
+        if "from" in node and "from_ref" not in node:
+            node["from_ref"] = node.pop("from")
+        for value in node.values():
+            _normalize_from_keys(value)
+    elif isinstance(node, list):
+        for item in node:
+            _normalize_from_keys(item)
+
+
 def load_yaml(path: str | Path) -> dict[str, Any]:
     """Load a YAML file and return its contents as a dict.
 
@@ -127,11 +145,13 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
         path: Path to the YAML file.
 
     Returns:
-        The parsed YAML content as a dictionary.
+        The parsed YAML content as a dictionary. ``from`` keys are
+        normalized to ``from_ref`` throughout the tree.
     """
     with open(path) as f:
         data: dict[str, Any] = yaml.safe_load(f)
-        return data
+    _normalize_from_keys(data)
+    return data
 
 
 def save_yaml(data: dict[str, Any], path: str | Path) -> None:

@@ -28,7 +28,7 @@ analyses:
     inputs:
       - id: survey_data
         type: data
-        from_ref: survey_catalog
+        from: survey_catalog
     outputs:
       - id: mock_catalog
         type: data
@@ -42,7 +42,7 @@ analyses:
           inputs: [mock_catalog]
     decisions:
       cosmology_model:
-        from_ref: ../cosmology_model
+        from: ../cosmology_model
       noise_model:
         label: "Noise Model"
         default: heteroscedastic
@@ -57,7 +57,7 @@ analyses:
     inputs:
       - id: training_data
         type: data
-        from_ref: build_mocks.mock_catalog
+        from: build_mocks.mock_catalog
     outputs:
       - id: trained_model
         type: data
@@ -81,7 +81,7 @@ analyses:
     inputs:
       - id: model
         type: data
-        from_ref: train_network.trained_model
+        from: train_network.trained_model
     outputs:
       - id: validation_report
         type: report
