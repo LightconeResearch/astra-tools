@@ -354,7 +354,7 @@ def _walk_coverage(
 
     for did, decision in (node.get("decisions") or {}).items():
         # Pure references to parent decisions aren't local elements.
-        if isinstance(decision, dict) and decision.get("from"):
+        if isinstance(decision, dict) and decision.get("from_ref"):
             continue
         if (path, "decisions", did) not in mentioned:
             p = f"{base}.decisions.{did}" if base else f"decisions.{did}"

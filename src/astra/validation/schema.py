@@ -18,28 +18,11 @@ from pydantic import ValidationError as PydanticValidationError
 from astra.helpers import load_yaml
 
 
-def _remap_from_field(obj: dict[str, Any]) -> None:
-    """Rename ``from`` to ``from_ref`` since ``from`` is a Python keyword."""
-    if "from" in obj:
-        obj.setdefault("from_ref", obj.pop("from"))
-
-
 def _inject_ids_inplace(data: dict[str, Any]) -> None:
     """Prepare a raw YAML dict for Pydantic validation.
 
-    - Injects dict keys as ``id`` fields (ASTRA YAML uses keyed dicts).
-    - Renames ``from`` to ``from_ref`` (Python keyword).
+    Injects dict keys as ``id`` fields (ASTRA YAML uses keyed dicts).
     """
-    _remap_from_field(data)
-
-    for inp in data.get("inputs") or []:
-        if isinstance(inp, dict):
-            _remap_from_field(inp)
-
-    for out in data.get("outputs") or []:
-        if isinstance(out, dict):
-            _remap_from_field(out)
-
     for field in ("decisions", "analyses", "prior_insights", "findings"):
         mapping = data.get(field)
         if not isinstance(mapping, dict):
@@ -48,7 +31,6 @@ def _inject_ids_inplace(data: dict[str, Any]) -> None:
             if not isinstance(value, dict):
                 continue
             value.setdefault("id", key)
-            _remap_from_field(value)
             if field == "decisions":
                 if isinstance(value.get("options"), dict):
                     for okey, ovalue in value["options"].items():

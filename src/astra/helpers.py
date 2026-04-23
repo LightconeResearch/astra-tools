@@ -49,13 +49,13 @@ def is_condition_met(
 def _collect_node_decisions(node: dict[str, Any]) -> dict[str, Any]:
     """Collect locally-defined decisions from a node.
 
-    Decisions with a ``from`` field are references to parent decisions
+    Decisions with a ``from_ref`` field are references to parent decisions
     and are excluded from the result since they are not locally defined.
     """
     decisions: dict[str, Any] = {}
     for decision_id, decision in (node.get("decisions") or {}).items():
-        if isinstance(decision, dict) and decision.get("from"):
-            continue  # Skip from: references
+        if isinstance(decision, dict) and decision.get("from_ref"):
+            continue  # Skip from_ref references
         decisions[decision_id] = decision
     return decisions
 

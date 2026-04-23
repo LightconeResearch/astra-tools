@@ -222,7 +222,7 @@ class TestCoverage:
                 "outputs": [{"id": "y", "type": "metric"}],
                 "decisions": {
                     # Pure reference to parent — shouldn't require local mention.
-                    "method": {"from": "../method"}
+                    "method": {"from_ref": "../method"}
                 },
             }
         }

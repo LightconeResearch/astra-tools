@@ -13,10 +13,10 @@ analyses:
     inputs:
       - id: sub_data
         type: data
-        from: data
+        from_ref: data
     outputs:
       - id: sub_result
         type: metric
     decisions:
       bad_ref:
-        from: ../nonexistent_decision
+        from_ref: ../nonexistent_decision

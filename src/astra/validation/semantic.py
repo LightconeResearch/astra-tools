@@ -213,10 +213,10 @@ def _validate_analysis_node(
                 )
             )
 
-    # Validate decision `from:` references against parent decisions
+    # Validate decision `from_ref` references against parent decisions
     node_all_decisions = node.get("decisions") or {}
     for decision_id, decision in node_all_decisions.items():
-        from_ref = decision.get("from")
+        from_ref = decision.get("from_ref")
         if from_ref:
             errors.extend(
                 _validate_decision_from_ref(
@@ -227,14 +227,14 @@ def _validate_analysis_node(
                 )
             )
 
-    # Validate node inputs (check `from` references)
+    # Validate node inputs (check `from_ref` references)
     node_inputs = node.get("inputs") or []
     node_input_ids: set[str] = set()
     for inp in node_inputs:
         inp_id = inp.get("id")
         if inp_id:
             node_input_ids.add(inp_id)
-        from_ref = inp.get("from")
+        from_ref = inp.get("from_ref")
         if from_ref:
             errors.extend(
                 _validate_from_ref(
@@ -262,12 +262,12 @@ def _validate_analysis_node(
             node_output_ids.add(out_id)
 
     # Validate decisions
-    # Collect only locally-defined decisions (not from: references)
+    # Collect only locally-defined decisions (not from_ref references)
     node_decisions = _collect_node_decisions(node)
-    # Build constraint scope: local decisions + resolved from: references from parent
+    # Build constraint scope: local decisions + resolved from_ref references from parent
     constraint_scope = dict(node_decisions)
     for decision_id, decision in node_all_decisions.items():
-        from_ref = decision.get("from")
+        from_ref = decision.get("from_ref")
         if from_ref and from_ref.startswith("../"):
             parent_decision_id = from_ref[3:]  # strip ../
             if parent_decision_id in parent_decisions:
@@ -637,9 +637,9 @@ def _validate_decision_from_ref(
     parent_decisions: dict[str, Any],
     decision_path: str,
 ) -> list[SemanticError]:
-    """Validate a `from` reference on a decision.
+    """Validate a `from_ref` reference on a decision.
 
-    ``from: ../parent_decision_id`` references a parent decision.
+    ``from_ref: ../parent_decision_id`` references a parent decision.
     The ``../`` prefix is required.
     """
 
@@ -671,7 +671,7 @@ def _validate_from_ref(
     current_node_id: str,
     node_path: str,
 ) -> list[SemanticError]:
-    """Validate a `from` reference on a sub-analysis input.
+    """Validate a `from_ref` reference on a sub-analysis input.
 
     Supports two syntaxes:
     - ``../`` prefix (new): ``../input_id`` (parent input),
@@ -793,23 +793,23 @@ def _validate_universe_node(
     """Recursively validate a universe node against an analysis node.
 
     Validates decisions at this level, checks for unknown/missing analyses,
-    then recurses into sub-analyses. Decisions with ``from:`` references are
+    then recurses into sub-analyses. Decisions with ``from_ref`` references are
     skipped (they inherit their value from the parent universe).
     """
     errors: list[SemanticError] = []
 
     # Validate decisions at this level
     analysis_decisions = _collect_node_decisions(analysis_node)
-    # Also get all decisions including from: references for detecting what the
+    # Also get all decisions including from_ref references for detecting what the
     # universe should/shouldn't contain
     all_analysis_decisions = analysis_node.get("decisions") or {}
     universe_decisions = universe_node.get("decisions") or {}
     decisions_path = f"{path_prefix}.decisions" if path_prefix else "decisions"
 
-    # Identify from: reference decisions (these are resolved from parent, not set in universe)
+    # Identify from_ref reference decisions (these are resolved from parent, not set in universe)
     from_decision_ids = set()
     for decision_id, decision in all_analysis_decisions.items():
-        if isinstance(decision, dict) and decision.get("from"):
+        if isinstance(decision, dict) and decision.get("from_ref"):
             from_decision_ids.add(decision_id)
 
     # Check for unknown decisions in universe
@@ -819,7 +819,7 @@ def _validate_universe_node(
                 SemanticError(
                     "FROM_DECISION_IN_UNIVERSE",
                     f"Universe should not set decision '{decision_id}' "
-                    f"(it uses 'from:' to reference a parent decision)",
+                    f"(it uses 'from_ref' to reference a parent decision)",
                     f"{decisions_path}.{decision_id}",
                 )
             )
@@ -863,10 +863,10 @@ def _validate_universe_node(
     all_universe_decisions.update(universe_decisions)
 
     # Check all locally-defined analysis decisions are covered
-    # (skip from: references -- they get their value from the parent universe)
+    # (skip from_ref references -- they get their value from the parent universe)
     for decision_id in analysis_decisions:
         if decision_id in from_decision_ids:
-            continue  # from: decisions are inherited, not set locally
+            continue  # from_ref decisions are inherited, not set locally
 
         decision = analysis_decisions[decision_id]
         when = decision.get("when")
@@ -896,19 +896,19 @@ def _validate_universe_node(
             )
 
     # Check constraints
-    # Build effective decisions: local selections + from: resolved from parent
+    # Build effective decisions: local selections + from_ref resolved from parent
     effective_decisions = dict(universe_decisions)
     for decision_id in from_decision_ids:
-        from_ref = all_analysis_decisions[decision_id].get("from", "")
+        from_ref = all_analysis_decisions[decision_id].get("from_ref", "")
         if from_ref.startswith("../"):
             parent_decision_id = from_ref[3:]
             if parent_decision_id in parent_universe_decisions:
                 effective_decisions[decision_id] = parent_universe_decisions[parent_decision_id]
 
-    # Build effective analysis decisions for constraint checking (include resolved from:)
+    # Build effective analysis decisions for constraint checking (include resolved from_ref)
     effective_analysis_decisions = dict(analysis_decisions)
     for decision_id in from_decision_ids:
-        from_ref = all_analysis_decisions[decision_id].get("from", "")
+        from_ref = all_analysis_decisions[decision_id].get("from_ref", "")
         if from_ref.startswith("../"):
             parent_decision_id = from_ref[3:]
             # The constraint scope uses the parent's decision definition
