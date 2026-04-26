@@ -4,11 +4,11 @@ inputs: []
 outputs:
   - id: a
     type: data
+    inputs: [b]
     recipe:
-      command: python a.py
-      inputs: [b]
+      command: python a.py {inputs.b}
   - id: b
     type: data
+    inputs: [a]
     recipe:
-      command: python b.py
-      inputs: [a]
+      command: python b.py {inputs.a}

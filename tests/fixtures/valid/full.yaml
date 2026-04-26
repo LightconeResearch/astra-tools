@@ -30,37 +30,37 @@ outputs:
   - id: accuracy
     type: metric
     description: "Model accuracy"
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: python src/evaluate.py {inputs.trained_output}
 
   - id: f1_score
     type: metric
     description: "F1 score"
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: python src/evaluate.py {inputs.trained_output}
 
   - id: plot
     type: figure
     description: "Results plot"
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: python src/evaluate.py {inputs.trained_output}
 
   - id: summary
     type: table
     description: "Results summary"
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: python src/evaluate.py {inputs.trained_output}
 
   - id: conclusion
     type: report
     description: "Analysis conclusion"
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: python src/evaluate.py {inputs.trained_output}
 
 decisions:
   preprocessing:

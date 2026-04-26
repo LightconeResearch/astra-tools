@@ -171,15 +171,16 @@ outputs:
   - id: main_result
     type: metric
     description: "TODO: Describe your primary output metric"
+    decisions: [example_method]
     recipe:
-      command: python src/main.py
+      command: python src/main.py --method {{decisions.example_method}} --out {{output}}
 
   - id: conclusion
     type: report
     description: "Summary of analysis findings"
+    inputs: [main_result]
     recipe:
-      command: python src/main.py
-      inputs: [main_result]
+      command: python src/main.py --result {{inputs.main_result}} --out {{output}}
 
 decisions:
   example_method:

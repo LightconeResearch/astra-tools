@@ -547,25 +547,21 @@ def get_option_value(decision: dict[str, Any], option_id: str) -> str:
 
 
 def get_output_dependencies(data: dict[str, Any]) -> dict[str, list[str]]:
-    """Build the output-to-output dependency graph from inline recipes.
+    """Build the output-to-output dependency graph from output declarations.
 
     Args:
         data: Analysis data as a dict.
 
     Returns:
-        Dict mapping output_id to list of input output_ids (from recipe.inputs).
-        Outputs without recipes have an empty dependency list.
+        Dict mapping output_id to list of input IDs (from Output.inputs).
+        Outputs without declared inputs have an empty dependency list.
     """
     result: dict[str, list[str]] = {}
     for out in data.get("outputs") or []:
         out_id = out.get("id")
         if not out_id:
             continue
-        recipe = out.get("recipe")
-        if recipe:
-            result[out_id] = recipe.get("inputs") or []
-        else:
-            result[out_id] = []
+        result[out_id] = out.get("inputs") or []
     return result
 
 

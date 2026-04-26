@@ -32,14 +32,15 @@ analyses:
     outputs:
       - id: mock_catalog
         type: data
+        inputs: [survey_data]
         recipe:
-          command: python src/generate_mocks.py
+          command: python src/generate_mocks.py {inputs.survey_data}
       - id: mock_sample_plot
         type: figure
         description: "Sample mock catalog visualization"
+        inputs: [mock_catalog]
         recipe:
-          command: python src/generate_mocks.py
-          inputs: [mock_catalog]
+          command: python src/generate_mocks.py {inputs.mock_catalog}
     decisions:
       cosmology_model:
         from: ../cosmology_model
@@ -61,8 +62,9 @@ analyses:
     outputs:
       - id: trained_model
         type: data
+        inputs: [training_data]
         recipe:
-          command: python src/train.py
+          command: python src/train.py {inputs.training_data}
           resources:
             gpus: 1
             memory: "32GB"

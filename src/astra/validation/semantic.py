@@ -163,8 +163,16 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
             if out_id:
                 sub_output_ids.add(f"{analysis_id}.{out_id}")
 
-    # Validate output recipes
-    errors.extend(_validate_output_recipes(outputs, "", extra_valid_ids=sub_output_ids))
+    # Validate output declarations and recipes
+    errors.extend(
+        _validate_output_dependencies(
+            outputs,
+            analysis_input_ids=input_ids,
+            decisions_in_scope=root_decisions,
+            path_prefix="",
+            extra_valid_ids=sub_output_ids,
+        )
+    )
 
     # Validate output when conditions
     errors.extend(_validate_output_when(outputs, root_decisions, ""))
@@ -285,9 +293,16 @@ def _validate_analysis_node(
         )
     )
 
-    # Validate output recipes
+    # Validate output declarations and recipes
     node_outputs = node.get("outputs") or []
-    errors.extend(_validate_output_recipes(node_outputs, node_path))
+    errors.extend(
+        _validate_output_dependencies(
+            node_outputs,
+            analysis_input_ids=node_input_ids,
+            decisions_in_scope=constraint_scope,
+            path_prefix=node_path,
+        )
+    )
 
     # Validate output when conditions
     errors.extend(_validate_output_when(node_outputs, constraint_scope, node_path))
@@ -542,61 +557,255 @@ def _validate_output_when(
     return errors
 
 
-def _validate_output_recipes(
+def _validate_output_dependencies(
     outputs: list[dict[str, Any]],
+    analysis_input_ids: set[str],
+    decisions_in_scope: dict[str, Any],
     path_prefix: str,
     extra_valid_ids: set[str] | None = None,
 ) -> list[SemanticError]:
-    """Validate inline recipes on outputs.
+    """Validate Output.inputs/decisions declarations and Recipe.command templates.
 
     Checks:
-    - Recipe inputs reference declared output IDs (or *extra_valid_ids*
-      such as qualified sub-analysis outputs like ``hod_fitting.galaxy_mesh``)
-    - No cycles in the output dependency graph
+    - Each ``Output.inputs`` ID resolves to an analysis-level input,
+      a sibling output, or a qualified sub-analysis output
+      (``sub.output_id``, supplied via ``extra_valid_ids``).
+    - Each ``Output.decisions`` ID resolves to a decision in scope.
+    - Recipe.command template placeholders only reference items declared
+      in ``Output.inputs`` / ``Output.decisions``.
+    - No cycles in the output-to-output dependency graph.
     """
     errors: list[SemanticError] = []
     outputs_prefix = f"{path_prefix}.outputs" if path_prefix else "outputs"
 
-    # Collect all output IDs at this level
     output_ids = {out.get("id") for out in outputs if out.get("id")}
+    sibling_or_extra = output_ids | (extra_valid_ids or set())
+    valid_input_ids = analysis_input_ids | sibling_or_extra
 
-    # Combine with extra valid IDs (e.g. sub-analysis outputs)
-    valid_ids = output_ids | (extra_valid_ids or set())
-
-    # Build dependency graph and validate inputs
     dep_graph: dict[str, list[str]] = {}
     for out in outputs:
         out_id = out.get("id")
         if not out_id:
             continue
-        recipe = out.get("recipe")
-        if not recipe:
-            dep_graph[out_id] = []
-            continue
-        inputs = recipe.get("inputs") or []
-        dep_graph[out_id] = inputs
-        for inp_id in inputs:
-            if inp_id not in valid_ids:
+        out_path = f"{outputs_prefix}.{out_id}"
+
+        declared_inputs = out.get("inputs") or []
+        # Cycle graph only edges to sibling outputs (analysis-level inputs
+        # are leaves and can't participate in a cycle).
+        dep_graph[out_id] = [i for i in declared_inputs if i in sibling_or_extra]
+
+        for inp_id in declared_inputs:
+            if inp_id not in valid_input_ids:
                 errors.append(
                     SemanticError(
-                        "INVALID_RECIPE_INPUT",
-                        f"Recipe input '{inp_id}' is not a declared output",
-                        f"{outputs_prefix}.{out_id}.recipe",
+                        "INVALID_OUTPUT_INPUT",
+                        f"Output input '{inp_id}' is not a declared analysis input "
+                        f"or sibling output",
+                        f"{out_path}.inputs",
                     )
                 )
 
-    # Check for cycles
+        declared_decisions = out.get("decisions") or []
+        for dec_id in declared_decisions:
+            if dec_id not in decisions_in_scope:
+                errors.append(
+                    SemanticError(
+                        "INVALID_OUTPUT_DECISION",
+                        f"Output decision '{dec_id}' is not a decision in scope",
+                        f"{out_path}.decisions",
+                    )
+                )
+
+        recipe = out.get("recipe")
+        if recipe and recipe.get("command"):
+            errors.extend(
+                _validate_command_template(
+                    recipe["command"],
+                    set(declared_inputs),
+                    set(declared_decisions),
+                    f"{out_path}.recipe.command",
+                )
+            )
+
     cycle = _detect_output_cycle(dep_graph)
     if cycle:
         errors.append(
             SemanticError(
-                "RECIPE_CYCLE",
+                "OUTPUT_CYCLE",
                 f"Dependency cycle detected: {' -> '.join(cycle)}",
                 outputs_prefix,
             )
         )
 
     return errors
+
+
+def _validate_command_template(
+    command: str,
+    declared_inputs: set[str],
+    declared_decisions: set[str],
+    path: str,
+) -> list[SemanticError]:
+    """Validate ``{...}`` placeholders in a Recipe.command template.
+
+    Recognized placeholders: ``{inputs}``, ``{inputs.<id>}``,
+    ``{decisions.<id>}``, ``{output}``. ``{{`` and ``}}`` are literal braces.
+    Each ``{inputs.<id>}`` / ``{decisions.<id>}`` must reference an item
+    declared on the surrounding Output. Declared-but-unreferenced inputs
+    or decisions produce a staleness lint.
+    """
+    errors: list[SemanticError] = []
+
+    referenced_inputs: set[str] = set()
+    referenced_decisions: set[str] = set()
+    uses_inputs_glob = False
+
+    i = 0
+    n = len(command)
+    while i < n:
+        ch = command[i]
+        if ch == "{":
+            if i + 1 < n and command[i + 1] == "{":
+                i += 2
+                continue
+            end = command.find("}", i + 1)
+            if end == -1:
+                errors.append(
+                    SemanticError(
+                        "INVALID_COMMAND_TEMPLATE",
+                        f"Unterminated '{{' in command template at offset {i}",
+                        path,
+                    )
+                )
+                break
+            placeholder = command[i + 1 : end]
+            ref_err = _classify_command_placeholder(
+                placeholder,
+                declared_inputs,
+                declared_decisions,
+                path,
+            )
+            if ref_err.error is not None:
+                errors.append(ref_err.error)
+            if ref_err.input_ref is not None:
+                referenced_inputs.add(ref_err.input_ref)
+            if ref_err.decision_ref is not None:
+                referenced_decisions.add(ref_err.decision_ref)
+            if ref_err.uses_inputs_glob:
+                uses_inputs_glob = True
+            i = end + 1
+            continue
+        if ch == "}":
+            if i + 1 < n and command[i + 1] == "}":
+                i += 2
+                continue
+            errors.append(
+                SemanticError(
+                    "INVALID_COMMAND_TEMPLATE",
+                    f"Unmatched '}}' in command template at offset {i}",
+                    path,
+                )
+            )
+            i += 1
+            continue
+        i += 1
+
+    # Staleness lint: declared but unreferenced. {inputs} satisfies all inputs.
+    if not uses_inputs_glob:
+        for inp in sorted(declared_inputs - referenced_inputs):
+            errors.append(
+                SemanticError(
+                    "UNREFERENCED_INPUT",
+                    f"Output input '{inp}' is declared but not referenced "
+                    f"in command template (use {{inputs.{inp}}} or {{inputs}})",
+                    path,
+                )
+            )
+    for dec in sorted(declared_decisions - referenced_decisions):
+        errors.append(
+            SemanticError(
+                "UNREFERENCED_DECISION",
+                f"Output decision '{dec}' is declared but not referenced "
+                f"in command template (use {{decisions.{dec}}})",
+                path,
+            )
+        )
+
+    return errors
+
+
+class _PlaceholderResult:
+    """Result from classifying a single ``{...}`` placeholder."""
+
+    __slots__ = ("error", "input_ref", "decision_ref", "uses_inputs_glob")
+
+    def __init__(
+        self,
+        error: SemanticError | None = None,
+        input_ref: str | None = None,
+        decision_ref: str | None = None,
+        uses_inputs_glob: bool = False,
+    ):
+        self.error = error
+        self.input_ref = input_ref
+        self.decision_ref = decision_ref
+        self.uses_inputs_glob = uses_inputs_glob
+
+
+def _classify_command_placeholder(
+    placeholder: str,
+    declared_inputs: set[str],
+    declared_decisions: set[str],
+    path: str,
+) -> _PlaceholderResult:
+    """Classify a single placeholder body (the text between ``{`` and ``}``)."""
+    if placeholder == "":
+        return _PlaceholderResult(
+            error=SemanticError(
+                "INVALID_COMMAND_TEMPLATE", "Empty '{}' placeholder", path
+            )
+        )
+    if placeholder == "output":
+        return _PlaceholderResult()
+    if placeholder == "inputs":
+        return _PlaceholderResult(uses_inputs_glob=True)
+
+    parts = placeholder.split(".")
+    if len(parts) == 2 and parts[0] == "inputs":
+        ref = parts[1]
+        if ref not in declared_inputs:
+            return _PlaceholderResult(
+                error=SemanticError(
+                    "UNDECLARED_TEMPLATE_REF",
+                    f"Command placeholder '{{inputs.{ref}}}' references undeclared "
+                    f"input '{ref}' (add it to Output.inputs)",
+                    path,
+                ),
+                input_ref=ref,
+            )
+        return _PlaceholderResult(input_ref=ref)
+    if len(parts) == 2 and parts[0] == "decisions":
+        ref = parts[1]
+        if ref not in declared_decisions:
+            return _PlaceholderResult(
+                error=SemanticError(
+                    "UNDECLARED_TEMPLATE_REF",
+                    f"Command placeholder '{{decisions.{ref}}}' references undeclared "
+                    f"decision '{ref}' (add it to Output.decisions)",
+                    path,
+                ),
+                decision_ref=ref,
+            )
+        return _PlaceholderResult(decision_ref=ref)
+
+    return _PlaceholderResult(
+        error=SemanticError(
+            "INVALID_COMMAND_TEMPLATE",
+            f"Unknown command placeholder '{{{placeholder}}}' (use "
+            "{inputs}, {inputs.<id>}, {decisions.<id>}, or {output})",
+            path,
+        )
+    )
 
 
 def _detect_output_cycle(dep_graph: dict[str, list[str]]) -> list[str] | None:

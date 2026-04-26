@@ -45,43 +45,70 @@ outputs:
   - id: trained_output
     type: data
     description: Best performing classifier
+    decisions: [scaling, model, test_size, random_seed]
     recipe:
-      command: python src/train.py
+      command: >-
+        python src/train.py
+        --scaling {decisions.scaling}
+        --model {decisions.model}
+        --test-size {decisions.test_size}
+        --seed {decisions.random_seed}
+        --out {output}
 
   - id: accuracy
     type: metric
     description: Classification accuracy on held-out test set
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: >-
+        python src/evaluate.py
+        --classifier {inputs.trained_output}
+        --metric accuracy
+        --out {output}
 
   - id: f1_score
     type: metric
     description: Macro-averaged F1 score
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: >-
+        python src/evaluate.py
+        --classifier {inputs.trained_output}
+        --metric f1_macro
+        --out {output}
 
   - id: confusion_matrix
     type: figure
     description: Confusion matrix heatmap
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: >-
+        python src/evaluate.py
+        --classifier {inputs.trained_output}
+        --metric confusion
+        --out {output}
 
   - id: model_comparison
     type: table
     description: Accuracy by model and preprocessing combination
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: >-
+        python src/evaluate.py
+        --classifier {inputs.trained_output}
+        --metric comparison
+        --out {output}
 
   - id: conclusion
     type: report
     description: Summary of classifier performance and suitability for the application
+    inputs: [trained_output]
     recipe:
-      command: python src/evaluate.py
-      inputs: [trained_output]
+      command: >-
+        python src/evaluate.py
+        --classifier {inputs.trained_output}
+        --metric summary
+        --out {output}
 
 decisions:
   scaling:
