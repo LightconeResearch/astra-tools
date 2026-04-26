@@ -145,6 +145,72 @@ class TestAnchorResolution:
         assert len(errs) == 1
         assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
 
+    def test_analyses_prefix_drill_in_emits_tailored_hint(self) -> None:
+        # `#analyses.<sub>.<cat>.<id>` is the natural-but-wrong form authors
+        # write when drilling into a sub-analysis. The correct form drops
+        # the `analyses.` collection prefix: `#<sub>.<cat>.<id>`.
+        data = _minimal_with_narrative("[bad](#analyses.sub.decisions.d)")
+        data["analyses"] = {
+            "sub": {
+                "inputs": [{"id": "x", "type": "data"}],
+                "outputs": [{"id": "y", "type": "metric"}],
+                "decisions": {
+                    "d": {
+                        "label": "D",
+                        "rationale": "r",
+                        "default": "a",
+                        "options": {"a": {"label": "A"}},
+                    }
+                },
+            }
+        }
+        errs = validate_narrative_anchors(data)
+        assert len(errs) == 1
+        assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
+        assert "starts with 'analyses.<sub>'" in errs[0].message
+        assert "#<sub>.<category>.<id>" in errs[0].message
+
+    def test_analyses_prefix_drill_in_with_parent_escape_emits_tailored_hint(self) -> None:
+        # Sibling reference written with the analyses-prefix anti-pattern:
+        # `#../analyses.<sib>.<cat>.<id>`. The correct form is
+        # `#../<sib>.<cat>.<id>`.
+        data = _minimal_with_narrative("(placeholder)")
+        data["analyses"] = {
+            "sub": {
+                "narrative": {"summary": "[bad](#../analyses.other.decisions.d)"},
+                "inputs": [{"id": "x", "type": "data"}],
+                "outputs": [{"id": "y", "type": "metric"}],
+            },
+            "other": {
+                "inputs": [{"id": "x", "type": "data"}],
+                "outputs": [{"id": "y", "type": "metric"}],
+                "decisions": {
+                    "d": {
+                        "label": "D",
+                        "rationale": "r",
+                        "default": "a",
+                        "options": {"a": {"label": "A"}},
+                    }
+                },
+            },
+        }
+        errs = validate_narrative_anchors(data)
+        assert len(errs) == 1
+        assert errs[0].code == "INVALID_NARRATIVE_ANCHOR"
+        assert "starts with 'analyses.<sub>'" in errs[0].message
+
+    def test_analyses_node_reference_still_valid(self) -> None:
+        # `#analyses.<sub>` (whole sub-analysis node, no further drill-in)
+        # remains the canonical form and must not trigger the new hint.
+        data = _minimal_with_narrative("[s](#analyses.sub)")
+        data["analyses"] = {
+            "sub": {
+                "inputs": [{"id": "x", "type": "data"}],
+                "outputs": [{"id": "y", "type": "metric"}],
+            }
+        }
+        assert validate_narrative_anchors(data) == []
+
     def test_external_links_ignored(self) -> None:
         # URLs and other non-anchor hrefs are not ASTRA references.
         data = _minimal_with_narrative(

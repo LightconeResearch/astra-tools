@@ -59,6 +59,13 @@ _CATEGORIES = frozenset(
     {"inputs", "outputs", "decisions", "findings", "prior_insights", "analyses"}
 )
 
+# Non-canonical "analyses.<sub>.<category>..." drill-in — the spec-canonical
+# form drops the "analyses." collection prefix when descending into a
+# sub-analysis (e.g. #pure_eb.decisions.foo, not #analyses.pure_eb.decisions.foo).
+_ANALYSES_PREFIX_FORM_RE = re.compile(
+    r"^analyses\.[^.]+\.(?:" + "|".join(sorted(_CATEGORIES)) + r")(?:\.|$)"
+)
+
 # Categories whose elements are coverage-checked, with the human-readable
 # label used in warnings. Options, inputs, and prior_insights are
 # intentionally excluded: options are typically numerous, inputs are
@@ -278,6 +285,22 @@ def _walk_anchors(
                 continue
             parsed = _parse_anchor(raw)
             if parsed is None:
+                stripped = raw
+                while stripped.startswith("../"):
+                    stripped = stripped[3:]
+                if _ANALYSES_PREFIX_FORM_RE.match(stripped):
+                    errors.append(
+                        SemanticError(
+                            "INVALID_NARRATIVE_ANCHOR",
+                            f"Anchor '{href}' starts with 'analyses.<sub>' but "
+                            f"drilling below the sub-analysis node uses the "
+                            f"tree-path form: write '#<sub>.<category>.<id>' "
+                            f"(or '#../<sib>.<category>.<id>' from a sibling) "
+                            f"instead.",
+                            narrative_path,
+                        )
+                    )
+                    continue
                 errors.append(
                     SemanticError(
                         "INVALID_NARRATIVE_ANCHOR",
