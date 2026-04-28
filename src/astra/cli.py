@@ -249,12 +249,15 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
     "--verify-evidence",
     "-e",
     is_flag=True,
-    help="Verify evidence quotes exist in source papers (requires papers to be cached)",
+    help=(
+        "Verify evidence quotes (in prior_insights and findings) "
+        "exist in source papers (requires papers to be cached)"
+    ),
 )
 @click.option(
     "--skip-evidence",
     is_flag=True,
-    help="Skip evidence verification even if prior insights are present",
+    help="Skip evidence verification even if prior insights or findings are present",
 )
 def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evidence: bool) -> None:
     """Validate an ASTRA specification file.
@@ -262,9 +265,10 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
     FILE can be an analysis (astra.yaml) or universe file.
     For universe files, use --analysis to specify the analysis file.
 
-    Evidence verification (--verify-evidence) checks that quotes in prior insights
-    actually exist in the source papers. Papers must be cached first using
-    'astra paper add'.
+    Evidence verification (--verify-evidence) checks that quotes in prior_insights
+    and findings actually exist in the source papers. Papers must be cached first
+    using 'astra paper add'. Artifact-backed evidence (typical for findings whose
+    artifacts are not yet materialized) is reported as SKIPPED.
     """
     # Determine file type
     is_universe = "universe" in file.stem.lower() or file.parent.name == "universes"
@@ -339,33 +343,46 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
         else:
             console.print("[green]✓[/green] Narrative coverage complete")
 
-    # Evidence verification (for analysis files with prior insights)
+    # Evidence verification (for analysis files with prior insights and/or findings)
     if not is_universe and not skip_evidence:
         prior_insights = data.get("prior_insights", {})
+        findings = data.get("findings", {})
 
-        if prior_insights:
+        if prior_insights or findings:
             if not verify_evidence:
                 # Show hint about evidence verification
-                evidence_count = sum(
+                prior_ev_count = sum(
                     len(insight.get("evidence", [])) for insight in prior_insights.values()
                 )
-                if evidence_count > 0:
+                finding_ev_count = sum(
+                    len(finding.get("evidence", [])) for finding in findings.values()
+                )
+                total_ev = prior_ev_count + finding_ev_count
+                if total_ev > 0:
                     console.print(
-                        f"\n[dim]Note: {len(prior_insights)} prior insight(s) with "
-                        f"{evidence_count} evidence item(s) found.[/dim]"
+                        f"\n[dim]Note: {len(prior_insights)} prior insight(s) "
+                        f"({prior_ev_count} evidence) and {len(findings)} finding(s) "
+                        f"({finding_ev_count} evidence) found.[/dim]"
                     )
                     console.print(
                         "[dim]Run with --verify-evidence to verify quotes exist in papers.[/dim]"
                     )
             else:
                 console.print("\n[bold]Verifying evidence...[/bold]")
-                _verify_insights_evidence(prior_insights)
+                if prior_insights:
+                    _verify_insights_evidence(prior_insights, label="prior_insights")
+                if findings:
+                    _verify_insights_evidence(findings, label="findings")
 
     console.print("\n[green]Validation successful![/green]")
 
 
-def _verify_insights_evidence(prior_insights: dict[str, Any]) -> None:
-    """Verify evidence for all prior insights."""
+def _verify_insights_evidence(insights: dict[str, Any], label: str = "prior_insights") -> None:
+    """Verify evidence for all insight-shaped entries (prior_insights or findings).
+
+    The verification machinery is generic over insight-shaped dicts
+    ({<id>: {claim, evidence: [...]}}); the label is used only for the summary line.
+    """
     from astra.papers.cache import PaperCache
     from astra.verification.cache import VerificationCache
     from astra.verification.core import VerificationStatus, verify_all_insights
@@ -373,12 +390,12 @@ def _verify_insights_evidence(prior_insights: dict[str, Any]) -> None:
     paper_cache = PaperCache()
     verification_cache = VerificationCache()
 
-    results = verify_all_insights(prior_insights, paper_cache, verification_cache)
+    results = verify_all_insights(insights, paper_cache, verification_cache)
 
-    has_errors = False
     verified_count = 0
     cached_count = 0
     skipped_count = 0
+    artifact_skipped_count = 0
     failed_count = 0
 
     for insight_id, result in results.items():
@@ -390,9 +407,12 @@ def _verify_insights_evidence(prior_insights: dict[str, Any]) -> None:
                     cached_count += 1
             elif status == VerificationStatus.SKIPPED:
                 skipped_count += 1
+                # Artifact-backed evidence carries its own diagnostic message;
+                # surface it as a separate count so the gap is visible.
+                if "Artifact quote verification" in ev_result.message:
+                    artifact_skipped_count += 1
             else:
                 failed_count += 1
-                has_errors = True
                 if status == VerificationStatus.ERROR:
                     icon = "[yellow]![/yellow]"
                 else:
@@ -403,17 +423,19 @@ def _verify_insights_evidence(prior_insights: dict[str, Any]) -> None:
 
     # Summary
     total = verified_count + skipped_count + failed_count
+    parts = [f"{verified_count}/{total} verified"]
     if cached_count > 0:
-        console.print(
-            f"[green]✓[/green] Evidence: {verified_count}/{total} verified "
-            f"({cached_count} from cache), {skipped_count} skipped"
-        )
-    else:
-        console.print(
-            f"[green]✓[/green] Evidence: {verified_count}/{total} verified, {skipped_count} skipped"
-        )
+        parts.append(f"{cached_count} from cache")
+    if artifact_skipped_count > 0:
+        parts.append(f"{artifact_skipped_count} SKIPPED (artifact)")
+        other_skipped = skipped_count - artifact_skipped_count
+        if other_skipped > 0:
+            parts.append(f"{other_skipped} skipped")
+    elif skipped_count > 0:
+        parts.append(f"{skipped_count} skipped")
+    console.print(f"[green]✓[/green] Evidence ({label}): " + ", ".join(parts))
 
-    if has_errors:
+    if failed_count > 0:
         console.print(f"\n[red]Error:[/red] {failed_count} evidence item(s) failed verification")
         console.print("\nTo fix:")
         console.print("  1. Check that quotes are exact copies from the paper")

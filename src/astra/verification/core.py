@@ -107,6 +107,31 @@ def _get_attr(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+def _skip_if_no_paper(evidence: Any) -> EvidenceVerification | None:
+    """Return a SKIPPED EvidenceVerification for evidence that has no paper backing.
+
+    Some evidence (typically findings.evidence) references an `artifact:` (output ID)
+    rather than a paper DOI — there is no document to search, so paper-cache lookup
+    would spuriously return ERROR ("Paper not in cache"). Mark these SKIPPED so the
+    gap is visible in the summary instead of being reported as a failure.
+
+    Returns None if the evidence has a DOI (normal paper-backed verification path).
+    """
+    doi = _get_attr(evidence, "doi", "")
+    if doi:
+        return None
+    if _get_attr(evidence, "artifact"):
+        artifact_id = _get_attr(evidence, "artifact", "unknown")
+        return EvidenceVerification(
+            evidence_id=_get_attr(evidence, "id", "unknown"),
+            doi="",
+            version=_get_attr(evidence, "version"),
+            status=VerificationStatus.SKIPPED,
+            message=f"Artifact quote verification not yet implemented: {artifact_id}",
+        )
+    return None
+
+
 def _determine_overall_status(results: list[EvidenceVerification]) -> VerificationStatus:
     """Determine overall verification status from individual results.
 
@@ -239,6 +264,15 @@ def verify_evidence(
         result.status = VerificationStatus.SKIPPED
         result.message = f"Table verification not yet implemented: {label}"
 
+    elif _get_attr(evidence, "artifact"):
+        # Artifact-backed evidence (typical for findings.evidence): the evidence
+        # references an output ID rather than a paper DOI. At SPECIFY phase the
+        # artifact is not materialized, so there is no document to search.
+        # Mark SKIPPED so the gap is visible in the summary rather than silent.
+        artifact_id = _get_attr(evidence, "artifact", "unknown")
+        result.status = VerificationStatus.SKIPPED
+        result.message = f"Artifact quote verification not yet implemented: {artifact_id}"
+
     return result
 
 
@@ -271,6 +305,13 @@ def verify_insight(
 
     # Group evidence by DOI/version for efficiency
     for ev in evidence_list:
+        # Artifact-backed evidence (no paper DOI) cannot be verified against a PDF;
+        # emit SKIPPED so the gap is visible instead of a spurious "paper not cached" error.
+        skipped = _skip_if_no_paper(ev)
+        if skipped is not None:
+            evidence_results.append(skipped)
+            continue
+
         evidence_id = _get_attr(ev, "id", "unknown")
         doi = _get_attr(ev, "doi", "")
         version = _get_attr(ev, "version")
@@ -346,6 +387,9 @@ def verify_all_insights(
     # Collect all unique (DOI, version) pairs across all insights
     for insight in insights.values():
         for ev in _get_attr(insight, "evidence", []):
+            # Skip artifact-backed evidence (no DOI) — handled per-evidence below.
+            if _skip_if_no_paper(ev) is not None:
+                continue
             doi = _get_attr(ev, "doi", "")
             version = _get_attr(ev, "version")
             key = (doi, version)
@@ -391,6 +435,13 @@ def _verify_insight_with_pdf_cache(
     evidence_results: list[EvidenceVerification] = []
 
     for ev in evidence_list:
+        # Artifact-backed evidence (no paper DOI) cannot be verified against a PDF;
+        # emit SKIPPED so the gap is visible instead of a spurious "paper not cached" error.
+        skipped = _skip_if_no_paper(ev)
+        if skipped is not None:
+            evidence_results.append(skipped)
+            continue
+
         evidence_id = _get_attr(ev, "id", "unknown")
         doi = _get_attr(ev, "doi", "")
         version = _get_attr(ev, "version")
