@@ -175,6 +175,37 @@ class TestSubAnalysisRequirements:
         assert any(e.code == "INCOMPATIBLE_OPTIONS" for e in errors)
 
 
+class TestFromPathGrammar:
+    """Tests for the unified `from:` path grammar across Input/Output/Decision."""
+
+    def test_valid_multilevel_from(self, valid_dir: Path):
+        """Multi-level `../../id` and `child.sub.id` should resolve correctly."""
+        errors = validate_analysis_file(valid_dir / "multilevel_from.yaml")
+        assert errors == []
+
+    def test_input_from_downward_rejected(self, invalid_dir: Path):
+        """Input.from must escape upward — bare `child.out` form is rejected."""
+        errors = validate_analysis_file(invalid_dir / "input_from_downward.yaml")
+        # Pydantic rejects this at schema level; semantic just needs to not crash.
+        # The schema-level error surfaces via the schema validator, not semantic.
+        # We check semantic doesn't accept it — but since the YAML may not even
+        # parse through pydantic, we instead check semantic flags it too.
+        codes = [e.code for e in errors]
+        assert "INVALID_FROM" in codes or "INVALID_OUTPUT_FROM" in codes
+
+    def test_output_from_upward_rejected(self, invalid_dir: Path):
+        """Output.from must descend; upward references rejected."""
+        errors = validate_analysis_file(invalid_dir / "output_from_upward.yaml")
+        codes = [e.code for e in errors]
+        assert "INVALID_OUTPUT_FROM" in codes
+
+    def test_output_from_unknown_child(self, invalid_dir: Path):
+        """Output.from points at a sub-analysis that doesn't exist."""
+        errors = validate_analysis_file(invalid_dir / "output_from_unknown_child.yaml")
+        codes = [e.code for e in errors]
+        assert "INVALID_OUTPUT_FROM" in codes
+
+
 class TestOutputDependencyValidation:
     """Tests for Output.inputs/decisions and dependency-graph validation."""
 
@@ -349,7 +380,11 @@ class TestCommandTemplateValidation:
         codes = [e.code for e in errors]
         assert "UNDECLARED_TEMPLATE_REF" in codes
 
-    def test_unreferenced_input_warns(self):
+    def test_declared_but_unreferenced_input_is_fine(self):
+        # The spec grants the runner free choice of delivery mechanism for
+        # declared inputs ("via flags, env vars, or a sidecar"), so a recipe
+        # whose command doesn't substitute every declared input is valid —
+        # the runner may deliver them by sidecar instead of template.
         out = {
             "id": "r",
             "type": "metric",
@@ -357,10 +392,10 @@ class TestCommandTemplateValidation:
             "recipe": {"command": "python run.py"},
         }
         errors = validate_analysis(self._make(out))
-        codes = [e.code for e in errors]
-        assert "UNREFERENCED_INPUT" in codes
+        assert errors == []
 
-    def test_unreferenced_decision_warns(self):
+    def test_declared_but_unreferenced_decision_is_fine(self):
+        # Same as above for decisions.
         out = {
             "id": "r",
             "type": "metric",
@@ -371,10 +406,9 @@ class TestCommandTemplateValidation:
             "m": {"label": "M", "default": "a", "options": {"a": {"label": "A"}}},
         }
         errors = validate_analysis(self._make(out, decisions))
-        codes = [e.code for e in errors]
-        assert "UNREFERENCED_DECISION" in codes
+        assert errors == []
 
-    def test_inputs_glob_satisfies_input_references(self):
+    def test_inputs_glob_is_valid_template(self):
         out = {
             "id": "r",
             "type": "metric",

@@ -12,6 +12,5 @@ analyses:
   sub:
     inputs:
       - id: sub_data
-        type: data
-        from: data
+        from: ../data
     # outputs is missing

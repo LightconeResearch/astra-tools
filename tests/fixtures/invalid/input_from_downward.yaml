@@ -1,0 +1,20 @@
+version: "1.0"
+name: "Test Input.from with downward path"
+description: "Input.from must escape upward, not descend into own children."
+inputs:
+  - id: data
+    type: data
+    source: data.csv
+outputs:
+  - id: result
+    from: child.relayed
+analyses:
+  child:
+    inputs:
+      - id: child_data
+        from: child.relayed   # invalid: Input.from must start with ../
+    outputs:
+      - id: relayed
+        type: data
+        recipe:
+          command: python src/relay.py

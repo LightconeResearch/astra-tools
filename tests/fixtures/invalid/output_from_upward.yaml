@@ -1,0 +1,21 @@
+version: "1.0"
+name: "Test Output.from with upward path"
+description: "Output.from must descend into a sub-analysis, not escape upward."
+inputs:
+  - id: data
+    type: data
+    source: data.csv
+outputs:
+  - id: result
+    type: metric
+    inputs: [data]
+    recipe:
+      command: python src/eval.py
+analyses:
+  child:
+    inputs:
+      - id: child_data
+        from: ../data
+    outputs:
+      - id: relayed
+        from: ../result   # invalid: Output.from cannot reach upward

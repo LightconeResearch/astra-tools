@@ -59,8 +59,7 @@ analyses:
         Produces the [scaled output](#outputs.scaled).
     inputs:
       - id: raw
-        type: data
-        from: primary_data
+        from: ../primary_data
     outputs:
       - id: scaled
         type: data
