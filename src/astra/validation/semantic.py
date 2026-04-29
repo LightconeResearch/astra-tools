@@ -1032,8 +1032,7 @@ def _validate_input_from(
         sub_analyses = current.get("analyses") or {}
         if seg not in sub_analyses:
             return _error(
-                f"Input.from '{ref}': sub-analysis '{seg}' not found "
-                f"at depth {i} in target scope"
+                f"Input.from '{ref}': sub-analysis '{seg}' not found at depth {i} in target scope"
             )
         # Block self-reference: `../<self>.out_id` would point at our own scope's outputs.
         if up == 1 and i == 0 and seg == current_node_id:
@@ -1081,9 +1080,7 @@ def _validate_output_from(
     for i, seg in enumerate(segments[:-1]):
         sub_analyses = current.get("analyses") or {}
         if seg not in sub_analyses:
-            return _error(
-                f"Output.from '{ref}': sub-analysis '{seg}' not found at depth {i}"
-            )
+            return _error(f"Output.from '{ref}': sub-analysis '{seg}' not found at depth {i}")
         current = sub_analyses[seg]
 
     if segments[-1] not in _output_ids_in_scope(current):
