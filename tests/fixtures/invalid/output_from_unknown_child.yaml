@@ -1,0 +1,20 @@
+version: "1.0"
+name: "Test Output.from points at non-existent child"
+description: "Output.from references a sub-analysis that doesn't exist."
+inputs:
+  - id: data
+    type: data
+    source: data.csv
+outputs:
+  - id: relayed
+    from: nonexistent_child.metric
+analyses:
+  real_child:
+    inputs:
+      - id: child_data
+        from: ../data
+    outputs:
+      - id: metric
+        type: metric
+        recipe:
+          command: python src/run.py

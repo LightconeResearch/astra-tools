@@ -20,6 +20,12 @@ dependencies = [
     "rapidfuzz>=3.0",
 ]
 
+# In-flight: track the unreleased astra-spec branch with the unified `from:`
+# aliasing schema. Revert this once astra-spec ships a release with the new
+# Output.inputs / Decision.from rules.
+[tool.uv.sources]
+astra-spec = { path = "../astra-spec", editable = true }
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

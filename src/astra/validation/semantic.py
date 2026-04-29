@@ -6,6 +6,7 @@ using dict-based data structures loaded from YAML files.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,55 @@ class SemanticError:
         if self.path:
             return f"[{self.code}] {self.path}: {self.message}"
         return f"[{self.code}] {self.message}"
+
+
+# ---------------------------------------------------------------------------
+# `from:` path grammar
+# ---------------------------------------------------------------------------
+#
+# A unified path expression that any `from:` slot can take:
+#
+#   ../id              -- escape one scope upward, then `id`
+#   ../../id           -- escape two scopes upward, then `id`
+#   ../scope.id        -- escape upward, then descend into a named child
+#   scope.id           -- descend from current scope into a named child
+#   scope.sub.id       -- descend through nested children
+#
+# Direction restrictions are applied per-slot by the caller:
+#   Input.from    : up, or up-then-into-sibling
+#   Output.from   : down (re-export)
+#   Decision.from : up only
+#
+# The Pydantic schema validator already enforces the regex grammar at load
+# time; the helper here is for resolution against the actual analysis tree.
+
+_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _parse_from_path(ref: str) -> tuple[int, list[str]] | None:
+    """Parse a `from:` path into ``(up_levels, descent_segments)``.
+
+    Returns ``None`` if the path is malformed (empty segments, invalid
+    identifier characters, etc.). Examples:
+
+        "../id"               -> (1, ["id"])
+        "../../id"            -> (2, ["id"])
+        "../scope.id"         -> (1, ["scope", "id"])
+        "scope.id"            -> (0, ["scope", "id"])
+        "scope.sub.id"        -> (0, ["scope", "sub", "id"])
+    """
+    up = 0
+    rest = ref
+    while rest.startswith("../"):
+        up += 1
+        rest = rest[3:]
+    if not rest or rest.startswith(".") or rest.endswith("."):
+        return None
+    segments = rest.split(".")
+    for seg in segments:
+        if not _ID_PATTERN.match(seg):
+            return None
+    return (up, segments)
 
 
 def _check_path_exclusivity(
@@ -163,6 +213,11 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
             if out_id:
                 sub_output_ids.add(f"{analysis_id}.{out_id}")
 
+    # Validate Output.from re-exports at the root (one boundary deep into
+    # any direct child sub-analysis) before output dependencies, since those
+    # rely on knowing which output ids are real.
+    errors.extend(_validate_outputs_from(outputs, data, ""))
+
     # Validate output declarations and recipes
     errors.extend(
         _validate_output_dependencies(
@@ -182,9 +237,7 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
                 analysis_id,
                 analysis_node,
                 prior_insights,
-                parent_input_ids=input_ids,
-                parent_decisions=root_decisions,
-                sibling_analyses=sub_analyses,
+                ancestor_chain=[data],
                 path_prefix="analyses",
             )
         )
@@ -196,12 +249,14 @@ def _validate_analysis_node(
     node_id: str,
     node: dict[str, Any],
     prior_insights: dict[str, Any],
-    parent_input_ids: set[str],
-    parent_decisions: dict[str, Any],
-    sibling_analyses: dict[str, Any],
+    ancestor_chain: list[dict[str, Any]],
     path_prefix: str,
 ) -> list[SemanticError]:
-    """Validate a single analysis node's decisions, inputs, and sub-analyses."""
+    """Validate a single analysis node's decisions, inputs, and sub-analyses.
+
+    ``ancestor_chain`` is ordered root-first; ``ancestor_chain[-1]`` is the
+    immediate parent of this node.
+    """
     errors: list[SemanticError] = []
     node_path = f"{path_prefix}.{node_id}"
 
@@ -220,7 +275,7 @@ def _validate_analysis_node(
                 )
             )
 
-    # Validate decision `from` references against parent decisions
+    # Validate decision `from` references against ancestor decisions
     node_all_decisions = node.get("decisions") or {}
     for decision_id, decision in node_all_decisions.items():
         ref = decision.get("from")
@@ -229,7 +284,7 @@ def _validate_analysis_node(
                 _validate_decision_from(
                     decision_id,
                     ref,
-                    parent_decisions,
+                    ancestor_chain,
                     f"{node_path}.decisions.{decision_id}",
                 )
             )
@@ -244,10 +299,9 @@ def _validate_analysis_node(
         ref = inp.get("from")
         if ref:
             errors.extend(
-                _validate_from(
+                _validate_input_from(
                     ref,
-                    parent_input_ids,
-                    sibling_analyses,
+                    ancestor_chain,
                     node_id,
                     node_path,
                 )
@@ -268,17 +322,32 @@ def _validate_analysis_node(
         if out_id:
             node_output_ids.add(out_id)
 
+    # Validate Output.from re-exports (downward into own children)
+    node_outputs = node.get("outputs") or []
+    errors.extend(_validate_outputs_from(node_outputs, node, node_path))
+
     # Validate decisions
     # Collect only locally-defined decisions (not `from` references)
     node_decisions = _collect_node_decisions(node)
-    # Build constraint scope: local decisions + resolved `from` references from parent
+    # Build constraint scope: local decisions + resolved ancestor decisions
+    # (multi-level via ancestor_chain).
     constraint_scope = dict(node_decisions)
     for decision_id, decision in node_all_decisions.items():
         ref = decision.get("from")
-        if ref and ref.startswith("../"):
-            parent_decision_id = ref[3:]
-            if parent_decision_id in parent_decisions:
-                constraint_scope[decision_id] = parent_decisions[parent_decision_id]
+        if not ref:
+            continue
+        parsed = _parse_from_path(ref)
+        if parsed is None:
+            continue
+        up, segments = parsed
+        if up <= 0 or len(segments) != 1:
+            continue
+        target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+        if target_scope is None:
+            continue
+        target_decisions = target_scope.get("decisions") or {}
+        if segments[0] in target_decisions:
+            constraint_scope[decision_id] = target_decisions[segments[0]]
     errors.extend(_validate_decisions(node_decisions, prior_insights, node_path, constraint_scope))
 
     # Validate evidence artifact references in prior_insights and findings
@@ -293,14 +362,24 @@ def _validate_analysis_node(
         )
     )
 
+    # Sub-analysis output IDs are exposed as qualified ids so this node's
+    # outputs can declare them as inputs (e.g. ``inputs: [child.out]``).
+    sub_analyses = node.get("analyses") or {}
+    sub_output_ids: set[str] = set()
+    for sub_id, sub_node in sub_analyses.items():
+        for out in sub_node.get("outputs") or []:
+            out_id = out.get("id")
+            if out_id:
+                sub_output_ids.add(f"{sub_id}.{out_id}")
+
     # Validate output declarations and recipes
-    node_outputs = node.get("outputs") or []
     errors.extend(
         _validate_output_dependencies(
             node_outputs,
             analysis_input_ids=node_input_ids,
             decisions_in_scope=constraint_scope,
             path_prefix=node_path,
+            extra_valid_ids=sub_output_ids,
         )
     )
 
@@ -308,20 +387,40 @@ def _validate_analysis_node(
     errors.extend(_validate_output_when(node_outputs, constraint_scope, node_path))
 
     # Recurse into sub-analyses
-    sub_analyses = node.get("analyses") or {}
     for sub_id, sub_node in sub_analyses.items():
         errors.extend(
             _validate_analysis_node(
                 sub_id,
                 sub_node,
                 prior_insights,
-                parent_input_ids=node_input_ids,
-                parent_decisions=node_decisions,
-                sibling_analyses=sub_analyses,
+                ancestor_chain=ancestor_chain + [node],
                 path_prefix=f"{node_path}.analyses",
             )
         )
 
+    return errors
+
+
+def _validate_outputs_from(
+    outputs: list[dict[str, Any]],
+    current_scope: dict[str, Any],
+    path_prefix: str,
+) -> list[SemanticError]:
+    """Validate ``from:`` paths on a list of Outputs (re-exports)."""
+    errors: list[SemanticError] = []
+    outputs_prefix = f"{path_prefix}.outputs" if path_prefix else "outputs"
+    for out in outputs:
+        ref = out.get("from")
+        out_id = out.get("id")
+        if not ref or not out_id:
+            continue
+        errors.extend(
+            _validate_output_from(
+                ref,
+                current_scope,
+                f"{outputs_prefix}.{out_id}",
+            )
+        )
     return errors
 
 
@@ -589,6 +688,13 @@ def _validate_output_dependencies(
             continue
         out_path = f"{outputs_prefix}.{out_id}"
 
+        # Aliased Outputs (re-exports) are pure pointers — they don't have
+        # their own inputs/decisions/recipe to validate. The `from:` path
+        # itself is checked by `_validate_outputs_from`.
+        if out.get("from"):
+            dep_graph[out_id] = []
+            continue
+
         declared_inputs = out.get("inputs") or []
         # Cycle graph only edges to sibling outputs (analysis-level inputs
         # are leaves and can't participate in a cycle).
@@ -839,90 +945,185 @@ def _detect_output_cycle(dep_graph: dict[str, list[str]]) -> list[str] | None:
     return None
 
 
+def _resolve_ancestor_scope(
+    ancestor_chain: list[dict[str, Any]],
+    up_levels: int,
+) -> dict[str, Any] | None:
+    """Walk ``up_levels`` scopes up from the current node.
+
+    ``ancestor_chain`` is ordered root-first: ``ancestor_chain[-1]`` is the
+    immediate parent. Returns the target scope, or ``None`` if the chain is
+    not deep enough.
+    """
+    if up_levels <= 0 or up_levels > len(ancestor_chain):
+        return None
+    return ancestor_chain[len(ancestor_chain) - up_levels]
+
+
+def _output_ids_in_scope(scope: dict[str, Any]) -> set[str]:
+    return {o.get("id") for o in (scope.get("outputs") or []) if o.get("id")}
+
+
+def _input_ids_in_scope(scope: dict[str, Any]) -> set[str]:
+    return {i.get("id") for i in (scope.get("inputs") or []) if i.get("id")}
+
+
 def _validate_decision_from(
     decision_id: str,
     ref: str,
-    parent_decisions: dict[str, Any],
+    ancestor_chain: list[dict[str, Any]],
     decision_path: str,
 ) -> list[SemanticError]:
-    """Validate a `from` reference on a decision.
+    """Validate a `from:` reference on a Decision.
 
-    ``from: ../parent_decision_id`` references a parent decision.
-    The ``../`` prefix is required.
+    Decisions only flow downward through scopes — the only legal form is
+    ``../id``, ``../../id``, etc. (an ancestor decision). Sibling-sub or
+    child references are rejected.
     """
 
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_DECISION_FROM", message, decision_path)]
 
-    if not ref.startswith("../"):
+    parsed = _parse_from_path(ref)
+    if parsed is None:
+        return _error(f"Decision.from '{ref}' has invalid path syntax")
+    up, segments = parsed
+    if up == 0:
         return _error(
-            f"Decision from reference '{ref}' must use '../' prefix to reference parent scope"
+            f"Decision.from '{ref}' must start with '../' to reference an ancestor decision"
+        )
+    if len(segments) != 1:
+        return _error(
+            f"Decision.from '{ref}' must reference a single decision id "
+            "(no descent into sibling/child scopes allowed; "
+            "lift the decision to a common ancestor instead)"
         )
 
-    parent_decision_id = ref[3:]
-    if not parent_decision_id:
-        return _error(f"Decision from reference '{ref}' is empty after '../'")
-
-    if parent_decision_id not in parent_decisions:
+    target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+    if target_scope is None:
         return _error(
-            f"Decision from reference '{ref}' points to non-existent "
-            f"parent decision '{parent_decision_id}'"
+            f"Decision.from '{ref}' escapes {up} level(s) but only "
+            f"{len(ancestor_chain)} ancestor scope(s) available"
         )
 
+    target_decisions = target_scope.get("decisions") or {}
+    if segments[0] not in target_decisions:
+        return _error(
+            f"Decision.from '{ref}' points to non-existent ancestor decision '{segments[0]}'"
+        )
     return []
 
 
-def _validate_from(
+def _validate_input_from(
     ref: str,
-    parent_input_ids: set[str],
-    sibling_analyses: dict[str, Any],
+    ancestor_chain: list[dict[str, Any]],
     current_node_id: str,
     node_path: str,
 ) -> list[SemanticError]:
-    """Validate a `from` reference on a sub-analysis input.
+    """Validate a `from:` reference on an Input.
 
-    Supports two syntaxes:
-    - ``../`` prefix (new): ``../input_id`` (parent input),
-      ``../sibling.output_id`` (sibling output)
-    - Legacy (no prefix): ``input_id`` (parent input),
-      ``sibling.output_id`` (sibling output)
+    Legal forms:
+
+      ``../id``                       -- a parent (or further-ancestor) Input
+      ``../scope.out_id``             -- a sibling sub-analysis's Output
+      ``../../uncle.out_id``          -- a cousin sub's Output (further up)
+
+    Reaching downward from an Input (``child.out_id``) is not allowed — those
+    are consumed via Output re-export at the parent.
     """
 
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_FROM", message, node_path)]
 
-    # Strip ../ prefix if present
-    tail = ref
-    if tail.startswith("../"):
-        tail = tail[3:]
+    parsed = _parse_from_path(ref)
+    if parsed is None:
+        return _error(f"Input.from '{ref}' has invalid path syntax")
+    up, segments = parsed
+    if up == 0:
+        return _error(
+            f"Input.from '{ref}' must start with '../' to escape upward "
+            "(downward references aren't allowed on Inputs; consume sub outputs via Output re-export)"
+        )
 
-    parts = tail.split(".")
-    if len(parts) == 1:
-        if tail not in parent_input_ids:
-            return _error(f"from reference '{ref}' not found in parent inputs")
-        return []
+    target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+    if target_scope is None:
+        return _error(
+            f"Input.from '{ref}' escapes {up} level(s) but only "
+            f"{len(ancestor_chain)} ancestor scope(s) available"
+        )
 
-    if len(parts) == 2:
-        sibling_id, output_id = parts
-        if sibling_id == current_node_id:
-            return _error(f"from reference '{ref}' cannot reference own outputs")
-        if sibling_id not in sibling_analyses:
+    if len(segments) == 1:
+        if segments[0] not in _input_ids_in_scope(target_scope):
             return _error(
-                f"from reference '{ref}' points to non-existent sibling '{sibling_id}'",
-            )
-        sibling_outputs = sibling_analyses[sibling_id].get("outputs") or []
-        sibling_output_ids = {o.get("id") for o in sibling_outputs if o.get("id")}
-        if output_id not in sibling_output_ids:
-            return _error(
-                f"from reference '{ref}' points to non-existent output "
-                f"'{output_id}' in sibling '{sibling_id}'"
+                f"Input.from '{ref}' points to non-existent ancestor input '{segments[0]}'"
             )
         return []
 
-    return _error(
-        f"from reference '{ref}' has invalid format "
-        "(expected '[../]input_id' or '[../]sibling.output_id')"
-    )
+    # len >= 2: descend through named sub-analyses to a final Output id.
+    current = target_scope
+    for i, seg in enumerate(segments[:-1]):
+        sub_analyses = current.get("analyses") or {}
+        if seg not in sub_analyses:
+            return _error(
+                f"Input.from '{ref}': sub-analysis '{seg}' not found "
+                f"at depth {i} in target scope"
+            )
+        # Block self-reference: `../<self>.out_id` would point at our own scope's outputs.
+        if up == 1 and i == 0 and seg == current_node_id:
+            return _error(f"Input.from '{ref}' cannot reference own outputs")
+        current = sub_analyses[seg]
+
+    if segments[-1] not in _output_ids_in_scope(current):
+        return _error(
+            f"Input.from '{ref}': output '{segments[-1]}' not found in target sub-analysis"
+        )
+    return []
+
+
+def _validate_output_from(
+    ref: str,
+    current_scope: dict[str, Any],
+    output_path: str,
+) -> list[SemanticError]:
+    """Validate a `from:` reference on an Output (re-export).
+
+    Outputs only flow upward through re-export: a parent Output points down
+    into a child sub-analysis's Output via ``child.out_id`` (or deeper,
+    ``child.grandchild.out_id``). Upward references aren't allowed.
+    """
+
+    def _error(message: str) -> list[SemanticError]:
+        return [SemanticError("INVALID_OUTPUT_FROM", message, output_path)]
+
+    parsed = _parse_from_path(ref)
+    if parsed is None:
+        return _error(f"Output.from '{ref}' has invalid path syntax")
+    up, segments = parsed
+    if up != 0:
+        return _error(
+            f"Output.from '{ref}' must descend into a sub-analysis "
+            "(upward references aren't allowed; outputs flow up via per-layer re-export)"
+        )
+    if len(segments) < 2:
+        return _error(
+            f"Output.from '{ref}' must take the form 'child.out_id' "
+            "(at least one descent step into a named sub-analysis)"
+        )
+
+    current = current_scope
+    for i, seg in enumerate(segments[:-1]):
+        sub_analyses = current.get("analyses") or {}
+        if seg not in sub_analyses:
+            return _error(
+                f"Output.from '{ref}': sub-analysis '{seg}' not found at depth {i}"
+            )
+        current = sub_analyses[seg]
+
+    if segments[-1] not in _output_ids_in_scope(current):
+        return _error(
+            f"Output.from '{ref}': output '{segments[-1]}' not found in target sub-analysis"
+        )
+    return []
 
 
 def _validate_constraint_ref(
@@ -988,7 +1189,7 @@ def validate_universe(
         universe_data,
         analysis_data,
         path_prefix="",
-        parent_universe_decisions={},
+        ancestor_universe_chain=[],
     )
 
 
@@ -996,7 +1197,7 @@ def _validate_universe_node(
     universe_node: dict[str, Any],
     analysis_node: dict[str, Any],
     path_prefix: str,
-    parent_universe_decisions: dict[str, str],
+    ancestor_universe_chain: list[dict[str, str]],
 ) -> list[SemanticError]:
     """Recursively validate a universe node against an analysis node.
 
@@ -1066,8 +1267,10 @@ def _validate_universe_node(
                     )
                 )
 
-    # Merge current and parent universe decisions for condition evaluation
-    all_universe_decisions = dict(parent_universe_decisions)
+    # Merge current and ancestor universe decisions for condition evaluation
+    all_universe_decisions: dict[str, str] = {}
+    for ancestor_universe in ancestor_universe_chain:
+        all_universe_decisions.update(ancestor_universe)
     all_universe_decisions.update(universe_decisions)
 
     # Check all locally-defined analysis decisions are covered
@@ -1104,23 +1307,27 @@ def _validate_universe_node(
             )
 
     # Check constraints
-    # Build effective decisions: local selections + `from` resolved from parent
+    # Build effective decisions: local selections + `from` resolved from
+    # the appropriate ancestor in the chain (multi-level via `../../`).
     effective_decisions = dict(universe_decisions)
     for decision_id in from_decision_ids:
         ref = all_analysis_decisions[decision_id].get("from", "")
-        if ref.startswith("../"):
-            parent_decision_id = ref[3:]
-            if parent_decision_id in parent_universe_decisions:
-                effective_decisions[decision_id] = parent_universe_decisions[parent_decision_id]
+        parsed = _parse_from_path(ref)
+        if parsed is None:
+            continue
+        up, segments = parsed
+        if up <= 0 or len(segments) != 1:
+            continue
+        # The ancestor universe is `up` levels above us in the universe chain.
+        if up > len(ancestor_universe_chain):
+            continue
+        target_universe = ancestor_universe_chain[len(ancestor_universe_chain) - up]
+        target_decision_id = segments[0]
+        if target_decision_id in target_universe:
+            effective_decisions[decision_id] = target_universe[target_decision_id]
 
     # Build effective analysis decisions for constraint checking (include resolved `from`)
     effective_analysis_decisions = dict(analysis_decisions)
-    for decision_id in from_decision_ids:
-        ref = all_analysis_decisions[decision_id].get("from", "")
-        if ref.startswith("../"):
-            parent_decision_id = ref[3:]
-            # The constraint scope uses the parent's decision definition
-            # (This is already in analysis_decisions if _collect_node_decisions handled it)
 
     errors.extend(
         _validate_node_universe_constraints(
@@ -1157,7 +1364,7 @@ def _validate_universe_node(
                 sub_universe,
                 sub_analysis_node,
                 path_prefix=f"{analyses_prefix}.{analysis_id}",
-                parent_universe_decisions=universe_decisions,
+                ancestor_universe_chain=ancestor_universe_chain + [universe_decisions],
             )
         )
 

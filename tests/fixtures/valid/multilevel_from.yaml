@@ -1,0 +1,46 @@
+version: "1.0"
+name: "Test multi-level from: paths"
+
+inputs:
+  - id: root_data
+    type: data
+    source: data.csv
+
+outputs:
+  - id: root_metric
+    from: stage_a.stage_b.deep_metric
+
+decisions:
+  random_seed:
+    label: "Random Seed"
+    default: seed_42
+    options:
+      seed_42:
+        label: "42"
+
+analyses:
+  stage_a:
+    inputs:
+      - id: a_data
+        from: ../root_data
+    outputs:
+      - id: deep_metric
+        from: stage_b.deep_metric
+    decisions:
+      seed:
+        from: ../random_seed
+    analyses:
+      stage_b:
+        inputs:
+          - id: b_data
+            from: ../../root_data        # grandparent input
+        outputs:
+          - id: deep_metric
+            type: metric
+            inputs: [b_data]
+            decisions: [seed]
+            recipe:
+              command: python src/deep.py {inputs.b_data} --seed {decisions.seed}
+        decisions:
+          seed:
+            from: ../../random_seed      # grandparent decision
