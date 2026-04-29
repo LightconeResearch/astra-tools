@@ -7,15 +7,20 @@ using dict-based data structures loaded from YAML files.
 from __future__ import annotations
 
 import re
+import string
 from pathlib import Path
 from typing import Any
 
 from astra.helpers import (
     _collect_node_decisions,
+    get_input_ids,
+    get_output_ids,
     is_condition_met,
     load_yaml,
     resolve_analysis_tree,
 )
+
+_FORMATTER = string.Formatter()
 
 
 class SemanticError:
@@ -213,12 +218,10 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
             if out_id:
                 sub_output_ids.add(f"{analysis_id}.{out_id}")
 
-    # Validate Output.from re-exports at the root (one boundary deep into
-    # any direct child sub-analysis) before output dependencies, since those
+    # `from:` re-exports must be checked before output dependencies, which
     # rely on knowing which output ids are real.
     errors.extend(_validate_outputs_from(outputs, data, ""))
 
-    # Validate output declarations and recipes
     errors.extend(
         _validate_output_dependencies(
             outputs,
@@ -322,15 +325,10 @@ def _validate_analysis_node(
         if out_id:
             node_output_ids.add(out_id)
 
-    # Validate Output.from re-exports (downward into own children)
     node_outputs = node.get("outputs") or []
     errors.extend(_validate_outputs_from(node_outputs, node, node_path))
 
-    # Validate decisions
-    # Collect only locally-defined decisions (not `from` references)
     node_decisions = _collect_node_decisions(node)
-    # Build constraint scope: local decisions + resolved ancestor decisions
-    # (multi-level via ancestor_chain).
     constraint_scope = dict(node_decisions)
     for decision_id, decision in node_all_decisions.items():
         ref = decision.get("from")
@@ -372,7 +370,6 @@ def _validate_analysis_node(
             if out_id:
                 sub_output_ids.add(f"{sub_id}.{out_id}")
 
-    # Validate output declarations and recipes
     errors.extend(
         _validate_output_dependencies(
             node_outputs,
@@ -382,11 +379,8 @@ def _validate_analysis_node(
             extra_valid_ids=sub_output_ids,
         )
     )
-
-    # Validate output when conditions
     errors.extend(_validate_output_when(node_outputs, constraint_scope, node_path))
 
-    # Recurse into sub-analyses
     for sub_id, sub_node in sub_analyses.items():
         errors.extend(
             _validate_analysis_node(
@@ -759,125 +753,53 @@ def _validate_command_template(
     Each ``{inputs.<id>}`` / ``{decisions.<id>}`` must reference an item
     declared on the surrounding Output.
 
-    Note: we deliberately don't lint "declared but unreferenced" — the spec
-    grants the runner free choice of delivery mechanism for declared inputs
-    and decisions ("via flags, env vars, or a sidecar — runner's choice"),
-    so a recipe with `python script.py` and decisions delivered by sidecar
-    is just as valid as one using `{decisions.x}` template substitution.
+    We deliberately don't lint "declared but unreferenced" — the spec
+    grants the runner free choice of delivery mechanism (flags, env vars,
+    sidecar JSON), so a recipe with `python script.py` and decisions
+    delivered by sidecar is just as valid as one using `{decisions.x}`.
     """
-    errors: list[SemanticError] = []
+    try:
+        parsed = list(_FORMATTER.parse(command))
+    except ValueError as e:
+        return [SemanticError("INVALID_COMMAND_TEMPLATE", str(e), path)]
 
-    i = 0
-    n = len(command)
-    while i < n:
-        ch = command[i]
-        if ch == "{":
-            if i + 1 < n and command[i + 1] == "{":
-                i += 2
-                continue
-            end = command.find("}", i + 1)
-            if end == -1:
-                errors.append(
-                    SemanticError(
-                        "INVALID_COMMAND_TEMPLATE",
-                        f"Unterminated '{{' in command template at offset {i}",
-                        path,
-                    )
-                )
-                break
-            placeholder = command[i + 1 : end]
-            ref_err = _classify_command_placeholder(
-                placeholder,
-                declared_inputs,
-                declared_decisions,
-                path,
-            )
-            if ref_err.error is not None:
-                errors.append(ref_err.error)
-            i = end + 1
+    errors: list[SemanticError] = []
+    declared = {"inputs": declared_inputs, "decisions": declared_decisions}
+    for _literal, field_name, format_spec, conversion in parsed:
+        if field_name is None:
             continue
-        if ch == "}":
-            if i + 1 < n and command[i + 1] == "}":
-                i += 2
-                continue
+        if field_name == "" or format_spec or conversion:
             errors.append(
                 SemanticError(
                     "INVALID_COMMAND_TEMPLATE",
-                    f"Unmatched '}}' in command template at offset {i}",
+                    f"Invalid command placeholder '{{{field_name}}}'",
                     path,
                 )
             )
-            i += 1
             continue
-        i += 1
-
+        if field_name in ("output", "inputs"):
+            continue
+        head, dot, tail = field_name.partition(".")
+        if dot and "." not in tail and head in declared:
+            if tail not in declared[head]:
+                errors.append(
+                    SemanticError(
+                        "UNDECLARED_TEMPLATE_REF",
+                        f"Command placeholder '{{{field_name}}}' references undeclared "
+                        f"{head[:-1]} '{tail}' (add it to Output.{head})",
+                        path,
+                    )
+                )
+            continue
+        errors.append(
+            SemanticError(
+                "INVALID_COMMAND_TEMPLATE",
+                f"Unknown command placeholder '{{{field_name}}}' (use "
+                "{inputs}, {inputs.<id>}, {decisions.<id>}, or {output})",
+                path,
+            )
+        )
     return errors
-
-
-class _PlaceholderResult:
-    """Result from classifying a single ``{...}`` placeholder."""
-
-    __slots__ = ("error",)
-
-    def __init__(self, error: SemanticError | None = None):
-        self.error = error
-
-
-def _classify_command_placeholder(
-    placeholder: str,
-    declared_inputs: set[str],
-    declared_decisions: set[str],
-    path: str,
-) -> _PlaceholderResult:
-    """Classify a single placeholder body (the text between ``{`` and ``}``).
-
-    Returns an error if the placeholder references something not declared
-    on the Output, or if its grammar is malformed. The caller doesn't track
-    *which* declared item was referenced — declared-but-unreferenced is a
-    legitimate pattern (decisions can flow via env/sidecar, not just the
-    template), so there's nothing to lint.
-    """
-    if placeholder == "":
-        return _PlaceholderResult(
-            SemanticError("INVALID_COMMAND_TEMPLATE", "Empty '{}' placeholder", path)
-        )
-    if placeholder == "output" or placeholder == "inputs":
-        return _PlaceholderResult()
-
-    parts = placeholder.split(".")
-    if len(parts) == 2 and parts[0] == "inputs":
-        ref = parts[1]
-        if ref not in declared_inputs:
-            return _PlaceholderResult(
-                SemanticError(
-                    "UNDECLARED_TEMPLATE_REF",
-                    f"Command placeholder '{{inputs.{ref}}}' references undeclared "
-                    f"input '{ref}' (add it to Output.inputs)",
-                    path,
-                )
-            )
-        return _PlaceholderResult()
-    if len(parts) == 2 and parts[0] == "decisions":
-        ref = parts[1]
-        if ref not in declared_decisions:
-            return _PlaceholderResult(
-                SemanticError(
-                    "UNDECLARED_TEMPLATE_REF",
-                    f"Command placeholder '{{decisions.{ref}}}' references undeclared "
-                    f"decision '{ref}' (add it to Output.decisions)",
-                    path,
-                )
-            )
-        return _PlaceholderResult()
-
-    return _PlaceholderResult(
-        SemanticError(
-            "INVALID_COMMAND_TEMPLATE",
-            f"Unknown command placeholder '{{{placeholder}}}' (use "
-            "{inputs}, {inputs.<id>}, {decisions.<id>}, or {output})",
-            path,
-        )
-    )
 
 
 def _detect_output_cycle(dep_graph: dict[str, list[str]]) -> list[str] | None:
@@ -924,14 +846,6 @@ def _resolve_ancestor_scope(
     if up_levels <= 0 or up_levels > len(ancestor_chain):
         return None
     return ancestor_chain[len(ancestor_chain) - up_levels]
-
-
-def _output_ids_in_scope(scope: dict[str, Any]) -> set[str]:
-    return {o.get("id") for o in (scope.get("outputs") or []) if o.get("id")}
-
-
-def _input_ids_in_scope(scope: dict[str, Any]) -> set[str]:
-    return {i.get("id") for i in (scope.get("inputs") or []) if i.get("id")}
 
 
 def _validate_decision_from(
@@ -1020,7 +934,7 @@ def _validate_input_from(
         )
 
     if len(segments) == 1:
-        if segments[0] not in _input_ids_in_scope(target_scope):
+        if segments[0] not in get_input_ids(target_scope):
             return _error(
                 f"Input.from '{ref}' points to non-existent ancestor input '{segments[0]}'"
             )
@@ -1039,7 +953,7 @@ def _validate_input_from(
             return _error(f"Input.from '{ref}' cannot reference own outputs")
         current = sub_analyses[seg]
 
-    if segments[-1] not in _output_ids_in_scope(current):
+    if segments[-1] not in get_output_ids(current):
         return _error(
             f"Input.from '{ref}': output '{segments[-1]}' not found in target sub-analysis"
         )
@@ -1083,7 +997,7 @@ def _validate_output_from(
             return _error(f"Output.from '{ref}': sub-analysis '{seg}' not found at depth {i}")
         current = sub_analyses[seg]
 
-    if segments[-1] not in _output_ids_in_scope(current):
+    if segments[-1] not in get_output_ids(current):
         return _error(
             f"Output.from '{ref}': output '{segments[-1]}' not found in target sub-analysis"
         )
