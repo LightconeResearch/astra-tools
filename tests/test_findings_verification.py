@@ -56,9 +56,7 @@ def patch_extract(monkeypatch: pytest.MonkeyPatch):
             # Single-PDF fixtures: return the only one we have.
             return next(iter(pdfs.values()))
 
-        monkeypatch.setattr(
-            "astra.verification.core.extract_text_from_pdf", fake_extract
-        )
+        monkeypatch.setattr("astra.verification.core.extract_text_from_pdf", fake_extract)
         return _StubPaperCache(pdfs)
 
     return _install
@@ -171,9 +169,7 @@ def test_prior_insights_still_walked(patch_extract: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_cli_validate_reports_findings_artifact_skipped(
-    tmp_path: Path, patch_extract: Any
-) -> None:
+def test_cli_validate_reports_findings_artifact_skipped(tmp_path: Path, patch_extract: Any) -> None:
     """`astra validate --verify-evidence` walks findings and reports SKIPPED (artifact)."""
     # No paper-backed PDFs needed: all evidence is artifact-backed.
     patch_extract({})
