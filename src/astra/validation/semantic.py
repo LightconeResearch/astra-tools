@@ -757,14 +757,15 @@ def _validate_command_template(
     Recognized placeholders: ``{inputs}``, ``{inputs.<id>}``,
     ``{decisions.<id>}``, ``{output}``. ``{{`` and ``}}`` are literal braces.
     Each ``{inputs.<id>}`` / ``{decisions.<id>}`` must reference an item
-    declared on the surrounding Output. Declared-but-unreferenced inputs
-    or decisions produce a staleness lint.
+    declared on the surrounding Output.
+
+    Note: we deliberately don't lint "declared but unreferenced" — the spec
+    grants the runner free choice of delivery mechanism for declared inputs
+    and decisions ("via flags, env vars, or a sidecar — runner's choice"),
+    so a recipe with `python script.py` and decisions delivered by sidecar
+    is just as valid as one using `{decisions.x}` template substitution.
     """
     errors: list[SemanticError] = []
-
-    referenced_inputs: set[str] = set()
-    referenced_decisions: set[str] = set()
-    uses_inputs_glob = False
 
     i = 0
     n = len(command)
@@ -793,12 +794,6 @@ def _validate_command_template(
             )
             if ref_err.error is not None:
                 errors.append(ref_err.error)
-            if ref_err.input_ref is not None:
-                referenced_inputs.add(ref_err.input_ref)
-            if ref_err.decision_ref is not None:
-                referenced_decisions.add(ref_err.decision_ref)
-            if ref_err.uses_inputs_glob:
-                uses_inputs_glob = True
             i = end + 1
             continue
         if ch == "}":
@@ -816,46 +811,16 @@ def _validate_command_template(
             continue
         i += 1
 
-    # Staleness lint: declared but unreferenced. {inputs} satisfies all inputs.
-    if not uses_inputs_glob:
-        for inp in sorted(declared_inputs - referenced_inputs):
-            errors.append(
-                SemanticError(
-                    "UNREFERENCED_INPUT",
-                    f"Output input '{inp}' is declared but not referenced "
-                    f"in command template (use {{inputs.{inp}}} or {{inputs}})",
-                    path,
-                )
-            )
-    for dec in sorted(declared_decisions - referenced_decisions):
-        errors.append(
-            SemanticError(
-                "UNREFERENCED_DECISION",
-                f"Output decision '{dec}' is declared but not referenced "
-                f"in command template (use {{decisions.{dec}}})",
-                path,
-            )
-        )
-
     return errors
 
 
 class _PlaceholderResult:
     """Result from classifying a single ``{...}`` placeholder."""
 
-    __slots__ = ("error", "input_ref", "decision_ref", "uses_inputs_glob")
+    __slots__ = ("error",)
 
-    def __init__(
-        self,
-        error: SemanticError | None = None,
-        input_ref: str | None = None,
-        decision_ref: str | None = None,
-        uses_inputs_glob: bool = False,
-    ):
+    def __init__(self, error: SemanticError | None = None):
         self.error = error
-        self.input_ref = input_ref
-        self.decision_ref = decision_ref
-        self.uses_inputs_glob = uses_inputs_glob
 
 
 def _classify_command_placeholder(
@@ -864,48 +829,49 @@ def _classify_command_placeholder(
     declared_decisions: set[str],
     path: str,
 ) -> _PlaceholderResult:
-    """Classify a single placeholder body (the text between ``{`` and ``}``)."""
+    """Classify a single placeholder body (the text between ``{`` and ``}``).
+
+    Returns an error if the placeholder references something not declared
+    on the Output, or if its grammar is malformed. The caller doesn't track
+    *which* declared item was referenced — declared-but-unreferenced is a
+    legitimate pattern (decisions can flow via env/sidecar, not just the
+    template), so there's nothing to lint.
+    """
     if placeholder == "":
         return _PlaceholderResult(
-            error=SemanticError(
-                "INVALID_COMMAND_TEMPLATE", "Empty '{}' placeholder", path
-            )
+            SemanticError("INVALID_COMMAND_TEMPLATE", "Empty '{}' placeholder", path)
         )
-    if placeholder == "output":
+    if placeholder == "output" or placeholder == "inputs":
         return _PlaceholderResult()
-    if placeholder == "inputs":
-        return _PlaceholderResult(uses_inputs_glob=True)
 
     parts = placeholder.split(".")
     if len(parts) == 2 and parts[0] == "inputs":
         ref = parts[1]
         if ref not in declared_inputs:
             return _PlaceholderResult(
-                error=SemanticError(
+                SemanticError(
                     "UNDECLARED_TEMPLATE_REF",
                     f"Command placeholder '{{inputs.{ref}}}' references undeclared "
                     f"input '{ref}' (add it to Output.inputs)",
                     path,
-                ),
-                input_ref=ref,
+                )
             )
-        return _PlaceholderResult(input_ref=ref)
+        return _PlaceholderResult()
     if len(parts) == 2 and parts[0] == "decisions":
         ref = parts[1]
         if ref not in declared_decisions:
             return _PlaceholderResult(
-                error=SemanticError(
+                SemanticError(
                     "UNDECLARED_TEMPLATE_REF",
                     f"Command placeholder '{{decisions.{ref}}}' references undeclared "
                     f"decision '{ref}' (add it to Output.decisions)",
                     path,
-                ),
-                decision_ref=ref,
+                )
             )
-        return _PlaceholderResult(decision_ref=ref)
+        return _PlaceholderResult()
 
     return _PlaceholderResult(
-        error=SemanticError(
+        SemanticError(
             "INVALID_COMMAND_TEMPLATE",
             f"Unknown command placeholder '{{{placeholder}}}' (use "
             "{inputs}, {inputs.<id>}, {decisions.<id>}, or {output})",

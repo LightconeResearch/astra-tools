@@ -380,7 +380,11 @@ class TestCommandTemplateValidation:
         codes = [e.code for e in errors]
         assert "UNDECLARED_TEMPLATE_REF" in codes
 
-    def test_unreferenced_input_warns(self):
+    def test_declared_but_unreferenced_input_is_fine(self):
+        # The spec grants the runner free choice of delivery mechanism for
+        # declared inputs ("via flags, env vars, or a sidecar"), so a recipe
+        # whose command doesn't substitute every declared input is valid —
+        # the runner may deliver them by sidecar instead of template.
         out = {
             "id": "r",
             "type": "metric",
@@ -388,10 +392,10 @@ class TestCommandTemplateValidation:
             "recipe": {"command": "python run.py"},
         }
         errors = validate_analysis(self._make(out))
-        codes = [e.code for e in errors]
-        assert "UNREFERENCED_INPUT" in codes
+        assert errors == []
 
-    def test_unreferenced_decision_warns(self):
+    def test_declared_but_unreferenced_decision_is_fine(self):
+        # Same as above for decisions.
         out = {
             "id": "r",
             "type": "metric",
@@ -402,10 +406,9 @@ class TestCommandTemplateValidation:
             "m": {"label": "M", "default": "a", "options": {"a": {"label": "A"}}},
         }
         errors = validate_analysis(self._make(out, decisions))
-        codes = [e.code for e in errors]
-        assert "UNREFERENCED_DECISION" in codes
+        assert errors == []
 
-    def test_inputs_glob_satisfies_input_references(self):
+    def test_inputs_glob_is_valid_template(self):
         out = {
             "id": "r",
             "type": "metric",
