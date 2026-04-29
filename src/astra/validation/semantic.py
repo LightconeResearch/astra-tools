@@ -1008,7 +1008,8 @@ def _validate_input_from(
     if up == 0:
         return _error(
             f"Input.from '{ref}' must start with '../' to escape upward "
-            "(downward references aren't allowed on Inputs; consume sub outputs via Output re-export)"
+            "(downward references aren't allowed on Inputs; "
+            "consume sub outputs via Output re-export)"
         )
 
     target_scope = _resolve_ancestor_scope(ancestor_chain, up)
