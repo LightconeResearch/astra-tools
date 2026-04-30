@@ -10,6 +10,8 @@ narrative: |
 
   Highlights the [best method finding](#findings.best_method).
 
+  ![Confusion matrix on the held-out set](#outputs.confusion_matrix)
+
   # Methods
 
   Driven by the [method decision](#decisions.method) with
@@ -25,7 +27,11 @@ narrative: |
 
   # Outputs
 
-  Produces the [accuracy output](#outputs.accuracy).
+  Produces the [accuracy output](#outputs.accuracy). On its own line,
+  Markdown image syntax pointing at a previewable output renders as an
+  inline embed in the reader UI:
+
+  ![Accuracy on the held-out test set](#outputs.accuracy)
 
 inputs:
   - id: primary_data
@@ -38,6 +44,13 @@ outputs:
     description: "Accuracy"
     recipe:
       command: python src/main.py
+
+  - id: confusion_matrix
+    type: figure
+    description: "Confusion matrix"
+    inputs: [accuracy]
+    recipe:
+      command: python src/plot_cm.py {inputs.accuracy}
 
 decisions:
   method:

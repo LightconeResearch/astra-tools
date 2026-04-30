@@ -158,7 +158,12 @@ narrative: |
   # Outputs
 
   TODO: Prose that frames the expected outputs; this scaffold
-  mentions the [main result output](#outputs.main_result).
+  mentions the [main result output](#outputs.main_result). On its
+  own line, Markdown image syntax pointing at a previewable output
+  (figure / table / metric) renders as an inline embed in the
+  reader UI:
+
+  ![Headline metric](#outputs.main_result)
 
 inputs:
   - id: primary_data
