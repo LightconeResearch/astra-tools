@@ -1,6 +1,7 @@
 id: iris_classification
 version: "0.1.0"
 name: Iris Classification Study
+container: python:3.12-slim
 narrative:
   summary: |
     A demonstration analysis that builds a classifier for the classic

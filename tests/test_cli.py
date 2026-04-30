@@ -295,6 +295,7 @@ class TestInitCommand:
         gitignore = (project_dir / ".gitignore").read_text()
         assert "__pycache__/" in gitignore
         assert ".venv/" in gitignore
+        assert "outputs/" not in gitignore
 
     def test_init_existing_nonempty_dir_fails(self, runner: CliRunner, tmp_path: Path):
         """Test that init fails on existing non-empty directory."""

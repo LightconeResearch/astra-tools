@@ -1,6 +1,7 @@
 id: iris_pipeline
 version: "0.1.0"
 name: Iris Two-Stage Classification
+container: python:3.12-slim
 narrative:
   summary: |
     A two-stage pipeline for Iris classification that demonstrates
