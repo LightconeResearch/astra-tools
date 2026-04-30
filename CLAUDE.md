@@ -9,8 +9,8 @@ ASTRA (Agentic Schema for Transparent Research Analysis) is the **Python CLI and
 **Architecture**:
 - **astra-spec** ([separate repo](https://github.com/LightconeResearch/astra-spec)) = the specification: LinkML schemas, generated data models
 - **ASTRA** (this repo) = tooling layer: validation, CLI, helpers, paper management, evidence verification
-- **Prism** (separate repo) = agentic layer: Claude Code skills, project scaffolding, remote/HPC config
-- **Prism-UI** (separate repo) = visual UI: VS Code extension for viewing/editing ASTRA analyses
+
+ASTRA is intentionally agnostic to any specific agentic layer or UI; downstream tools may consume ASTRA specifications, but this project does not depend on or prescribe one.
 
 Both `astra-spec` and this package share the `astra` Python namespace via implicit namespace packages (PEP 420). There is **no** `src/astra/__init__.py`.
 

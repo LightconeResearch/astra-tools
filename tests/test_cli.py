@@ -258,7 +258,7 @@ class TestInitCommand:
         assert (project_dir / "universes" / "baseline.yaml").exists()
         assert (project_dir / "src").is_dir()
 
-        # Agentic scaffolding NOT created (handled by prism init)
+        # Agentic scaffolding NOT created (init produces only the minimal spec scaffold)
         assert not (project_dir / ".claude").exists()
         assert not (project_dir / "CLAUDE.md").exists()
         assert not (project_dir / "workflows").exists()

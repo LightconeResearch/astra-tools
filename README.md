@@ -16,8 +16,9 @@ The specification itself is defined in [astra-spec](https://github.com/Lightcone
 ```
 astra-spec            =  LinkML schemas, generated data models
 ASTRA (this package)  =  Validation, CLI, helpers, evidence verification
-Prism (agent layer)   =  Claude Code skills, project scaffolding, remote/HPC config
 ```
+
+ASTRA is agnostic to the agentic layer used to execute analyses. The CLI and SDK provide the spec, validation, and helpers; any agent or downstream tool can consume them.
 
 ## Key Concepts
 
@@ -42,8 +43,6 @@ cd my-analysis
 # Then validate it
 astra validate astra.yaml
 ```
-
-For full agentic scaffolding with Claude Code integration, use `prism init` instead.
 
 ## Quick Example
 
@@ -103,8 +102,6 @@ my-analysis/
 └── universes/            # Universe definitions (decision selections)
     └── baseline.yaml
 ```
-
-Use `prism init` for full agentic scaffolding (Claude Code config, scripts, HPC targets).
 
 ## Design Principles
 

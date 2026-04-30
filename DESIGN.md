@@ -1,22 +1,48 @@
-# ASTRA - Agentic Schema for Transparent Research Analysis
+# ASTRA Tooling — Design Document
 
 ## Overview
 
-**ASTRA (Agentic Schema for Transparent Research Analysis)** is a declarative specification format for scientific analyses that can be executed by AI agents. It describes:
+This document describes the design of the **ASTRA tooling layer** (this repository): the Python CLI and SDK for working with ASTRA analysis specifications.
+
+**ASTRA (Agentic Schema for Transparent Research Analysis)** itself is a declarative specification format for scientific analyses. An ASTRA analysis describes:
 
 - What we have to work with (inputs)
 - What we want to produce (outputs)
 - What choices need to be made (decisions)
 
-Crucially, an analysis does **not** specify how to execute the computation. That is the job of an agent (e.g., Prism), which generates implementations from the specification.
+Crucially, an analysis does **not** specify how to execute the computation. ASTRA is intentionally **agnostic to the agentic and execution layers**: any agent, workflow engine, or human can consume an ASTRA spec and produce results. This project ships no agent and no execution runtime.
+
+## Project Architecture
+
+ASTRA is split across two repositories, with a clear boundary at the agentic layer:
+
+```
+┌──────────────────────────┐   ┌──────────────────────────┐   ┌──────────────────────────┐
+│ astra-spec               │   │ ASTRA (this repo)        │   │ Agentic / execution      │
+│ (separate repository)    │   │                          │   │ layer (out of scope)     │
+│                          │   │                          │   │                          │
+│ • LinkML schema          │   │ • CLI: astra ...         │   │ • Any agent or engine    │
+│ • Generated Pydantic     │◀──│ • Validation (schema +   │   │   that consumes ASTRA    │
+│   data models            │   │   semantic)              │   │ • Workflow engines,      │
+│ • JSON Schema exports    │   │ • Helpers (dict-based    │   │   notebooks, scripts,    │
+│ • Specification docs     │   │   SDK)                   │   │   LLM agents, humans     │
+│   (astra-spec.org)       │   │ • Paper management       │   │                          │
+│                          │   │ • Evidence verification  │   │                          │
+└──────────────────────────┘   └──────────────────────────┘   └──────────────────────────┘
+        the spec                      the tooling                   consumers (not us)
+```
+
+Both `astra-spec` and this package contribute modules to the shared `astra.*` Python namespace via PEP 420 implicit namespace packages. `astra-spec` is the **authoritative** source for the specification — schema definitions, valid field names, and semantic rules originate there. This repository imports from `astra.datamodel` and provides everything else needed to author, validate, and inspect analyses.
+
+ASTRA imposes no requirements on what runs the analysis. A separate consumer (an agent, a workflow engine, a notebook, or a human) reads the spec and decides how to materialize outputs. The tooling here helps authors write valid specs and helps consumers verify them, but it never executes them.
 
 ```
 ┌─────────────────┐      ┌─────────────┐      ┌──────────────┐      ┌─────────┐
-│ ASTRA Analysis    │ ───▶ │ Agent       │ ───▶ │ Implementation│ ───▶ │ Results │
-│ (what we want)  │      │ (executes)  │      │ (generated)  │      │         │
-│                 │      │             │      │              │      │         │
-│ - inputs        │      │             │      │ scripts/     │      │ metrics │
-│ - outputs       │      │             │      │ pipelines/   │      │ figures │
+│ ASTRA Analysis  │ ───▶ │  Consumer   │ ───▶ │Implementation│ ───▶ │ Results │
+│ (what we want)  │      │ (agent,     │      │ (generated)  │      │         │
+│                 │      │  workflow,  │      │              │      │         │
+│ - inputs        │      │  notebook,  │      │ scripts/     │      │ metrics │
+│ - outputs       │      │  human...)  │      │ pipelines/   │      │ figures │
 │ - decisions     │      │             │      │              │      │ tables  │
 │                 │      │             │      │              │      │ data    │
 └─────────────────┘      └─────────────┘      └──────────────┘      └─────────┘
@@ -26,6 +52,8 @@ Crucially, an analysis does **not** specify how to execute the computation. That
 
 Universe (decision selections) ───▶ Execution Parameters
 ```
+
+The rest of this document covers the conceptual model that the tooling supports. The schema details are summarized below for convenience, but [astra-spec](https://github.com/LightconeResearch/astra-spec) is always the authoritative reference.
 
 ## The Multiverse Concept
 
@@ -124,7 +152,7 @@ Constraints are scoped within an analysis node and validated when creating unive
 
 ### 5. Recipes
 
-Recipes are optional inline build rules on outputs that describe how to produce them. They provide the execution contract for agents or build systems.
+Recipes are optional inline build rules on outputs that describe how to produce them. They provide a portable execution contract that any consumer (agent, workflow engine, build system, or human) can act on. ASTRA tooling does not run recipes — it only validates that they are well-formed and that their `inputs` references resolve.
 
 ```yaml
 outputs:
@@ -322,18 +350,22 @@ Universe validation checks that every decision in every analysis node has a sele
 Previous versions had edges between decision nodes representing execution order. This is removed because:
 
 1. Decisions don't have causal relationships—the constraints (`requires`, `incompatible_with`) handle validity
-2. Execution order is an implementation detail that the agent determines
+2. Execution order is an implementation detail that the consumer determines
 3. Edges conflated "decision dependency" with "computational dependency"
 
 ### No Workflow Specification
 
-The analysis spec is declarative. It says WHAT we want, not HOW to compute it. The agent:
+The analysis spec is declarative. It says WHAT we want, not HOW to compute it. A consumer (agent, workflow engine, notebook, or human):
 1. Reads the spec
 2. Understands the analysis and decisions
-3. Generates appropriate code/workflow
+3. Produces appropriate code or workflow
 4. Executes and collects outputs
 
-The generated workflow should be versioned (in git) but is not part of the ASTRA spec.
+The generated workflow should be versioned (in git) but is not part of the ASTRA spec, and ASTRA tooling does not generate or run it.
+
+### No Agent or Runtime
+
+ASTRA tooling deliberately ships **no agent**, **no LLM integration**, and **no execution runtime**. Recipes attached to outputs (see below) describe *how* an output can be built so that any consumer can execute them, but the tooling itself only validates and inspects — it never runs commands. Choosing an agentic layer is left to the user.
 
 ## Insights
 
@@ -341,7 +373,7 @@ Insights represent scientific knowledge extracted from literature with full trac
 
 ### Evidence Lifecycle
 
-The following diagram shows the complete workflow for extracting insights from literature and linking them to analysis decisions:
+The following diagram shows a typical workflow for extracting insights from literature and linking them to analysis decisions. Phases 1, 3, and 4 are performed by an **author** — this can be an LLM agent, a human researcher, or any combination. ASTRA tooling (the CLI) handles only phases 2 and 5: paper acquisition and validation. The "Agent" labels below denote the author role, not a required ASTRA component.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -464,7 +496,7 @@ The following diagram shows the complete workflow for extracting insights from l
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight**: The agent can write whatever evidence it wants, but `astra validate --verify-evidence` will **fail** if quotes don't exist in the PDF. No fabricated evidence can make it through the workflow.
+**Key insight**: The author (whether agent or human) can write whatever evidence they want, but `astra validate --verify-evidence` will **fail** if quotes don't exist in the PDF. No fabricated evidence can make it through the workflow.
 
 ### Insight Structure
 
@@ -568,7 +600,7 @@ This:
 3. Verifies page numbers if provided
 4. Caches verification results for efficiency
 
-**Key principle**: The agent writes evidence, but validation is the gatekeeper. Fabricated quotes will fail verification.
+**Key principle**: The author (agent or human) writes evidence, but validation is the gatekeeper. Fabricated quotes will fail verification.
 
 ## Evidence-Based Decisions
 
@@ -774,15 +806,17 @@ decisions:
         label: "123"
 ```
 
-## Execution Model
+## Execution Model (consumer responsibility)
+
+The steps below describe what a consumer of ASTRA typically does. They are **not** implemented by this tooling — they are the contract between the spec and whatever layer the user picks to run it.
 
 ### Single Universe Execution (typical)
 
 Given an analysis spec and a universe (set of decisions):
 
-1. **Parse** the spec and validate the universe against constraints
-2. **Agent generates** implementation code based on the decisions
-3. **Execute** the code
+1. **Parse** the spec and validate the universe against constraints (this tooling provides `astra validate`)
+2. **Produce** an implementation that honours the selected decisions (consumer's job — could be an agent, a hand-written script, or a workflow definition)
+3. **Execute** the implementation
 4. **Collect** declared outputs (metrics, artifacts, conclusion)
 5. **Store** the execution record linking universe → results
 
@@ -793,13 +827,13 @@ The result is a complete analysis with all declared outputs produced.
 If the user wants to check robustness or explore alternatives:
 
 1. **Select** alternative universes to run (user choice or sampling)
-2. **Execute** each selected universe
+2. **Execute** each selected universe (via the consumer of choice)
 3. **Compare** results across universes
 4. **Generate** multiverse summary (specification curve, sensitivity analysis)
 
-## Execution
+## Execution Is Out of Scope
 
-ASTRA makes no prescription about execution frameworks. The specification defines *what* to compute; execution is handled by the agentic layer (e.g., Prism).
+ASTRA — the spec and this tooling — makes no prescription about execution frameworks. The specification defines *what* to compute and (optionally, via recipes) *how* an output can be built; orchestrating, scheduling, and running the work is handled entirely outside ASTRA. Users are free to plug in any agent, workflow engine, container runtime, or HPC scheduler.
 
 
 ## Versioning and Lifecycle
@@ -952,9 +986,9 @@ astra paper verify-quote <doi> -q "text"  # Verify a quote
 astra paper verify-quotes <doi>      # Verify multiple quotes (JSON stdin)
 ```
 
-For full agentic scaffolding (Claude Code config, HPC targets, visual editors), use Prism: `prism init`.
-
 ## Schema Reference
+
+> **Authoritative source:** the schema is defined in [astra-spec](https://github.com/LightconeResearch/astra-spec) using LinkML, with generated Pydantic models in `astra.datamodel` and JSON Schema exports under `astra schema export`. The summaries below are kept here for reader convenience; if they ever conflict with `astra-spec`, the spec wins.
 
 ### Analysis Schema (astra.yaml)
 
@@ -1095,11 +1129,11 @@ analyses:                         # Sub-analysis decision selections
 
 ## Open Questions
 
-1. **Agent instructions**: Should the spec include hints for the agent about implementation preferences? Or is the description sufficient?
+1. **Consumer hints**: Should the spec include optional hints about implementation preferences for downstream consumers? Or is the description sufficient? (Note: anything added here must remain advisory — ASTRA stays consumer-agnostic.)
 
 2. **Semantic validation**: How do we validate that outputs are meaningful? (Syntactic validation—checking outputs exist—is straightforward.)
 
-3. **Caching**: If a decision doesn't affect certain outputs, can we cache and reuse? This requires understanding which decisions affect which workflow steps.
+3. **Caching**: If a decision doesn't affect certain outputs, can we cache and reuse? This requires understanding which decisions affect which workflow steps — but caching strategy is a consumer concern, not an ASTRA one.
 
 4. **Cross-branch comparison**: How do we compare results between branches that have different decision spaces?
 
@@ -1110,7 +1144,7 @@ analyses:                         # Sub-analysis decision selections
 3. **Self-similar**: Every level has the same structure; sub-analyses are valid analyses
 4. **Composable**: Analyses can build on each other
 5. **Evidence-linked**: Decisions can cite supporting evidence
-6. **Agent-friendly**: Clear structure for LLM to understand and implement
+6. **Consumer-agnostic**: Any agent, workflow engine, notebook, or human can act on the spec
 7. **Goal-oriented**: Outputs define what the analysis must produce
 8. **Single-analysis first**: One universe answers the question; multiverse is for exploration
 9. **Reproducible**: Precise input provenance and execution records ensure reproducibility

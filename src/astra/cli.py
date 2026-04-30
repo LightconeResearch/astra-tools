@@ -81,9 +81,6 @@ def init(directory: Path, no_git: bool) -> None:
 
     DIRECTORY is the project folder to create (default: current directory).
 
-    For full agentic scaffolding (Claude Code config, venv, HPC),
-    use 'prism init' instead.
-
     Examples:
         astra init my-analysis
         astra init my-analysis --no-git
@@ -131,7 +128,6 @@ __pycache__/
 
     # Print success message
     console.print(f"[green]✓[/green] Created ASTRA analysis scaffold: [cyan]{directory}[/cyan]")
-    console.print("\nFor full agentic scaffolding, use [cyan]prism init[/cyan] instead.")
 
 
 def _create_boilerplate_astra_yaml(directory: Path) -> None:
