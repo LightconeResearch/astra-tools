@@ -6,8 +6,8 @@ from astra.validation.narrative import (
     check_narrative_coverage_file,
     validate_narrative_anchors,
     validate_narrative_anchors_file,
-    validate_narrative_sections,
-    validate_narrative_sections_file,
+    validate_narrative_figure_embeds,
+    validate_narrative_figure_embeds_file,
 )
 from astra.validation.schema import (
     is_valid_analysis,
@@ -38,8 +38,8 @@ __all__ = [
     "validate_analysis_schema",
     "validate_narrative_anchors",
     "validate_narrative_anchors_file",
-    "validate_narrative_sections",
-    "validate_narrative_sections_file",
+    "validate_narrative_figure_embeds",
+    "validate_narrative_figure_embeds_file",
     "validate_universe",
     "validate_universe_data",
     "validate_universe_file",

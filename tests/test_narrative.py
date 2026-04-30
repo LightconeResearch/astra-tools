@@ -9,23 +9,12 @@ from astra.validation.narrative import (
     check_narrative_coverage_file,
     validate_narrative_anchors,
     validate_narrative_anchors_file,
-    validate_narrative_sections,
+    validate_narrative_figure_embeds,
 )
 
-_FULL_SECTIONS = ("summary", "findings", "methods", "inputs", "outputs")
 
-
-def _full_narrative(**overrides: str) -> dict[str, str]:
-    """Build a narrative with placeholder prose in every section."""
-    base = {s: f"{s} placeholder." for s in _FULL_SECTIONS}
-    base.update(overrides)
-    return base
-
-
-def _minimal_with_narrative(narrative: dict[str, str] | str) -> dict[str, object]:
-    """Build a minimal analysis. Shorthand: a bare string is placed in ``summary``."""
-    if isinstance(narrative, str):
-        narrative = {"summary": narrative}
+def _minimal_with_narrative(narrative: str) -> dict[str, object]:
+    """Build a minimal analysis with the given narrative blob."""
     return {
         "version": "1.0",
         "name": "Test",
@@ -101,7 +90,7 @@ class TestAnchorResolution:
         data = _minimal_with_narrative("(placeholder)")
         data["analyses"] = {
             "sub": {
-                "narrative": {"summary": "[parent method](#../decisions.method)"},
+                "narrative": "[parent method](#../decisions.method)",
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
             }
@@ -184,7 +173,7 @@ class TestCoverage:
         )
         data["analyses"] = {
             "sub": {
-                "narrative": {"summary": "[d](#decisions.d) [o](#outputs.y)"},
+                "narrative": "[d](#decisions.d) [o](#outputs.y)",
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
                 "decisions": {
@@ -219,7 +208,7 @@ class TestCoverage:
         data = _minimal_with_narrative("[d](#decisions.method) [o](#outputs.y) [s](#sub.outputs.y)")
         data["analyses"] = {
             "sub": {
-                "narrative": {"summary": "[o](#outputs.y)"},
+                "narrative": "[o](#outputs.y)",
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
                 "decisions": {
@@ -244,126 +233,141 @@ class TestFileHelpers:
         assert all(e.code == "BROKEN_NARRATIVE_ANCHOR" for e in errs)
 
 
-class TestSectionedNarrative:
-    """Anchors and coverage work the same when narrative is a dict of sections."""
+class TestMarkdownHeadings:
+    """Heading levels are render-time concerns; the validator just sees prose.
+    These tests pin the contract: anchors and coverage work the same whether
+    the prose is a single paragraph or carries `#`/`##`/`###` structure."""
 
-    def test_anchors_across_sections_resolve(self) -> None:
+    def test_anchors_resolve_under_h1_and_h2_and_h3(self) -> None:
         data = _minimal_with_narrative(
-            _full_narrative(
-                methods="[method](#decisions.method) with [option](#decisions.method.options.a)",
-                outputs="See [output](#outputs.y).",
-                inputs="See [input](#inputs.x).",
-            )
+            "# Methods\n\n[method](#decisions.method) with "
+            "[option](#decisions.method.options.a)\n\n"
+            "## Inputs\n\nSee [input](#inputs.x).\n\n"
+            "### Outputs\n\nSee [output](#outputs.y)."
         )
         assert validate_narrative_anchors(data) == []
 
-    def test_broken_anchor_reports_section_path(self) -> None:
-        data = _minimal_with_narrative(_full_narrative(findings="[bad](#decisions.nope)"))
+    def test_broken_anchor_reports_narrative_path(self) -> None:
+        data = _minimal_with_narrative(
+            "# Findings\n\n[bad](#decisions.nope)"
+        )
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
-        assert errs[0].path == "narrative.findings"
+        assert errs[0].path == "narrative"
 
-    def test_coverage_is_global_across_sections(self) -> None:
-        # Decision cited in summary, output cited in outputs — both count.
+    def test_coverage_is_global_across_headings(self) -> None:
+        # Decision cited in one section, output cited in another — both count.
         data = _minimal_with_narrative(
-            _full_narrative(
-                summary="Mentions [method](#decisions.method) up top.",
-                outputs="Produces [y](#outputs.y).",
-            )
+            "# Summary\n\nMentions [method](#decisions.method) up top.\n\n"
+            "# Outputs\n\nProduces [y](#outputs.y)."
         )
         assert check_narrative_coverage(data) == []
 
 
-class TestNarrativeSections:
-    """Section-requirement check: a section is required when the
-    corresponding structured data exists on the Analysis node."""
+class TestFigureEmbeds:
+    """Image syntax (``![alt](href)``) means 'embed this artefact' to the
+    renderer. The validator enforces that authors only point image syntax
+    at previewable outputs; everything else is an author mistake that
+    would silently degrade to a plain link or nothing at all."""
 
-    def test_full_narrative_no_errors(self) -> None:
-        data = _minimal_with_narrative(_full_narrative())
-        assert validate_narrative_sections(data) == []
+    def test_image_targeting_previewable_output_ok(self) -> None:
+        # The minimal fixture's `y` output is a metric — previewable.
+        data = _minimal_with_narrative(
+            "Here is the headline result:\n\n![accuracy](#outputs.y)"
+        )
+        assert validate_narrative_figure_embeds(data) == []
 
-    def test_missing_methods_when_decisions_present_errors(self) -> None:
-        narrative = _full_narrative()
-        del narrative["methods"]
-        data = _minimal_with_narrative(narrative)
-        errs = validate_narrative_sections(data)
+    def test_image_targeting_decision_errors(self) -> None:
+        data = _minimal_with_narrative("![the decision](#decisions.method)")
+        errs = validate_narrative_figure_embeds(data)
         assert len(errs) == 1
-        assert errs[0].code == "NARRATIVE_SECTION_REQUIRED"
-        assert errs[0].path == "narrative.methods"
-        assert "'decisions'" in errs[0].message
+        assert errs[0].code == "INVALID_FIGURE_EMBED"
+        assert "decisions" in errs[0].message
+        assert errs[0].path == "narrative"
 
-    def test_missing_inputs_section_errors(self) -> None:
-        narrative = _full_narrative()
-        del narrative["inputs"]
-        data = _minimal_with_narrative(narrative)
-        errs = validate_narrative_sections(data)
+    def test_image_targeting_option_errors(self) -> None:
+        data = _minimal_with_narrative("![option a](#decisions.method.options.a)")
+        errs = validate_narrative_figure_embeds(data)
         assert len(errs) == 1
-        assert errs[0].path == "narrative.inputs"
+        assert errs[0].code == "INVALID_FIGURE_EMBED"
 
-    def test_empty_section_treated_as_missing(self) -> None:
-        data = _minimal_with_narrative(_full_narrative(outputs="   "))
-        errs = validate_narrative_sections(data)
-        paths = {e.path for e in errs}
-        assert "narrative.outputs" in paths
-
-    def test_summary_always_optional(self) -> None:
-        narrative = _full_narrative()
-        del narrative["summary"]
-        data = _minimal_with_narrative(narrative)
-        assert validate_narrative_sections(data) == []
-
-    def test_missing_findings_section_ok_when_no_findings_declared(self) -> None:
-        # The minimal fixture has no `findings:` key — so narrative.findings
-        # is not required, even though it is absent from the narrative.
-        narrative = _full_narrative()
-        del narrative["findings"]
-        data = _minimal_with_narrative(narrative)
-        assert data.get("findings") is None
-        assert validate_narrative_sections(data) == []
-
-    def test_findings_section_required_when_finding_declared(self) -> None:
-        narrative = _full_narrative()
-        del narrative["findings"]
-        data = _minimal_with_narrative(narrative)
-        data["findings"] = {
-            "f1": {
-                "id": "f1",
-                "claim": "A finding.",
-                "created_at": "2026-01-01T00:00:00",
-                "evidence": [],
-            }
-        }
-        errs = validate_narrative_sections(data)
+    def test_image_targeting_input_errors(self) -> None:
+        data = _minimal_with_narrative("![the input](#inputs.x)")
+        errs = validate_narrative_figure_embeds(data)
         assert len(errs) == 1
-        assert errs[0].path == "narrative.findings"
+        assert errs[0].code == "INVALID_FIGURE_EMBED"
 
-    def test_methods_required_when_only_analyses_present(self) -> None:
-        # A parent node with no decisions but with sub-analyses still
-        # requires narrative.methods.
+    def test_image_with_external_url_errors(self) -> None:
+        data = _minimal_with_narrative(
+            "![logo](https://example.com/logo.png)"
+        )
+        errs = validate_narrative_figure_embeds(data)
+        assert len(errs) == 1
+        assert errs[0].code == "INVALID_FIGURE_EMBED"
+        assert "external" in errs[0].message.lower()
+
+    def test_image_targeting_non_previewable_output_errors(self) -> None:
+        # Build an analysis with a `data`-typed output and reference it
+        # via image syntax — should fail because data outputs have no
+        # preview.
         data = {
             "version": "1.0",
             "name": "Test",
-            "narrative": {"summary": "top"},
-            "analyses": {
-                "sub": {
-                    "narrative": {"summary": "child"},
-                }
-            },
+            "narrative": "![raw](#outputs.dump)",
+            "inputs": [{"id": "x", "type": "data"}],
+            "outputs": [{"id": "dump", "type": "data"}],
         }
-        errs = validate_narrative_sections(data)
-        assert any(e.path == "narrative.methods" and "'analyses'" in e.message for e in errs)
+        errs = validate_narrative_figure_embeds(data)
+        assert len(errs) == 1
+        assert errs[0].code == "INVALID_FIGURE_EMBED"
+        assert "data" in errs[0].message
 
-    def test_sub_analysis_requirements_checked(self) -> None:
-        data = _minimal_with_narrative(_full_narrative())
+    def test_image_with_broken_anchor_does_not_double_error(self) -> None:
+        # Broken anchors are reported by validate_narrative_anchors;
+        # the figure-embed validator should stay quiet so the same
+        # mistake isn't reported twice.
+        data = _minimal_with_narrative("![missing](#outputs.nope)")
+        assert validate_narrative_figure_embeds(data) == []
+
+    def test_image_with_invalid_grammar_does_not_double_error(self) -> None:
+        data = _minimal_with_narrative("![weird](#nope.foo)")
+        assert validate_narrative_figure_embeds(data) == []
+
+    def test_image_in_sub_analysis_reports_sub_path(self) -> None:
+        data = _minimal_with_narrative("(top placeholder)")
         data["analyses"] = {
             "sub": {
-                "narrative": {"summary": "only summary here"},
+                "narrative": "![bad](#decisions.d)",
                 "inputs": [{"id": "x", "type": "data"}],
                 "outputs": [{"id": "y", "type": "metric"}],
+                "decisions": {
+                    "d": {
+                        "label": "D",
+                        "rationale": "r",
+                        "default": "a",
+                        "options": {"a": {"label": "A"}},
+                    }
+                },
             }
         }
-        errs = validate_narrative_sections(data)
-        sub_paths = {e.path for e in errs if e.path and "analyses.sub" in e.path}
-        # Only inputs and outputs required on the sub-analysis (no decisions,
-        # no child analyses, no findings).
-        assert sub_paths == {"analyses.sub.narrative.inputs", "analyses.sub.narrative.outputs"}
+        errs = validate_narrative_figure_embeds(data)
+        assert len(errs) == 1
+        assert errs[0].code == "INVALID_FIGURE_EMBED"
+        assert errs[0].path == "analyses.sub.narrative"
+
+    def test_inline_image_in_paragraph_still_validated(self) -> None:
+        # Position-agnostic: even mid-paragraph image syntax is checked,
+        # because the renderer's block-vs-inline rule is for rendering,
+        # not validation. The author still meant to embed something.
+        data = _minimal_with_narrative(
+            "Some prose, then ![bad](#decisions.method) more prose."
+        )
+        errs = validate_narrative_figure_embeds(data)
+        assert len(errs) == 1
+        assert errs[0].code == "INVALID_FIGURE_EMBED"
+
+    def test_plain_text_link_to_decision_unaffected(self) -> None:
+        # Text links to decisions are normal citations — only image
+        # syntax is constrained to outputs.
+        data = _minimal_with_narrative("[the method](#decisions.method)")
+        assert validate_narrative_figure_embeds(data) == []

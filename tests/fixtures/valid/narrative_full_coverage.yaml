@@ -1,22 +1,31 @@
 version: "1.0"
 name: "Narrative Full Coverage"
-narrative:
-  summary: |
-    Exercises the narrative anchor grammar with full coverage of
-    the local elements.
-  findings: |
-    Highlights the [best method finding](#findings.best_method).
-  methods: |
-    Driven by the [method decision](#decisions.method) with
-    [option a](#decisions.method.options.a) as the default. A
-    descendant reference like [child scaling](#preprocessing.decisions.scaling)
-    also counts toward the
-    [preprocessing sub-analysis](#analyses.preprocessing)'s
-    coverage.
-  inputs: |
-    Consumes the [primary_data](#inputs.primary_data) input.
-  outputs: |
-    Produces the [accuracy output](#outputs.accuracy).
+narrative: |
+  # Summary
+
+  Exercises the narrative anchor grammar with full coverage of
+  the local elements.
+
+  # Findings
+
+  Highlights the [best method finding](#findings.best_method).
+
+  # Methods
+
+  Driven by the [method decision](#decisions.method) with
+  [option a](#decisions.method.options.a) as the default. A
+  descendant reference like [child scaling](#preprocessing.decisions.scaling)
+  also counts toward the
+  [preprocessing sub-analysis](#analyses.preprocessing)'s
+  coverage.
+
+  # Inputs
+
+  Consumes the [primary_data](#inputs.primary_data) input.
+
+  # Outputs
+
+  Produces the [accuracy output](#outputs.accuracy).
 
 inputs:
   - id: primary_data
@@ -50,13 +59,18 @@ findings:
 
 analyses:
   preprocessing:
-    narrative:
-      summary: |
-        Sub-analysis narrative.
-      methods: |
-        Mentions its own [scaling decision](#decisions.scaling).
-      outputs: |
-        Produces the [scaled output](#outputs.scaled).
+    narrative: |
+      # Summary
+
+      Sub-analysis narrative.
+
+      # Methods
+
+      Mentions its own [scaling decision](#decisions.scaling).
+
+      # Outputs
+
+      Produces the [scaled output](#outputs.scaled).
     inputs:
       - id: raw
         from: ../primary_data

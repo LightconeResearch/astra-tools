@@ -1,8 +1,8 @@
 # Analysis with conditional outputs using when conditions
 version: "1.0"
 name: "Conditional Outputs Analysis"
-narrative:
-  summary: "Tests when conditions on outputs with negation and lists"
+narrative: |
+  Tests when conditions on outputs with negation and lists
 inputs:
   - id: training_data
     type: data

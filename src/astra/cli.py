@@ -26,7 +26,7 @@ from astra.helpers import (
 from astra.validation.narrative import (
     check_narrative_coverage,
     validate_narrative_anchors,
-    validate_narrative_sections,
+    validate_narrative_figure_embeds,
 )
 from astra.validation.schema import (
     validate_analysis_data,
@@ -143,23 +143,22 @@ def _create_boilerplate_astra_yaml(directory: Path) -> None:
 version: "1.0"
 name: "{name}"
 container: python:3.12-slim
-narrative:
-  summary: |
-    TODO: One-paragraph overview of the analysis — its question,
-    scope, and what the reader should take away.
-  findings: |
-    TODO: Prose that frames the analysis's findings. Reference
-    structured findings with `#findings.<id>` anchors once they
-    exist.
-  methods: |
-    TODO: Methodology write-up. Reference decisions and any
-    sub-analyses; this scaffold mentions the
-    [example method decision](#decisions.example_method).
-  inputs: |
-    TODO: Prose that frames the analysis's inputs.
-  outputs: |
-    TODO: Prose that frames the expected outputs; this scaffold
-    mentions the [main result output](#outputs.main_result).
+narrative: |
+  # Summary
+
+  TODO: One-paragraph overview of the analysis — its question,
+  scope, and what the reader should take away.
+
+  # Methods
+
+  TODO: Methodology write-up. Reference decisions and any
+  sub-analyses; this scaffold mentions the
+  [example method decision](#decisions.example_method).
+
+  # Outputs
+
+  TODO: Prose that frames the expected outputs; this scaffold
+  mentions the [main result output](#outputs.main_result).
 
 inputs:
   - id: primary_data
@@ -322,14 +321,14 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
         console.print("[green]✓[/green] Narrative anchors resolved")
 
-        section_errors = validate_narrative_sections(data, base_path=file.parent)
-        if section_errors:
-            console.print("\n[red]Narrative section errors:[/red]")
-            for section_err in section_errors:
-                console.print(f"  • {section_err}")
+        embed_errors = validate_narrative_figure_embeds(data, base_path=file.parent)
+        if embed_errors:
+            console.print("\n[red]Narrative figure-embed errors:[/red]")
+            for embed_err in embed_errors:
+                console.print(f"  • {embed_err}")
             raise SystemExit(1)
 
-        console.print("[green]✓[/green] Narrative sections present")
+        console.print("[green]✓[/green] Narrative figure embeds valid")
 
         narrative_warnings = check_narrative_coverage(data, base_path=file.parent)
         if narrative_warnings:
@@ -445,13 +444,11 @@ def info(
     # Header
     console.print(f"\n[bold]{data.get('name', 'Unknown')}[/bold]")
     console.print(f"Version: {data.get('version', 'Unknown')}")
-    narrative = data.get("narrative") or {}
-    for section in ("summary", "findings", "methods", "inputs", "outputs"):
-        content = narrative.get(section)
-        if isinstance(content, str) and content.strip():
-            console.print()
-            console.print(f"[bold]{section.title()}[/bold]")
-            console.print(content)
+    narrative = data.get("narrative")
+    if isinstance(narrative, str) and narrative.strip():
+        console.print()
+        console.print("[bold]Narrative[/bold]")
+        console.print(narrative)
 
     # Summary stats
     input_list = get_inputs(data)

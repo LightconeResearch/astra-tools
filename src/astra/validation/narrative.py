@@ -1,25 +1,15 @@
 """Narrative validation for ASTRA specifications.
 
-Three checks layered on top of structural and semantic validation:
+Two checks layered on top of structural and semantic validation:
 
-1. **Anchor resolution** — Markdown links inside narrative section
-   prose of the form ``[text](#target)`` must resolve to a declared
-   element. Broken references are errors.
+1. **Anchor resolution** — Markdown links inside narrative prose of
+   the form ``[text](#target)`` must resolve to a declared element.
+   Broken references are errors.
 
 2. **Coverage** — each Analysis node's own decisions, findings,
    outputs, and sub-analyses should be mentioned somewhere in the
-   narrative tree. References may appear in any of the five narrative
-   sections — coverage is resolved across the whole narrative, not
-   per-section. Unmentioned elements emit warnings (not errors).
-
-3. **Sections** — a narrative section is required (non-empty prose)
-   when the corresponding structured data exists on the Analysis
-   node: ``findings`` when ``Analysis.findings`` has entries;
-   ``methods`` when ``Analysis.decisions`` or ``Analysis.analyses``
-   has entries; ``inputs`` when ``Analysis.inputs`` has entries;
-   ``outputs`` when ``Analysis.outputs`` has entries. ``summary`` is
-   always optional. Violations are errors — authors must narrate
-   what they declare.
+   narrative tree. References may appear anywhere across the tree;
+   unmentioned elements emit warnings (not errors).
 
 Anchor grammar is **tree-path-first**, matching the rest of ASTRA's
 reference syntax (``sibling.output_id`` in ``from``). Sub-analyses
@@ -51,9 +41,20 @@ from astra.helpers import load_yaml, resolve_analysis_tree
 from astra.validation.semantic import SemanticError
 
 _HREF_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+# Image-syntax variant — `![alt](href)` — used for figure embeds in
+# rendered narrative. The renderer treats a standalone-line image
+# whose href is `#outputs.<id>` as an inline preview of that output;
+# the validator enforces shape regardless of position.
+_IMAGE_HREF_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
 # Non-canonical "../" before "#" — the spec-canonical form puts the parent
 # escape inside the fragment (e.g. (#../decisions.foo), not (../#decisions.foo)).
 _PARENT_PATH_FORM_RE = re.compile(r"^(?:\.\./)+#")
+
+# Output types that have a visual preview in the renderer. Image syntax
+# pointing at an output of any other type would silently fall through to
+# a plain link — almost certainly an author mistake, so the validator
+# rejects it.
+_PREVIEWABLE_OUTPUT_TYPES = frozenset({"figure", "table", "metric"})
 
 _CATEGORIES = frozenset(
     {"inputs", "outputs", "decisions", "findings", "prior_insights", "analyses"}
@@ -70,9 +71,6 @@ _COVERAGE_CATEGORY_LABELS: dict[str, str] = {
     "outputs": "Output",
     "analyses": "Sub-analysis",
 }
-
-# The five narrative sections, in canonical render order.
-_NARRATIVE_SECTIONS = ("summary", "findings", "methods", "inputs", "outputs")
 
 
 @dataclass
@@ -204,24 +202,15 @@ def _resolve_anchor(
     return (target_path, anchor.category, anchor.element_id, anchor.option_id)
 
 
-def _iter_sections(narrative: Any) -> Iterator[tuple[str, str]]:
-    """Yield ``(section, content)`` pairs for each non-empty section,
-    in canonical render order. Non-dict narratives yield nothing —
-    the spec's ``Narrative`` is a dict of five optional section fields.
-    """
-    if not isinstance(narrative, dict):
-        return
-    for section in _NARRATIVE_SECTIONS:
-        content = narrative.get(section)
-        if isinstance(content, str) and content:
-            yield section, content
+def _narrative_text(node: dict[str, Any]) -> str:
+    """Return the narrative blob for a node, or empty string if missing/wrong type."""
+    n = node.get("narrative")
+    return n if isinstance(n, str) else ""
 
 
-def _extract_section_hrefs(narrative: Any) -> Iterator[tuple[str, str]]:
-    """Yield ``(section, href)`` for every Markdown link across sections."""
-    for section, content in _iter_sections(narrative):
-        for href in _HREF_RE.findall(content):
-            yield section, href
+def _extract_hrefs(text: str) -> Iterator[str]:
+    """Yield every Markdown link href in the prose."""
+    yield from _HREF_RE.findall(text)
 
 
 def _node_path_str(path: tuple[str, ...]) -> str:
@@ -229,9 +218,9 @@ def _node_path_str(path: tuple[str, ...]) -> str:
     return ".".join(f"analyses.{seg}" for seg in path)
 
 
-def _narrative_report_path(base: str, section: str) -> str:
+def _narrative_report_path(base: str) -> str:
     """Build the path string used in error/warning reports for a narrative location."""
-    return f"{base}.narrative.{section}" if base else f"narrative.{section}"
+    return f"{base}.narrative" if base else "narrative"
 
 
 def validate_narrative_anchors(
@@ -251,11 +240,10 @@ def _walk_anchors(
     root: dict[str, Any],
     errors: list[SemanticError],
 ) -> None:
-    narrative = node.get("narrative")
-    if narrative:
-        base = _node_path_str(path)
-        for section, href in _extract_section_hrefs(narrative):
-            narrative_path = _narrative_report_path(base, section)
+    text = _narrative_text(node)
+    if text:
+        narrative_path = _narrative_report_path(_node_path_str(path))
+        for href in _extract_hrefs(text):
             if _PARENT_PATH_FORM_RE.match(href):
                 errors.append(
                     SemanticError(
@@ -304,9 +292,9 @@ def check_narrative_coverage(
     """Warn about decisions, findings, outputs, and sub-analyses not
     mentioned in any narrative across the analysis tree.
 
-    A reference anywhere in the tree — and in any section of a node's
-    narrative — counts toward the target element's coverage. Mentioning
-    a descendant implicitly mentions each sub-analysis along the path.
+    A reference anywhere in the tree counts toward the target element's
+    coverage. Mentioning a descendant implicitly mentions each
+    sub-analysis along the path.
     """
     if base_path is not None:
         data = resolve_analysis_tree(data, base_path)
@@ -323,9 +311,9 @@ def _collect_mentioned(
     root: dict[str, Any],
     mentioned: set[tuple[tuple[str, ...], str, str]],
 ) -> None:
-    narrative = node.get("narrative")
-    if narrative:
-        for _section, href in _extract_section_hrefs(narrative):
+    text = _narrative_text(node)
+    if text:
+        for href in _extract_hrefs(text):
             if not href.startswith("#"):
                 continue
             raw = href[1:]
@@ -386,65 +374,124 @@ def _walk_coverage(
         _walk_coverage(sub_node, path + (sub_id,), mentioned, warnings)
 
 
-# Narrative sections triggered by the presence of structured data.
-# Each maps a section name to the Analysis keys that require it.
-_DATA_TRIGGERED_SECTIONS: dict[str, tuple[str, ...]] = {
-    "findings": ("findings",),
-    "methods": ("decisions", "analyses"),
-    "inputs": ("inputs",),
-    "outputs": ("outputs",),
-}
-
-
-def validate_narrative_sections(
+def validate_narrative_figure_embeds(
     data: dict[str, Any], base_path: Path | None = None
 ) -> list[SemanticError]:
-    """Require a narrative section when the corresponding structured
-    data exists on the Analysis node. Authors must narrate what they
-    declare.
+    """Enforce figure-embed shape on Markdown image syntax.
 
-    - ``narrative.findings`` required when ``Analysis.findings`` has entries.
-    - ``narrative.methods`` required when ``Analysis.decisions`` or
-      ``Analysis.analyses`` has entries.
-    - ``narrative.inputs`` required when ``Analysis.inputs`` has entries.
-    - ``narrative.outputs`` required when ``Analysis.outputs`` has entries.
-    - ``narrative.summary`` is always optional (no structured counterpart).
+    Image syntax (``![alt](href)``) in narrative prose means "embed
+    this artefact" to the renderer. Author mistakes show up as image
+    syntax pointing at the wrong kind of thing; this validator rejects
+    them so they don't degrade silently to a broken link.
 
-    A section counts as present only if it holds non-empty prose
-    (whitespace doesn't satisfy the rule).
+    Errors:
+
+    - **External URL**: image href that isn't an anchor (no leading
+      ``#``). Narrative figures should reference the analysis's own
+      outputs, not external pictures.
+    - **Wrong category**: image href that resolves to a decision /
+      finding / input / sub-analysis / option, not an output. Only
+      outputs are artefacts.
+    - **Non-previewable output**: image href that resolves to an
+      output whose type isn't ``figure``, ``table``, or ``metric``
+      (the previewable set). The renderer can't show a preview, so
+      the embed would degrade to a plain link.
+
+    Anchor-grammar errors and broken-anchor errors are already reported
+    by ``validate_narrative_anchors``; this validator skips unparseable
+    or unresolvable hrefs to avoid duplicate diagnostics.
     """
     if base_path is not None:
         data = resolve_analysis_tree(data, base_path)
     errors: list[SemanticError] = []
-    _walk_section_requirements(data, (), errors)
+    _walk_figure_embeds(data, (), data, errors)
     return errors
 
 
-def _walk_section_requirements(
+def _output_type(node: dict[str, Any], output_id: str) -> str | None:
+    """Return the declared ``type`` for ``output_id`` on ``node``, or None."""
+    for out in node.get("outputs") or []:
+        if out.get("id") == output_id:
+            t = out.get("type")
+            return t if isinstance(t, str) else None
+    return None
+
+
+def _walk_figure_embeds(
     node: dict[str, Any],
     path: tuple[str, ...],
+    root: dict[str, Any],
     errors: list[SemanticError],
 ) -> None:
-    raw_narrative = node.get("narrative")
-    narrative = raw_narrative if isinstance(raw_narrative, dict) else {}
-    base = _node_path_str(path)
-    for section, trigger_keys in _DATA_TRIGGERED_SECTIONS.items():
-        present_triggers = [key for key in trigger_keys if node.get(key)]
-        if not present_triggers:
-            continue
-        content = narrative.get(section)
-        if isinstance(content, str) and content.strip():
-            continue
-        triggers_str = " and ".join(f"'{k}'" for k in present_triggers)
-        errors.append(
-            SemanticError(
-                "NARRATIVE_SECTION_REQUIRED",
-                f"Narrative section '{section}' is required because {triggers_str} has entries",
-                _narrative_report_path(base, section),
-            )
-        )
+    text = _narrative_text(node)
+    if text:
+        narrative_path = _narrative_report_path(_node_path_str(path))
+        for href in _IMAGE_HREF_RE.findall(text):
+            if not href.startswith("#"):
+                errors.append(
+                    SemanticError(
+                        "INVALID_FIGURE_EMBED",
+                        f"Figure embed '{href}' must reference an analysis "
+                        f"output (e.g. '#outputs.<id>'), not an external URL",
+                        narrative_path,
+                    )
+                )
+                continue
+            raw = href[1:]
+            if "." not in raw:
+                # Dotless anchor — bare Markdown heading link, not an
+                # ASTRA reference. Image syntax pointing at one is
+                # still nonsense (no artefact to embed), so flag it.
+                errors.append(
+                    SemanticError(
+                        "INVALID_FIGURE_EMBED",
+                        f"Figure embed '#{raw}' must reference an output "
+                        f"(e.g. '#outputs.<id>')",
+                        narrative_path,
+                    )
+                )
+                continue
+            parsed = _parse_anchor(raw)
+            if parsed is None:
+                # Anchor-grammar errors are reported by
+                # validate_narrative_anchors — skip to avoid duplicate
+                # diagnostics on the same href.
+                continue
+            resolved = _resolve_anchor(parsed, path, root)
+            if resolved is None:
+                # Same — broken-anchor errors are reported elsewhere.
+                continue
+            target_path, category, element_id, option_id = resolved
+            if category != "outputs" or option_id is not None:
+                errors.append(
+                    SemanticError(
+                        "INVALID_FIGURE_EMBED",
+                        f"Figure embed '#{raw}' targets a {category} entry; "
+                        f"image syntax may only reference outputs",
+                        narrative_path,
+                    )
+                )
+                continue
+            target_node = _get_node_at(root, target_path)
+            out_type = _output_type(target_node or {}, element_id) or "data"
+            if out_type not in _PREVIEWABLE_OUTPUT_TYPES:
+                errors.append(
+                    SemanticError(
+                        "INVALID_FIGURE_EMBED",
+                        f"Figure embed '#{raw}' targets output '{element_id}' "
+                        f"of type '{out_type}', which has no preview; "
+                        f"figure embeds require type figure, table, or metric",
+                        narrative_path,
+                    )
+                )
     for sub_id, sub_node in (node.get("analyses") or {}).items():
-        _walk_section_requirements(sub_node, path + (sub_id,), errors)
+        _walk_figure_embeds(sub_node, path + (sub_id,), root, errors)
+
+
+def validate_narrative_figure_embeds_file(path: str | Path) -> list[SemanticError]:
+    """Load and run figure-embed validation on a YAML file."""
+    path = Path(path)
+    return validate_narrative_figure_embeds(load_yaml(path), base_path=path.parent)
 
 
 def validate_narrative_anchors_file(path: str | Path) -> list[SemanticError]:
@@ -457,9 +504,3 @@ def check_narrative_coverage_file(path: str | Path) -> list[NarrativeWarning]:
     """Load and run coverage check on a YAML file."""
     path = Path(path)
     return check_narrative_coverage(load_yaml(path), base_path=path.parent)
-
-
-def validate_narrative_sections_file(path: str | Path) -> list[SemanticError]:
-    """Load and run section-requirement check on a YAML file."""
-    path = Path(path)
-    return validate_narrative_sections(load_yaml(path), base_path=path.parent)

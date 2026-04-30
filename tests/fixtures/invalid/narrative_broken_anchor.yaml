@@ -1,9 +1,8 @@
 version: "1.0"
 name: "Broken Anchor"
-narrative:
-  summary: |
-    References to [a missing decision](#decisions.nonexistent)
-    and [a missing finding](#findings.also_missing) should fail.
+narrative: |
+  References to [a missing decision](#decisions.nonexistent)
+  and [a missing finding](#findings.also_missing) should fail.
 
 inputs:
   - id: primary_data
