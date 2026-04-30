@@ -248,9 +248,7 @@ class TestMarkdownHeadings:
         assert validate_narrative_anchors(data) == []
 
     def test_broken_anchor_reports_narrative_path(self) -> None:
-        data = _minimal_with_narrative(
-            "# Findings\n\n[bad](#decisions.nope)"
-        )
+        data = _minimal_with_narrative("# Findings\n\n[bad](#decisions.nope)")
         errs = validate_narrative_anchors(data)
         assert len(errs) == 1
         assert errs[0].path == "narrative"
@@ -272,9 +270,7 @@ class TestFigureEmbeds:
 
     def test_image_targeting_previewable_output_ok(self) -> None:
         # The minimal fixture's `y` output is a metric — previewable.
-        data = _minimal_with_narrative(
-            "Here is the headline result:\n\n![accuracy](#outputs.y)"
-        )
+        data = _minimal_with_narrative("Here is the headline result:\n\n![accuracy](#outputs.y)")
         assert validate_narrative_figure_embeds(data) == []
 
     def test_image_targeting_decision_errors(self) -> None:
@@ -298,9 +294,7 @@ class TestFigureEmbeds:
         assert errs[0].code == "INVALID_FIGURE_EMBED"
 
     def test_image_with_external_url_errors(self) -> None:
-        data = _minimal_with_narrative(
-            "![logo](https://example.com/logo.png)"
-        )
+        data = _minimal_with_narrative("![logo](https://example.com/logo.png)")
         errs = validate_narrative_figure_embeds(data)
         assert len(errs) == 1
         assert errs[0].code == "INVALID_FIGURE_EMBED"
@@ -359,9 +353,7 @@ class TestFigureEmbeds:
         # Position-agnostic: even mid-paragraph image syntax is checked,
         # because the renderer's block-vs-inline rule is for rendering,
         # not validation. The author still meant to embed something.
-        data = _minimal_with_narrative(
-            "Some prose, then ![bad](#decisions.method) more prose."
-        )
+        data = _minimal_with_narrative("Some prose, then ![bad](#decisions.method) more prose.")
         errs = validate_narrative_figure_embeds(data)
         assert len(errs) == 1
         assert errs[0].code == "INVALID_FIGURE_EMBED"

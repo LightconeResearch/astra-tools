@@ -445,8 +445,7 @@ def _walk_figure_embeds(
                 errors.append(
                     SemanticError(
                         "INVALID_FIGURE_EMBED",
-                        f"Figure embed '#{raw}' must reference an output "
-                        f"(e.g. '#outputs.<id>')",
+                        f"Figure embed '#{raw}' must reference an output (e.g. '#outputs.<id>')",
                         narrative_path,
                     )
                 )
