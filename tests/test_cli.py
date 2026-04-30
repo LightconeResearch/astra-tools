@@ -256,7 +256,6 @@ class TestInitCommand:
         assert (project_dir / ".gitignore").exists()
         assert (project_dir / "universes").is_dir()
         assert (project_dir / "universes" / "baseline.yaml").exists()
-        assert (project_dir / "outputs").is_dir()
         assert (project_dir / "src").is_dir()
 
         # Agentic scaffolding NOT created (handled by prism init)
@@ -282,6 +281,7 @@ class TestInitCommand:
         assert "version:" in content
         assert "decisions:" in content
         assert "recipe:" in content
+        assert "container:" in content
 
     def test_init_gitignore_content(self, runner: CliRunner, tmp_path: Path):
         """Test gitignore content."""
@@ -293,8 +293,8 @@ class TestInitCommand:
         assert result.exit_code == 0
 
         gitignore = (project_dir / ".gitignore").read_text()
-        assert "outputs/" in gitignore
         assert "__pycache__/" in gitignore
+        assert ".venv/" in gitignore
 
     def test_init_existing_nonempty_dir_fails(self, runner: CliRunner, tmp_path: Path):
         """Test that init fails on existing non-empty directory."""

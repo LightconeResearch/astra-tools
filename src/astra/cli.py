@@ -111,12 +111,10 @@ def init(directory: Path, no_git: bool) -> None:
 
     # Create directory structure
     (directory / "universes").mkdir(parents=True, exist_ok=True)
-    (directory / "outputs").mkdir(parents=True, exist_ok=True)
     (directory / "src").mkdir(parents=True, exist_ok=True)
 
     # Create .gitignore
     gitignore = """# ASTRA Analysis
-outputs/
 __pycache__/
 *.py[cod]
 .venv/
@@ -144,6 +142,7 @@ def _create_boilerplate_astra_yaml(directory: Path) -> None:
 
 version: "1.0"
 name: "{name}"
+container: python:3.12-slim
 narrative:
   summary: |
     TODO: One-paragraph overview of the analysis — its question,
