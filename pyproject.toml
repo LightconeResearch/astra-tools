@@ -1,12 +1,39 @@
 [project]
 name = "astra-tools"
 dynamic = ["version"]
-description = "ASTRA CLI."
-license = { text = "BSD-3-Clause" }
+description = "Python CLI and SDK for working with ASTRA (Agentic Schema for Transparent Research Analysis) specifications: validation, paper management, and evidence verification."
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [
     { name = "Francois Lanusse", email = "francois.lanusse@cnrs.fr" },
     { name = "Liam Parker", email = "lhparker@berkeley.edu" },
+]
+keywords = [
+    "astra",
+    "research",
+    "reproducibility",
+    "multiverse-analysis",
+    "scientific-computing",
+    "schema",
+    "validation",
+    "linkml",
+    "agentic",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -31,6 +58,12 @@ dev = [
 
 [project.scripts]
 astra = "astra.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/LightconeResearch/astra-tools"
+Repository = "https://github.com/LightconeResearch/astra-tools"
+Issues = "https://github.com/LightconeResearch/astra-tools/issues"
+Specification = "https://github.com/LightconeResearch/astra-spec"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
