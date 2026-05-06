@@ -63,7 +63,7 @@ dev = [
 astra = "astra.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/LightconeResearch/astra-tools"
+Homepage = "https://astra-spec.org/"
 Repository = "https://github.com/LightconeResearch/astra-tools"
 Issues = "https://github.com/LightconeResearch/astra-tools/issues"
 Specification = "https://github.com/LightconeResearch/astra-spec"
