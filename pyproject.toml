@@ -9,6 +9,7 @@ requires-python = ">=3.11"
 authors = [
     { name = "Francois Lanusse", email = "francois.lanusse@cnrs.fr" },
     { name = "Liam Parker", email = "lhparker@berkeley.edu" },
+    { name = "Cail Daley", email = "cail.daley@cea.fr" },
 ]
 keywords = [
     "astra",
