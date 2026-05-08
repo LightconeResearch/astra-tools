@@ -27,7 +27,7 @@ def _minimal_with_narrative(narrative: dict[str, str] | str) -> dict[str, object
     if isinstance(narrative, str):
         narrative = {"summary": narrative}
     return {
-        "version": "0.0.7",
+        "version": "0.0.10",
         "name": "Test",
         "narrative": narrative,
         "inputs": [{"id": "x", "type": "data"}],
@@ -407,7 +407,7 @@ class TestNarrativeSections:
         # A parent node with no decisions but with sub-analyses still
         # requires narrative.methods.
         data = {
-            "version": "0.0.7",
+            "version": "0.0.10",
             "name": "Test",
             "narrative": {"summary": "top"},
             "analyses": {

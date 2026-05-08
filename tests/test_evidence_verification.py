@@ -276,7 +276,7 @@ class TestFullValidationWorkflow:
 
         # Create a test analysis file
         analysis = {
-            "version": "0.0.7",
+            "version": "0.0.10",
             "name": "Test Analysis",
             "inputs": [{"id": "data", "type": "data"}],
             "outputs": [{"id": "result", "type": "metric"}],

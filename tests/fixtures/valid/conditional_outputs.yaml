@@ -1,5 +1,5 @@
 # Analysis with conditional outputs using when conditions
-version: "0.0.7"
+version: "0.0.10"
 name: "Conditional Outputs Analysis"
 narrative:
   summary: "Tests when conditions on outputs with negation and lists"
