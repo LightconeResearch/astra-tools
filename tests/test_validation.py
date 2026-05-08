@@ -212,7 +212,7 @@ class TestOutputDependencyValidation:
     def test_output_input_must_reference_declared_id(self):
         """Output.inputs must reference an analysis input or sibling output."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -230,7 +230,7 @@ class TestOutputDependencyValidation:
     def test_output_dependency_cycle(self):
         """Cycle in output dependencies should be caught."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -245,7 +245,7 @@ class TestOutputDependencyValidation:
     def test_valid_output_chain(self):
         """Output that references a sibling output should pass validation."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -264,7 +264,7 @@ class TestOutputDependencyValidation:
     def test_output_input_can_reference_analysis_input(self):
         """Output.inputs can resolve to an analysis-level Input."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [{"id": "raw", "type": "data", "source": "x.csv"}],
             "outputs": [
@@ -282,7 +282,7 @@ class TestOutputDependencyValidation:
     def test_valid_output_no_inputs(self):
         """Output with no inputs/decisions should pass validation."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -299,7 +299,7 @@ class TestOutputDependencyValidation:
     def test_self_referencing_output_input(self):
         """Output input referencing its own ID should create a cycle."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -313,7 +313,7 @@ class TestOutputDependencyValidation:
     def test_output_decision_must_be_in_scope(self):
         """Output.decisions must reference a decision in scope."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -337,7 +337,7 @@ class TestCommandTemplateValidation:
 
     def _make(self, output: dict, decisions: dict | None = None) -> dict:
         return {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [{"id": "raw", "type": "data", "source": "x"}],
             "outputs": [output],
@@ -555,7 +555,7 @@ class TestConditionalOutputs:
     def test_output_when_negation(self):
         """Output with ~decision.option negation should pass validation."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -583,7 +583,7 @@ class TestConditionalOutputs:
     def test_output_when_list(self):
         """Output with when as list (AND logic) should pass validation."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -624,7 +624,7 @@ class TestConditionalOutputs:
     def test_invalid_output_when_bad_option(self):
         """Output when referencing non-existent option should fail."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [
@@ -653,7 +653,7 @@ class TestConditionalOutputs:
     def test_decision_when_negation(self):
         """Decision with ~decision.option negation should pass validation."""
         data = {
-            "version": "1.0",
+            "version": "0.0.7",
             "name": "test",
             "inputs": [],
             "outputs": [{"id": "result", "type": "metric"}],

@@ -1,5 +1,5 @@
 # Finding references non-existent output artifact in evidence
-version: "1.0"
+version: "0.0.7"
 name: "Test"
 inputs:
   - id: data

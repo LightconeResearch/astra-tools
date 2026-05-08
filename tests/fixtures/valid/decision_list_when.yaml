@@ -1,5 +1,5 @@
 # Analysis with a decision that has a list-valued when condition
-version: "1.0"
+version: "0.0.7"
 name: "Decision List When"
 narrative:
   summary: "Tests list-valued when on decisions"

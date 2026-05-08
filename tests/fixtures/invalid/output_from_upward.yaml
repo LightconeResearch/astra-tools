@@ -1,4 +1,4 @@
-version: "1.0"
+version: "0.0.7"
 name: "Test Output.from with upward path"
 description: "Output.from must descend into a sub-analysis, not escape upward."
 inputs:

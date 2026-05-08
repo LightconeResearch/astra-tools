@@ -1,4 +1,4 @@
-version: "1.0"
+version: "0.0.7"
 name: "Test invalid decision from reference"
 description: "Sub-analysis references non-existent parent decision via from:"
 inputs:

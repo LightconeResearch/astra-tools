@@ -9,6 +9,8 @@ models expect an explicit ``id`` on each object.
 from __future__ import annotations
 
 import copy
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +107,52 @@ def validate_universe_data(data: dict[str, Any]) -> list[str]:
         return []
     except PydanticValidationError as exc:
         return _format_pydantic_errors(exc)
+
+
+def installed_spec_version() -> str | None:
+    """Return the installed ``astra-spec`` package version, or None if unknown."""
+    try:
+        return _pkg_version("astra-spec")
+    except PackageNotFoundError:
+        return None
+
+
+def _normalize_version(v: str) -> tuple[int, ...] | None:
+    parts = v.split(".")
+    while len(parts) < 3:
+        parts.append("0")
+    try:
+        return tuple(int(p) for p in parts[:3])
+    except ValueError:
+        return None
+
+
+def check_spec_version(data: dict[str, Any]) -> str | None:
+    """Compare an analysis's declared ASTRA spec version to the installed astra-spec.
+
+    Returns a human-readable warning string when the declared ``version``
+    differs from the installed ``astra-spec`` package version, else None.
+    Returns None if either version is missing or unparseable — those cases
+    are surfaced (or ignored) by other validation layers.
+    """
+    declared = data.get("version")
+    if not isinstance(declared, str):
+        return None
+    installed = installed_spec_version()
+    if installed is None:
+        return None
+    declared_t = _normalize_version(declared)
+    installed_t = _normalize_version(installed)
+    if declared_t is None or installed_t is None:
+        return None
+    if declared_t == installed_t:
+        return None
+    return (
+        f"analysis declares ASTRA spec version {declared}, but astra-spec "
+        f"{installed} is installed; validation reflects the installed version. "
+        f"Pin astra-spec=={declared} to validate against the original spec, or "
+        f"update the analysis's version field after confirming compatibility."
+    )
 
 
 def is_valid_analysis(path: str | Path) -> bool:

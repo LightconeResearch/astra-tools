@@ -10,6 +10,8 @@ from astra.validation.narrative import (
     validate_narrative_sections_file,
 )
 from astra.validation.schema import (
+    check_spec_version,
+    installed_spec_version,
     is_valid_analysis,
     is_valid_universe,
     validate_analysis_data,
@@ -30,6 +32,8 @@ __all__ = [
     "SemanticError",
     "check_narrative_coverage",
     "check_narrative_coverage_file",
+    "check_spec_version",
+    "installed_spec_version",
     "is_valid_analysis",
     "is_valid_universe",
     "validate_analysis",

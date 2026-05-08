@@ -1,5 +1,5 @@
 id: iris_pipeline
-version: "0.1.0"
+version: "0.0.7"
 name: Iris Two-Stage Classification
 container: python:3.12-slim
 narrative:

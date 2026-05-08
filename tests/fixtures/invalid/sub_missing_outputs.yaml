@@ -1,4 +1,4 @@
-version: "1.0"
+version: "0.0.7"
 name: "Test sub-analysis missing outputs"
 description: "Sub-analysis is missing required outputs"
 inputs:

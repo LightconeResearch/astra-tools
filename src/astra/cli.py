@@ -29,6 +29,7 @@ from astra.validation.narrative import (
     validate_narrative_sections,
 )
 from astra.validation.schema import (
+    check_spec_version,
     validate_analysis_data,
     validate_universe_data,
 )
@@ -281,6 +282,12 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
 
     # Load once — all downstream checks take data dicts.
     data = load_yaml(file)
+
+    # Spec-version compatibility (analysis files only; non-fatal)
+    if not is_universe:
+        version_warning = check_spec_version(data)
+        if version_warning:
+            console.print(f"[yellow]⚠[/yellow]  [yellow]{version_warning}[/yellow]")
 
     # Schema validation
     if is_universe:
