@@ -72,6 +72,23 @@ class TestSemanticValidation:
         errors = validate_analysis_file(invalid_dir / "invalid_insight_ref.yaml")
         assert any(e.code == "INVALID_INSIGHT_REF" for e in errors)
 
+    def test_option_insights_resolve_in_local_and_ancestor_scope(self, valid_dir: Path):
+        """`Option.insights` must resolve against the merged map of root +
+        ancestor + node-local `prior_insights`, not just the root map.
+
+        Regression test for the bug where `_validate_analysis_node` passed
+        the root-level `prior_insights` at every recursion level, rejecting
+        Option.insights references to same-scope or ancestor (non-root)
+        prior_insight ids.
+        """
+        errors = validate_analysis_file(valid_dir / "sub_scope_insight_ref.yaml")
+        insight_errors = [e for e in errors if e.code == "INVALID_INSIGHT_REF"]
+        assert insight_errors == [], (
+            "Option.insights references to same-scope or ancestor "
+            f"prior_insights should resolve; got: {insight_errors}"
+        )
+        assert errors == [], f"Expected no semantic errors; got: {[str(e) for e in errors]}"
+
     def test_invalid_finding_output(self, invalid_dir: Path):
         errors = validate_analysis_file(invalid_dir / "invalid_finding_output.yaml")
         assert any(e.code == "INVALID_ARTIFACT_REF" for e in errors)

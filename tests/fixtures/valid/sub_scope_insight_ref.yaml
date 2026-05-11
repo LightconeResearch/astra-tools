@@ -1,0 +1,100 @@
+# Option.insights resolves against the prior_insight defined at the
+# same sub-analysis scope (or any ancestor scope, not just the root).
+version: "1.0"
+name: "Sub-Scope Insight Reference"
+
+inputs:
+  - id: survey_catalog
+    type: data
+    source: "data/survey.parquet"
+
+outputs:
+  - id: final_result
+    from: two_point.xi_pm
+
+# A root-level prior_insight, used by a root-level decision. Demonstrates
+# the legacy behavior keeps working.
+prior_insights:
+  root_motivation:
+    id: root_motivation
+    claim: "A root-level motivating result."
+    created_at: "2026-05-11T00:00:00Z"
+    evidence:
+      - id: ev1
+        doi: "10.1234/root.example"
+
+decisions:
+  cosmology_model:
+    label: "Cosmological Model"
+    default: flat_lcdm
+    options:
+      flat_lcdm:
+        label: "Flat LCDM"
+        insights: [root_motivation]
+      wcdm:
+        label: "wCDM"
+
+analyses:
+  two_point:
+    inputs:
+      - id: catalog
+        from: ../survey_catalog
+    outputs:
+      - id: xi_pm
+        type: data
+        inputs: [catalog]
+        decisions: [xi_pm_estimator]
+        recipe:
+          command: python src/xi_pm.py {inputs.catalog}
+
+    # A sub-analysis-local prior_insight, referenced by a sub-analysis
+    # Option.insights at the SAME scope. Before the fix, this raised
+    # INVALID_INSIGHT_REF because the validator only consulted the root
+    # prior_insights map at every recursion level.
+    prior_insights:
+      jarvis15_treecorr:
+        id: jarvis15_treecorr
+        claim: "TreeCorr provides correlation-function estimation."
+        created_at: "2026-05-11T00:00:00Z"
+        evidence:
+          - id: ev1
+            doi: "10.1234/jarvis.2015"
+
+    decisions:
+      xi_pm_estimator:
+        label: "Correlation Function Estimator"
+        default: treecorr
+        options:
+          treecorr:
+            label: "TreeCorr"
+            insights: [jarvis15_treecorr]   # same-scope ref
+          athena:
+            label: "athena"
+            insights: [root_motivation]     # ancestor-scope ref (also works)
+
+    analyses:
+      validation:
+        inputs:
+          - id: catalog_in
+            from: ../catalog
+        outputs:
+          - id: validation_report
+            type: report
+            inputs: [catalog_in]
+            recipe:
+              command: python src/validate.py {inputs.catalog_in}
+
+        # Grandchild scope. An ancestor-scope reference (to the sub-
+        # analysis-local prior_insight one level up) must resolve too —
+        # the merge has to compose across levels, not just root + node.
+        decisions:
+          coverage_check:
+            label: "Coverage Check Method"
+            default: bootstrap
+            options:
+              bootstrap:
+                label: "Bootstrap"
+                insights: [jarvis15_treecorr]   # two-point scope, one ancestor up
+              jackknife:
+                label: "Jackknife"
+                insights: [root_motivation]      # root scope, two ancestors up

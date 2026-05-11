@@ -346,7 +346,15 @@ def _validate_analysis_node(
         target_decisions = target_scope.get("decisions") or {}
         if segments[0] in target_decisions:
             constraint_scope[decision_id] = target_decisions[segments[0]]
-    errors.extend(_validate_decisions(node_decisions, prior_insights, node_path, constraint_scope))
+
+    # `Option.insights:` resolves against any prior_insight defined at this
+    # scope OR any ancestor scope, not just the root. Merge node-local
+    # prior_insights onto the inherited map so local definitions shadow
+    # ancestors on id conflict (innermost wins).
+    node_prior_insights = node.get("prior_insights") or {}
+    insight_scope = {**prior_insights, **node_prior_insights}
+
+    errors.extend(_validate_decisions(node_decisions, insight_scope, node_path, constraint_scope))
 
     # Validate evidence artifact references in prior_insights and findings
     errors.extend(
@@ -386,7 +394,7 @@ def _validate_analysis_node(
             _validate_analysis_node(
                 sub_id,
                 sub_node,
-                prior_insights,
+                insight_scope,
                 ancestor_chain=ancestor_chain + [node],
                 path_prefix=f"{node_path}.analyses",
             )
