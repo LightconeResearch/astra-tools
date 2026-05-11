@@ -30,6 +30,7 @@ from astra.validation.narrative import (
 )
 from astra.validation.schema import (
     check_spec_version,
+    installed_spec_version,
     validate_analysis_data,
     validate_universe_data,
 )
@@ -134,10 +135,11 @@ __pycache__/
 def _create_boilerplate_astra_yaml(directory: Path) -> None:
     """Create boilerplate astra.yaml with TODOs."""
     name = directory.name if directory != Path(".") else "My Analysis"
+    spec_version = installed_spec_version() or "1.0"
 
     astra_yaml = f"""# ASTRA Analysis Specification
 
-version: "1.0"
+version: "{spec_version}"
 name: "{name}"
 container: python:3.12-slim
 narrative:
@@ -153,10 +155,12 @@ narrative:
     sub-analyses; this scaffold mentions the
     [example method decision](#decisions.example_method).
   inputs: |
-    TODO: Prose that frames the analysis's inputs.
+    TODO: Prose that frames the analysis's inputs; this scaffold
+    mentions the [primary data input](#inputs.primary_data).
   outputs: |
     TODO: Prose that frames the expected outputs; this scaffold
-    mentions the [main result output](#outputs.main_result).
+    mentions the [main result output](#outputs.main_result) and
+    the final [conclusion](#outputs.conclusion).
 
 inputs:
   - id: primary_data
