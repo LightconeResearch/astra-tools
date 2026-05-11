@@ -552,59 +552,15 @@ def _validate_decisions(
         for option_id, option in options.items():
             option_path = f"{decision_path}.options.{option_id}"
 
-            # Check insight references (options reference prior_insights).
-            # Same-scope: bare id (resolves in this node's prior_insights).
-            # Ancestor: `../id`, `../../id`, ... (matches Input.from / Decision.from).
-            insight_refs = option.get("insights") or []
-            for i, insight_ref in enumerate(insight_refs):
-                ref_path = f"{option_path}.insights[{i}]"
-                parsed = _parse_from_path(insight_ref)
-                if parsed is None:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_INSIGHT_REF",
-                            f"Option insight '{insight_ref}' has invalid path syntax",
-                            ref_path,
-                        )
+            for i, insight_ref in enumerate(option.get("insights") or []):
+                errors.extend(
+                    _validate_option_insight_ref(
+                        insight_ref,
+                        prior_insights,
+                        ancestor_chain,
+                        f"{option_path}.insights[{i}]",
                     )
-                    continue
-                up, segments = parsed
-                if len(segments) != 1:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_INSIGHT_REF",
-                            f"Option insight '{insight_ref}' must reference a single "
-                            "insight id (descent into sub-analyses is not allowed)",
-                            ref_path,
-                        )
-                    )
-                    continue
-                insight_id = segments[0]
-                if up == 0:
-                    target_insights = prior_insights
-                    scope_desc = "this node's prior_insights"
-                else:
-                    target_scope = _resolve_ancestor_scope(ancestor_chain, up)
-                    if target_scope is None:
-                        errors.append(
-                            SemanticError(
-                                "INVALID_INSIGHT_REF",
-                                f"Option insight '{insight_ref}' escapes {up} level(s) "
-                                f"but only {len(ancestor_chain)} ancestor scope(s) available",
-                                ref_path,
-                            )
-                        )
-                        continue
-                    target_insights = target_scope.get("prior_insights") or {}
-                    scope_desc = f"{up}-level ancestor's prior_insights"
-                if insight_id not in target_insights:
-                    errors.append(
-                        SemanticError(
-                            "INVALID_INSIGHT_REF",
-                            f"Option insight '{insight_ref}' not found in {scope_desc}",
-                            ref_path,
-                        )
-                    )
+                )
 
             # Check incompatible_with refs (scoped to constraint_scope)
             incompatible_with = option.get("incompatible_with") or []
@@ -951,6 +907,52 @@ def _validate_decision_from(
         return _error(
             f"Decision.from '{ref}' points to non-existent ancestor decision '{segments[0]}'"
         )
+    return []
+
+
+def _validate_option_insight_ref(
+    ref: str,
+    prior_insights: dict[str, Any],
+    ancestor_chain: list[dict[str, Any]],
+    ref_path: str,
+) -> list[SemanticError]:
+    """Validate a single ``Option.insights`` reference.
+
+    Bare id resolves against ``prior_insights`` (the node-local map);
+    ``../id``, ``../../id``, ... resolves against the corresponding
+    ancestor's ``prior_insights``. Mirrors the ``../`` grammar used by
+    ``Input.from`` and ``Decision.from``.
+    """
+
+    def _error(message: str) -> list[SemanticError]:
+        return [SemanticError("INVALID_INSIGHT_REF", message, ref_path)]
+
+    parsed = _parse_from_path(ref)
+    if parsed is None:
+        return _error(f"Option insight '{ref}' has invalid path syntax")
+    up, segments = parsed
+    if len(segments) != 1:
+        return _error(
+            f"Option insight '{ref}' must reference a single insight id "
+            "(descent into sub-analyses is not allowed)"
+        )
+    insight_id = segments[0]
+
+    if up == 0:
+        target_insights = prior_insights
+        scope_desc = "this node's prior_insights"
+    else:
+        target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+        if target_scope is None:
+            return _error(
+                f"Option insight '{ref}' escapes {up} level(s) but only "
+                f"{len(ancestor_chain)} ancestor scope(s) available"
+            )
+        target_insights = target_scope.get("prior_insights") or {}
+        scope_desc = f"{up}-level ancestor's prior_insights"
+
+    if insight_id not in target_insights:
+        return _error(f"Option insight '{ref}' not found in {scope_desc}")
     return []
 
 
