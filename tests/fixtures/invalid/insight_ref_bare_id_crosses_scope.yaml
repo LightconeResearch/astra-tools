@@ -1,0 +1,43 @@
+# A sub-analysis option uses a BARE id that only exists in the root's
+# prior_insights map. This must fail INVALID_INSIGHT_REF: cross-scope refs
+# require the explicit `../id` form (matching Input.from / Decision.from).
+version: "0.0.10"
+name: "Test"
+
+inputs:
+  - id: data
+    type: data
+
+outputs:
+  - id: result
+    from: sub.sub_out
+
+prior_insights:
+  root_insight:
+    id: root_insight
+    claim: "Root claim."
+    created_at: "2026-05-11T00:00:00Z"
+    evidence:
+      - id: ev1
+        doi: "10.1234/root.example"
+
+analyses:
+  sub:
+    inputs:
+      - id: x
+        from: ../data
+    outputs:
+      - id: sub_out
+        type: data
+        inputs: [x]
+        recipe:
+          command: python src/run.py {inputs.x}
+    decisions:
+      method:
+        label: "Method"
+        default: a
+        options:
+          a:
+            label: "A"
+            insights: [root_insight]   # BARE id — but `root_insight` lives at root.
+                                       # Must be written `../root_insight`.

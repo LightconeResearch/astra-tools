@@ -72,6 +72,36 @@ class TestSemanticValidation:
         errors = validate_analysis_file(invalid_dir / "invalid_insight_ref.yaml")
         assert any(e.code == "INVALID_INSIGHT_REF" for e in errors)
 
+    def test_option_insights_resolve_in_local_and_ancestor_scope(self, valid_dir: Path):
+        """`Option.insights` resolves bare ids against the node-local
+        ``prior_insights`` map, and ``../id`` / ``../../id`` against the
+        corresponding ancestor scope. Mirrors the ``../`` convention used
+        by ``Input.from`` and ``Decision.from``.
+        """
+        errors = validate_analysis_file(valid_dir / "sub_scope_insight_ref.yaml")
+        insight_errors = [e for e in errors if e.code == "INVALID_INSIGHT_REF"]
+        assert insight_errors == [], (
+            "Same-scope (bare id) and explicit `../`-form ancestor refs "
+            f"should both resolve; got: {insight_errors}"
+        )
+
+    def test_insight_ref_bare_id_does_not_walk_ancestors(self, invalid_dir: Path):
+        """A bare-id ``Option.insights`` ref in a sub-analysis must NOT
+        silently resolve against the root's ``prior_insights``. Cross-scope
+        refs require explicit ``../id``.
+        """
+        errors = validate_analysis_file(invalid_dir / "insight_ref_bare_id_crosses_scope.yaml")
+        bad = [e for e in errors if e.code == "INVALID_INSIGHT_REF"]
+        assert len(bad) == 1, f"expected 1 INVALID_INSIGHT_REF, got: {bad}"
+        assert "root_insight" in bad[0].message
+
+    def test_insight_ref_escapes_too_far(self, invalid_dir: Path):
+        """A ``../id`` ref at root has no ancestor scope to resolve against."""
+        errors = validate_analysis_file(invalid_dir / "insight_ref_escapes_too_far.yaml")
+        bad = [e for e in errors if e.code == "INVALID_INSIGHT_REF"]
+        assert len(bad) == 1, f"expected 1 INVALID_INSIGHT_REF, got: {bad}"
+        assert "escapes" in bad[0].message
+
     def test_invalid_finding_output(self, invalid_dir: Path):
         errors = validate_analysis_file(invalid_dir / "invalid_finding_output.yaml")
         assert any(e.code == "INVALID_ARTIFACT_REF" for e in errors)

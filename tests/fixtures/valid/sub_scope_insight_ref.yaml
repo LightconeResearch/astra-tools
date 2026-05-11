@@ -1,0 +1,94 @@
+# Option.insights resolution across scopes:
+#   - bare id            -> resolved in this node's prior_insights
+#   - ../id, ../../id    -> resolved against an ancestor node's prior_insights
+# Cross-scope refs must be EXPLICIT (../-form), matching the convention
+# used by Input.from / Decision.from. There is no silent ancestor walk.
+version: "1.0"
+name: "Sub-Scope Insight Reference"
+
+inputs:
+  - id: survey_catalog
+    type: data
+    source: "data/survey.parquet"
+
+outputs:
+  - id: final_result
+    from: two_point.xi_pm
+
+prior_insights:
+  root_motivation:
+    id: root_motivation
+    claim: "A root-level motivating result."
+    created_at: "2026-05-11T00:00:00Z"
+    evidence:
+      - id: ev1
+        doi: "10.1234/root.example"
+
+decisions:
+  cosmology_model:
+    label: "Cosmological Model"
+    default: flat_lcdm
+    options:
+      flat_lcdm:
+        label: "Flat LCDM"
+        insights: [root_motivation]   # bare id resolves locally (root)
+      wcdm:
+        label: "wCDM"
+
+analyses:
+  two_point:
+    inputs:
+      - id: catalog
+        from: ../survey_catalog
+    outputs:
+      - id: xi_pm
+        type: data
+        inputs: [catalog]
+        decisions: [xi_pm_estimator]
+        recipe:
+          command: python src/xi_pm.py {inputs.catalog}
+
+    prior_insights:
+      jarvis15_treecorr:
+        id: jarvis15_treecorr
+        claim: "TreeCorr provides correlation-function estimation."
+        created_at: "2026-05-11T00:00:00Z"
+        evidence:
+          - id: ev1
+            doi: "10.1234/jarvis.2015"
+
+    decisions:
+      xi_pm_estimator:
+        label: "Correlation Function Estimator"
+        default: treecorr
+        options:
+          treecorr:
+            label: "TreeCorr"
+            insights: [jarvis15_treecorr]      # same-scope, bare id
+          athena:
+            label: "athena"
+            insights: [../root_motivation]     # one ancestor up, explicit
+
+    analyses:
+      validation:
+        inputs:
+          - id: catalog_in
+            from: ../catalog
+        outputs:
+          - id: validation_report
+            type: report
+            inputs: [catalog_in]
+            recipe:
+              command: python src/validate.py {inputs.catalog_in}
+
+        decisions:
+          coverage_check:
+            label: "Coverage Check Method"
+            default: bootstrap
+            options:
+              bootstrap:
+                label: "Bootstrap"
+                insights: [../jarvis15_treecorr]   # one level up
+              jackknife:
+                label: "Jackknife"
+                insights: [../../root_motivation]  # two levels up

@@ -1,0 +1,30 @@
+# Option.insights ref escapes more levels than the ancestor chain has.
+# A root-level option cannot use `../id` — there's no ancestor above root.
+version: "0.0.10"
+name: "Test"
+
+inputs:
+  - id: data
+    type: data
+
+outputs:
+  - id: result
+    type: metric
+
+prior_insights:
+  root_insight:
+    id: root_insight
+    claim: "Root claim."
+    created_at: "2026-05-11T00:00:00Z"
+    evidence:
+      - id: ev1
+        doi: "10.1234/root.example"
+
+decisions:
+  method:
+    label: "Method"
+    default: a
+    options:
+      a:
+        label: "A"
+        insights: [../root_insight]   # root has no ancestor scope.

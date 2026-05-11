@@ -196,7 +196,7 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
     root_decisions = _collect_node_decisions(data)
 
     # Validate all decisions
-    errors.extend(_validate_decisions(root_decisions, prior_insights, ""))
+    errors.extend(_validate_decisions(root_decisions, prior_insights, "", ancestor_chain=[]))
 
     # Validate evidence artifact references in prior_insights and findings
     errors.extend(
@@ -239,7 +239,6 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
             _validate_analysis_node(
                 analysis_id,
                 analysis_node,
-                prior_insights,
                 ancestor_chain=[data],
                 path_prefix="analyses",
             )
@@ -251,7 +250,6 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
 def _validate_analysis_node(
     node_id: str,
     node: dict[str, Any],
-    prior_insights: dict[str, Any],
     ancestor_chain: list[dict[str, Any]],
     path_prefix: str,
 ) -> list[SemanticError]:
@@ -346,7 +344,20 @@ def _validate_analysis_node(
         target_decisions = target_scope.get("decisions") or {}
         if segments[0] in target_decisions:
             constraint_scope[decision_id] = target_decisions[segments[0]]
-    errors.extend(_validate_decisions(node_decisions, prior_insights, node_path, constraint_scope))
+    # `Option.insights` resolves only against this node's own
+    # `prior_insights` map. Cross-scope refs must be written explicitly
+    # as `../id`, `../../id`, ... (matching `Input.from` / `Decision.from`
+    # convention) — `_validate_decisions` parses those via the ancestor chain.
+    node_prior_insights = node.get("prior_insights") or {}
+    errors.extend(
+        _validate_decisions(
+            node_decisions,
+            node_prior_insights,
+            node_path,
+            constraint_scope,
+            ancestor_chain=ancestor_chain,
+        )
+    )
 
     # Validate evidence artifact references in prior_insights and findings
     errors.extend(
@@ -386,7 +397,6 @@ def _validate_analysis_node(
             _validate_analysis_node(
                 sub_id,
                 sub_node,
-                prior_insights,
                 ancestor_chain=ancestor_chain + [node],
                 path_prefix=f"{node_path}.analyses",
             )
@@ -454,16 +464,24 @@ def _validate_decisions(
     prior_insights: dict[str, Any],
     path_prefix: str,
     constraint_scope: dict[str, Any] | None = None,
+    ancestor_chain: list[dict[str, Any]] | None = None,
 ) -> list[SemanticError]:
     """Validate a set of decisions at a given node.
 
     Args:
+        prior_insights: Node-local ``prior_insights`` map. Bare-id
+            ``Option.insights`` refs resolve here.
         constraint_scope: Decisions available for constraint resolution. Defaults to
             decisions themselves, but may include parent decisions for sub-analyses.
+        ancestor_chain: Root-first chain of ancestor scopes for resolving
+            ``../id``-form ``Option.insights`` refs against ancestor
+            ``prior_insights``. Empty/None at the root.
     """
     errors: list[SemanticError] = []
     if constraint_scope is None:
         constraint_scope = decisions
+    if ancestor_chain is None:
+        ancestor_chain = []
 
     decisions_prefix = f"{path_prefix}.decisions" if path_prefix else "decisions"
     for decision_id, decision in decisions.items():
@@ -534,15 +552,57 @@ def _validate_decisions(
         for option_id, option in options.items():
             option_path = f"{decision_path}.options.{option_id}"
 
-            # Check insight references (options reference prior_insights)
+            # Check insight references (options reference prior_insights).
+            # Same-scope: bare id (resolves in this node's prior_insights).
+            # Ancestor: `../id`, `../../id`, ... (matches Input.from / Decision.from).
             insight_refs = option.get("insights") or []
             for i, insight_ref in enumerate(insight_refs):
-                if insight_ref not in prior_insights:
+                ref_path = f"{option_path}.insights[{i}]"
+                parsed = _parse_from_path(insight_ref)
+                if parsed is None:
                     errors.append(
                         SemanticError(
                             "INVALID_INSIGHT_REF",
-                            f"Option insight '{insight_ref}' not found in prior_insights",
-                            f"{option_path}.insights[{i}]",
+                            f"Option insight '{insight_ref}' has invalid path syntax",
+                            ref_path,
+                        )
+                    )
+                    continue
+                up, segments = parsed
+                if len(segments) != 1:
+                    errors.append(
+                        SemanticError(
+                            "INVALID_INSIGHT_REF",
+                            f"Option insight '{insight_ref}' must reference a single "
+                            "insight id (descent into sub-analyses is not allowed)",
+                            ref_path,
+                        )
+                    )
+                    continue
+                insight_id = segments[0]
+                if up == 0:
+                    target_insights = prior_insights
+                    scope_desc = "this node's prior_insights"
+                else:
+                    target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+                    if target_scope is None:
+                        errors.append(
+                            SemanticError(
+                                "INVALID_INSIGHT_REF",
+                                f"Option insight '{insight_ref}' escapes {up} level(s) "
+                                f"but only {len(ancestor_chain)} ancestor scope(s) available",
+                                ref_path,
+                            )
+                        )
+                        continue
+                    target_insights = target_scope.get("prior_insights") or {}
+                    scope_desc = f"{up}-level ancestor's prior_insights"
+                if insight_id not in target_insights:
+                    errors.append(
+                        SemanticError(
+                            "INVALID_INSIGHT_REF",
+                            f"Option insight '{insight_ref}' not found in {scope_desc}",
+                            ref_path,
                         )
                     )
 
