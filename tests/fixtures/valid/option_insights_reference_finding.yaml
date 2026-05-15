@@ -1,0 +1,86 @@
+# Option.insights may reference either prior_insights or findings.
+# Prior insights motivate a choice via external/literature evidence;
+# findings (claims produced by this analysis) can in turn justify a
+# downstream choice. The semantic validator resolves Option.insights ids
+# against the union of prior_insights and findings — at the node-local
+# scope for bare ids and at an ancestor scope for `../id`-form refs.
+version: "0.0.10"
+name: "Option insights reference findings"
+
+inputs:
+  - id: catalog
+    type: data
+    source: "data/catalog.parquet"
+
+outputs:
+  - id: pilot_fit
+    type: data
+    inputs: [catalog]
+    decisions: [fit_form]
+    recipe:
+      command: python src/pilot.py {inputs.catalog}
+  - id: production_fit
+    from: production.fit_out
+
+prior_insights:
+  literature_motivation:
+    id: literature_motivation
+    claim: "Linear fits suffice in the regime we target."
+    created_at: "2026-05-15T00:00:00Z"
+    evidence:
+      - id: ev1
+        doi: "10.1234/example.lit"
+
+findings:
+  pilot_residuals_flat:
+    id: pilot_residuals_flat
+    claim: "Pilot residuals showed no curvature signal."
+    created_at: "2026-05-15T00:00:00Z"
+    evidence:
+      - id: ev_pilot
+        artifact: pilot_fit
+    derived: true
+
+decisions:
+  fit_form:
+    label: "Fit form"
+    default: linear
+    options:
+      linear:
+        label: "Linear"
+        # Bare id resolving into prior_insights (literature motivation).
+        insights: [literature_motivation]
+      quadratic:
+        label: "Quadratic"
+        excluded: true
+        excluded_reason: "Ruled out by pilot residuals."
+        # Bare id resolving into findings (claim produced by this analysis).
+        insights: [pilot_residuals_flat]
+
+analyses:
+  production:
+    inputs:
+      - id: catalog
+        from: ../catalog
+    outputs:
+      - id: fit_out
+        type: data
+        inputs: [catalog]
+        decisions: [production_fit_form]
+        recipe:
+          command: python src/production.py {inputs.catalog}
+    decisions:
+      production_fit_form:
+        label: "Production fit form"
+        default: linear
+        options:
+          linear:
+            label: "Linear"
+            # `../id` resolving into a root-level finding.
+            insights: [../pilot_residuals_flat]
+          quadratic:
+            label: "Quadratic"
+            excluded: true
+            excluded_reason: "Same as the pilot decision."
+            # `../id` resolving into a root-level prior_insight.
+            insights: [../literature_motivation]
