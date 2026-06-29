@@ -116,7 +116,7 @@ class TestSemanticValidation:
         assert len(conflicts) == 1
         assert "preprocessing" in conflicts[0].message
         assert "name" in conflicts[0].message
-        assert "narrative" in conflicts[0].message
+        assert "description" in conflicts[0].message
 
 
 class TestUniverseValidation:

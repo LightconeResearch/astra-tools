@@ -1,14 +1,5 @@
 """Validation utilities for ASTRA specifications."""
 
-from astra.validation.narrative import (
-    NarrativeWarning,
-    check_narrative_coverage,
-    check_narrative_coverage_file,
-    validate_narrative_anchors,
-    validate_narrative_anchors_file,
-    validate_narrative_sections,
-    validate_narrative_sections_file,
-)
 from astra.validation.schema import (
     check_spec_version,
     installed_spec_version,
@@ -28,10 +19,7 @@ from astra.validation.semantic import (
 )
 
 __all__ = [
-    "NarrativeWarning",
     "SemanticError",
-    "check_narrative_coverage",
-    "check_narrative_coverage_file",
     "check_spec_version",
     "installed_spec_version",
     "is_valid_analysis",
@@ -40,10 +28,6 @@ __all__ = [
     "validate_analysis_data",
     "validate_analysis_file",
     "validate_analysis_schema",
-    "validate_narrative_anchors",
-    "validate_narrative_anchors_file",
-    "validate_narrative_sections",
-    "validate_narrative_sections_file",
     "validate_universe",
     "validate_universe_data",
     "validate_universe_file",

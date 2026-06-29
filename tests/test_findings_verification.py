@@ -177,18 +177,9 @@ def test_cli_validate_reports_findings_artifact_skipped(tmp_path: Path, patch_ex
     yaml_text = """\
 version: "1.0"
 name: "Findings walk smoke test"
-narrative:
-  summary: |
-    Smoke-test fixture for findings.evidence walk. The [result](#findings.result)
-    is supported by an artifact-backed evidence item.
-  methods: |
-    A single [method decision](#decisions.method) governs the run.
-  inputs: |
-    Consumes the [data](#inputs.data) input.
-  outputs: |
-    Produces the [accuracy_table](#outputs.accuracy_table).
-  findings: |
-    Reports the [result](#findings.result).
+description: |
+  Smoke-test fixture for the findings.evidence walk. The result is
+  supported by an artifact-backed evidence item.
 inputs:
   - id: data
     type: data

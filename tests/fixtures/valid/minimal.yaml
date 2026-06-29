@@ -1,9 +1,6 @@
 version: "0.0.10"
 name: "Minimal Analysis"
-narrative:
-  methods: "Single [method](#decisions.method) decision."
-  inputs: "Consumes [test_data](#inputs.test_data)."
-  outputs: "Emits [result](#outputs.result)."
+description: "A minimal analysis with one decision, one input, one output."
 inputs:
   - id: test_data
     type: data
