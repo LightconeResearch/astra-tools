@@ -141,7 +141,8 @@ description: |
   TODO: One-paragraph overview of the analysis — its question,
   scope, and what the reader should take away. A richer write-up
   (figures, citations, multi-page structure) is authored separately
-  as a report that references this analysis's elements; see RFC-0002.
+  as a report that references this analysis's elements; see the
+  ASTRA documentation.
 
 inputs:
   - id: primary_data
