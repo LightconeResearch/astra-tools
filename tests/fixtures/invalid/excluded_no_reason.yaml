@@ -1,5 +1,5 @@
 # Excluded option without excluded_reason
-version: "0.0.10"
+version: "0.0.11"
 name: "Test"
 inputs:
   - id: data

@@ -3,7 +3,7 @@
 #   - ../id, ../../id    -> resolved against an ancestor node's prior_insights
 # Cross-scope refs must be EXPLICIT (../-form), matching the convention
 # used by Input.from / Decision.from. There is no silent ancestor walk.
-version: "0.0.10"
+version: "0.0.11"
 name: "Sub-Scope Insight Reference"
 
 inputs:

@@ -1,5 +1,5 @@
 # Output with when referencing a non-existent decision
-version: "0.0.10"
+version: "0.0.11"
 name: "Invalid Output When"
 inputs:
   - id: data

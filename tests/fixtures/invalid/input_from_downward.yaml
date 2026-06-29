@@ -1,4 +1,4 @@
-version: "0.0.10"
+version: "0.0.11"
 name: "Test Input.from with downward path"
 description: "Input.from must escape upward, not descend into own children."
 inputs:

@@ -1,4 +1,4 @@
-version: "0.0.10"
+version: "0.0.11"
 name: "Minimal Analysis"
 description: "A minimal analysis with one decision, one input, one output."
 inputs:
