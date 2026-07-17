@@ -664,8 +664,9 @@ class TestSpecCommand:
 
     def test_field_table_renders_requiredness(self, runner: CliRunner):
         # Requiredness is a contract-named field-table property. Option pins both
-        # tokens in one class: `label` is a required slot, the rest are optional.
-        # Inverting the ternary (required<->optional) must fail this.
+        # tokens in one class: `label` is explicitly required and `id` is required
+        # by LinkML identifier semantics, while the rest are optional. Inverting the
+        # ternary (required<->optional) must fail this.
         result = runner.invoke(main, ["spec", "option"])
         assert result.exit_code == 0
         lines = result.output.splitlines()
@@ -673,9 +674,11 @@ class TestSpecCommand:
         def field_line(name: str) -> str:
             return next(ln for ln in lines if ln.strip().startswith(name + " "))
 
-        label = field_line("label")
-        assert "required" in label and "optional" not in label
-        for optional_field in ("id", "description", "excluded"):
+        # `id` is `identifier: true`; class_induced_slots resolves it to required.
+        for required_field in ("label", "id"):
+            ln = field_line(required_field)
+            assert "required" in ln and "optional" not in ln
+        for optional_field in ("description", "excluded"):
             ln = field_line(optional_field)
             assert "optional" in ln and "required" not in ln
 
