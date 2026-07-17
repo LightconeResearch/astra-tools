@@ -158,34 +158,52 @@ def _render_field_table(name: str) -> list[str]:
     return out
 
 
+def _forbidden_slot(rule: Any) -> str | None:
+    """The single slot a forbid-rule marks absent, or ``None``.
+
+    Read from the postcondition -- the real slot name, underscores intact --
+    not the title, so multi-token names like ``ref_version`` survive.
+    """
+    conds = getattr(rule.postconditions, "slot_conditions", None) or {}
+    if len(conds) != 1:
+        return None
+    ((slot, cond),) = conds.items()
+    presence = getattr(cond, "value_presence", None)
+    return slot if presence is not None and str(presence) == "ABSENT" else None
+
+
 def _render_rules(name: str) -> list[str]:
     cls = _view().get_class(name)
     rules = [r for r in (cls.rules or []) if r.title]
     if not rules:
         return []
 
-    # Collapse parallel rules that share a title stem (everything but the last
-    # underscore-delimited token), e.g. from_alias_forbids_{label,options,...}.
-    groups: dict[str, list[Any]] = {}
+    # Collapse parallel forbid-rules -- those marking one slot absent under a
+    # shared precondition, e.g. from_alias_forbids_{label,ref_version,...}. The
+    # forbidden slot comes from the postcondition (so underscored names stay
+    # intact); the group label is the title with that suffix stripped. Stripping
+    # a whole shared prefix this way, rather than one trailing token, is what
+    # keeps ref_version/use_outputs in their family instead of orphaning them.
+    groups: dict[str, list[tuple[Any, str | None]]] = {}
     order: list[str] = []
     for r in rules:
-        stem, _, _ = r.title.rpartition("_")
-        stem = stem or r.title
+        slot = _forbidden_slot(r)
+        stem = r.title[: -(len(slot) + 1)] if slot and r.title.endswith("_" + slot) else r.title
         if stem not in groups:
             order.append(stem)
-        groups.setdefault(stem, []).append(r)
+        groups.setdefault(stem, []).append((r, slot))
 
     out = ["Rules:"]
     for stem in order:
         members = groups[stem]
-        if len(members) > 1:
-            suffixes = ", ".join(m.title.rpartition("_")[2] for m in members)
-            out.append(f"  {_humanize(stem)}: {suffixes}")
+        forbids = [slot for _, slot in members if slot is not None]
+        if len(members) > 1 and len(forbids) == len(members):
+            out.append(f"  {_humanize(stem)}: {', '.join(forbids)}")
         else:
-            r = members[0]
-            out.append(f"  {_humanize(r.title)}")
-            if r.description:
-                out.append(f"      {_first_sentence(r.description)}")
+            for r, _ in members:
+                out.append(f"  {_humanize(r.title)}")
+                if r.description:
+                    out.append(f"      {_first_sentence(r.description)}")
     return out
 
 
