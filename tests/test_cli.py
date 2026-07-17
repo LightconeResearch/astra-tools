@@ -499,3 +499,105 @@ class TestBatchQuoteVerification:
         assert "Verify multiple quotes" in result.output
         assert "stdin" in result.output
         assert "JSON" in result.output
+
+
+class TestSpecCommand:
+    """Tests for the `spec` schema-reference renderer.
+
+    Output is a pure transformation of the installed astra-spec schema, so
+    these assert structural invariants and a few load-bearing concepts rather
+    than exact prose.
+    """
+
+    def test_summary_groups_by_schema(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec"])
+        assert result.exit_code == 0
+        out = result.output
+        assert "concept vocabulary" in out
+        # The three schema layers appear as group headers, in display order.
+        for label in ("ANALYSIS", "UNIVERSE", "INSIGHT"):
+            assert label in out
+        assert out.index("ANALYSIS") < out.index("UNIVERSE") < out.index("INSIGHT")
+
+    def test_summary_footer_points_at_term_and_full(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec"])
+        assert result.exit_code == 0
+        assert "astra spec <term>" in result.output
+        assert "astra spec --full" in result.output
+
+    def test_summary_lists_core_concepts(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec"])
+        for term in ("Analysis", "Decision", "Universe", "Insight"):
+            assert term in result.output
+
+    def test_term_renders_class_in_full(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec", "analysis"])
+        assert result.exit_code == 0
+        out = result.output
+        assert out.startswith("# Analysis")
+        assert "Fields:" in out
+        # Slot ranges that are classes render as `astra spec <term>` links.
+        assert "-> astra spec input" in out
+
+    def test_term_lookup_is_case_insensitive(self, runner: CliRunner):
+        lower = runner.invoke(main, ["spec", "analysis"])
+        upper = runner.invoke(main, ["spec", "ANALYSIS"])
+        assert lower.exit_code == upper.exit_code == 0
+        assert lower.output == upper.output
+        assert upper.output.startswith("# Analysis")
+
+    def test_term_collapses_parallel_forbid_rules(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec", "decision"])
+        assert result.exit_code == 0
+        out = result.output
+        assert "Rules:" in out
+        # Rules sharing a title stem collapse to one line listing the suffixes.
+        forbid_lines = [ln for ln in out.splitlines() if "From alias forbids:" in ln]
+        assert len(forbid_lines) == 1
+        assert forbid_lines[0].count(",") >= 1
+
+    def test_enum_renders_values_and_used_by(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec", "inputtype"])
+        assert result.exit_code == 0
+        out = result.output
+        assert "(enum)" in out
+        assert "Values:" in out
+        assert "data" in out
+        assert "Used by:" in out
+
+    def test_unknown_term_exits_1_and_lists_terms(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec", "not_a_real_term"])
+        assert result.exit_code == 1
+        assert "Unknown term" in result.output
+        assert "Valid terms" in result.output
+        # A genuine term is offered among the valid ones.
+        assert "Analysis" in result.output
+
+    def test_full_concatenates_every_entry(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec", "--full"])
+        assert result.exit_code == 0
+        out = result.output
+        # Sanity: substantial, spanning far more than any single entry.
+        assert len(out.splitlines()) > 300
+        for heading in ("# Analysis", "# Decision", "# Universe", "# InputType"):
+            assert heading in out
+
+    def test_cross_references_link_related_terms(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec", "decision"])
+        out = result.output
+        assert "References:" in out
+        assert "Option (astra spec option)" in out
+        assert "Used by:" in out
+        assert "Analysis (astra spec analysis)" in out
+
+    def test_self_recursive_edge_is_marked_not_dropped(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec", "analysis"])
+        out = result.output
+        # Analysis contains sub-Analyses; the self edge is flagged, not silent.
+        assert "Analysis (self-recursive)" in out
+        assert "Used by:" in out
+
+    def test_spec_help(self, runner: CliRunner):
+        result = runner.invoke(main, ["spec", "--help"])
+        assert result.exit_code == 0
+        assert "reference" in result.output.lower()
