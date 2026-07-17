@@ -597,6 +597,78 @@ class TestSpecCommand:
         assert "Analysis (self-recursive)" in out
         assert "Used by:" in out
 
+    def test_term_collapses_forbid_rules_with_underscored_slots(self, runner: CliRunner):
+        # Input's forbidden slots include multi-token names (ref_version,
+        # use_outputs). All from_alias_forbids_* rules must collapse to ONE
+        # line, with the underscored names intact as suffixes -- not orphaned
+        # onto standalone "From alias forbids ref version" lines.
+        result = runner.invoke(main, ["spec", "input"])
+        assert result.exit_code == 0
+        lines = result.output.splitlines()
+        forbid_lines = [ln for ln in lines if "From alias forbids:" in ln]
+        assert len(forbid_lines) == 1
+        collapsed = forbid_lines[0]
+        for slot in ("type", "label", "description", "source", "ref", "ref_version", "use_outputs"):
+            assert slot in collapsed
+        # No forbid slot fragments onto its own humanized rule line.
+        assert not any("From alias forbids ref version" in ln for ln in lines)
+        assert not any("From alias forbids use outputs" in ln for ln in lines)
+
+    def test_class_description_rendered_verbatim(self, runner: CliRunner):
+        # A class description renders VERBATIM with newlines preserved -- in
+        # deliberate contrast to first-sentence-flattened field descriptions.
+        # Decision carries an indented reference-grammar block that only
+        # survives if the line breaks are kept.
+        result = runner.invoke(main, ["spec", "decision"])
+        assert result.exit_code == 0
+        lines = result.output.splitlines()
+        assert "Reference grammar:" in lines  # its own line, not folded in
+        grammar_idx = lines.index("Reference grammar:")
+        # The indented example lines follow on their own separate lines.
+        block = lines[grammar_idx : grammar_idx + 4]
+        assert any(ln.startswith("  from: ../id") for ln in block)
+        assert any(ln.startswith("  from: ../../id") for ln in block)
+
+    def test_field_table_derives_flags_and_pattern(self, runner: CliRunner):
+        # Requiredness, multivalued/inlined flags, and pattern are induced from
+        # the slots. Decision exercises all three.
+        result = runner.invoke(main, ["spec", "decision"])
+        out = result.output
+        lines = out.splitlines()
+
+        def field_line(name: str) -> str:
+            return next(ln for ln in lines if ln.strip().startswith(name + " "))
+
+        # `options` is a multivalued, inlined map of Option.
+        opts = field_line("options")
+        assert "multivalued" in opts and "inlined" in opts
+        # `when` is multivalued but not inlined.
+        when = field_line("when")
+        assert "multivalued" in when and "inlined" not in when
+        # `from` carries a pattern, emitted on its own indented line.
+        assert any(ln.strip().startswith("pattern: ^(\\.\\./)") for ln in lines)
+
+    def test_field_table_honors_slot_usage_overrides(self, runner: CliRunner):
+        # Input.from and Output.from are the same slot with per-class
+        # slot_usage overrides; they must render distinct patterns. This holds
+        # only because the renderer reads class_induced_slots, not plain slots.
+        input_from = runner.invoke(main, ["spec", "input"]).output
+        output_from = runner.invoke(main, ["spec", "output"]).output
+        input_pattern = r"^(\.\./)+[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$"
+        output_pattern = r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$"
+        assert input_pattern in input_from
+        assert output_pattern in output_from
+        # The override is real: neither class shows the other's pattern.
+        assert input_pattern not in output_from
+        assert output_pattern not in input_from
+
+    def test_full_with_term_is_rejected(self, runner: CliRunner):
+        # --full and a positional TERM are mutually exclusive; passing both
+        # errors rather than silently dumping the whole reference.
+        result = runner.invoke(main, ["spec", "analysis", "--full"])
+        assert result.exit_code != 0
+        assert "--full" in result.output
+
     def test_spec_help(self, runner: CliRunner):
         result = runner.invoke(main, ["spec", "--help"])
         assert result.exit_code == 0
