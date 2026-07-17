@@ -296,7 +296,10 @@ def render_summary() -> str:
 
 def render_full() -> str:
     """Every entry concatenated: summary, then each term in schema order."""
-    parts = [render_summary(), ""]
+    # No empty-string sentinel here: joining `sep` against one would place two
+    # `====` rules (with a blank line between) at the summary->first-entry seam,
+    # inconsistent with every other single-rule boundary.
+    parts = [render_summary()]
     class_groups = _classes_by_schema()
     enum_groups = _enums_by_schema()
     sep = "\n" + "=" * 74 + "\n\n"
