@@ -77,12 +77,14 @@ def _enums_by_schema() -> dict[str, list[str]]:
 # --------------------------------------------------------------------------
 
 def _used_by(target: str) -> list[str]:
+    # Self-edges (a class holding a slot ranged at itself) are kept, not
+    # dropped: Analysis contains sub-Analyses, and that recursion is a real
+    # part of the graph. It is flagged at render time via `_term_ref`.
     sv = _view()
     users = [
         name
         for name, _ in sv.all_classes().items()
-        if name != target
-        and any(s.range == target for s in sv.class_induced_slots(name))
+        if any(s.range == target for s in sv.class_induced_slots(name))
     ]
     return users
 
@@ -92,13 +94,18 @@ def _references(name: str) -> list[str]:
     known = set(sv.all_classes()) | set(sv.all_enums())
     seen: list[str] = []
     for s in sv.class_induced_slots(name):
-        if s.range in known and s.range != name and s.range not in seen:
+        if s.range in known and s.range not in seen:
             seen.append(s.range)
     return seen
 
 
 def _term_link(name: str) -> str:
     return f"{name} (astra spec {name.lower()})"
+
+
+def _term_ref(name: str, current: str) -> str:
+    """Cross-reference link, marking an edge back to the current term."""
+    return f"{name} (self-recursive)" if name == current else _term_link(name)
 
 
 # --------------------------------------------------------------------------
@@ -224,9 +231,9 @@ def render_term(term: str) -> str:
     if refs or used:
         out.append("")
     if refs:
-        out.append("References: " + ", ".join(_term_link(r) for r in refs))
+        out.append("References: " + ", ".join(_term_ref(r, name) for r in refs))
     if used:
-        out.append("Used by: " + ", ".join(_term_link(u) for u in used))
+        out.append("Used by: " + ", ".join(_term_ref(u, name) for u in used))
     return "\n".join(out).rstrip() + "\n"
 
 
