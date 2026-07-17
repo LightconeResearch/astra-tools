@@ -73,6 +73,17 @@ def _enums_by_schema() -> dict[str, list[str]]:
     return groups
 
 
+def _schema_display_order(*group_dicts: dict[str, list[str]]) -> list[str]:
+    """SCHEMA_ORDER first, then any other schema buckets (sorted).
+
+    Guarantees every bucket is rendered: a schema file astra-spec grows beyond
+    the three known layers still appears, appended after them, rather than being
+    silently dropped from the summary and full dump.
+    """
+    extra = sorted({s for g in group_dicts for s in g} - set(SCHEMA_ORDER))
+    return SCHEMA_ORDER + extra
+
+
 # --------------------------------------------------------------------------
 # Cross-reference graph
 # --------------------------------------------------------------------------
@@ -265,7 +276,7 @@ def render_summary() -> str:
     sv = _view()
 
     out = ["ASTRA specification -- concept vocabulary", ""]
-    for schema in SCHEMA_ORDER:
+    for schema in _schema_display_order(class_groups, enum_groups):
         names = class_groups.get(schema, [])
         enums = enum_groups.get(schema, [])
         if not names and not enums:
@@ -289,7 +300,7 @@ def render_full() -> str:
     class_groups = _classes_by_schema()
     enum_groups = _enums_by_schema()
     sep = "\n" + "=" * 74 + "\n\n"
-    for schema in SCHEMA_ORDER:
+    for schema in _schema_display_order(class_groups, enum_groups):
         for name in class_groups.get(schema, []) + enum_groups.get(schema, []):
             parts.append(render_term(name).rstrip())
     return sep.join(parts) + "\n"
