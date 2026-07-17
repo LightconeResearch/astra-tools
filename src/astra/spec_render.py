@@ -136,7 +136,11 @@ def _render_field_table(name: str) -> list[str]:
             flags.append("multivalued")
         if s.inlined or s.inlined_as_list:
             flags.append("inlined")
-        rng = f"-> astra spec {s.range.lower()}" if s.range in known else (s.range or "string")
+        rng = (
+            f"-> astra spec {s.range.lower()}"
+            if s.range in known
+            else (s.range or sv.schema.default_range)
+        )
         rows.append(
             {
                 "name": s.name,
