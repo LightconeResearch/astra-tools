@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-
-from linkml_runtime.utils.schemaview import SchemaView
+from typing import Any
 
 from astra.datamodel import SCHEMA_DIRECTORY
+from linkml_runtime.utils.schemaview import SchemaView
 
 # The three schema files map to the three conceptual layers ASTRA groups by.
 # `from_schema` on each class carries the source schema URI; we key on its tail.
@@ -45,6 +45,7 @@ def _humanize(token: str) -> str:
 # Term registry
 # --------------------------------------------------------------------------
 
+
 def _terms() -> dict[str, tuple[str, str]]:
     """Map lowercased term -> (canonical name, kind) for every class and enum."""
     sv = _view()
@@ -75,6 +76,7 @@ def _enums_by_schema() -> dict[str, list[str]]:
 # --------------------------------------------------------------------------
 # Cross-reference graph
 # --------------------------------------------------------------------------
+
 
 def _used_by(target: str) -> list[str]:
     # Self-edges (a class holding a slot ranged at itself) are kept, not
@@ -111,6 +113,7 @@ def _term_ref(name: str, current: str) -> str:
 # --------------------------------------------------------------------------
 # Rendering
 # --------------------------------------------------------------------------
+
 
 def _render_field_table(name: str) -> list[str]:
     sv = _view()
@@ -163,7 +166,7 @@ def _render_rules(name: str) -> list[str]:
 
     # Collapse parallel rules that share a title stem (everything but the last
     # underscore-delimited token), e.g. from_alias_forbids_{label,options,...}.
-    groups: dict[str, list] = {}
+    groups: dict[str, list[Any]] = {}
     order: list[str] = []
     for r in rules:
         stem, _, _ = r.title.rpartition("_")
@@ -256,8 +259,9 @@ def render_summary() -> str:
         for n in enums:
             out.append(f"  {n:<{width}}  (enum) {_first_sentence(sv.get_enum(n).description)}")
         out.append("")
-    out.append("astra spec <term> for detail; astra spec --full dumps the entire "
-               "reference (very long).")
+    out.append(
+        "astra spec <term> for detail; astra spec --full dumps the entire reference (very long)."
+    )
     return "\n".join(out)
 
 

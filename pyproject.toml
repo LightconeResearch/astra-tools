@@ -107,6 +107,12 @@ module = [
 ]
 follow_untyped_imports = true
 
+[[tool.mypy.overrides]]
+module = [
+    "linkml_runtime.*",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
