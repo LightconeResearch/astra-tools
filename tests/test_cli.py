@@ -662,6 +662,56 @@ class TestSpecCommand:
         assert input_pattern not in output_from
         assert output_pattern not in input_from
 
+    def test_field_table_renders_requiredness(self, runner: CliRunner):
+        # Requiredness is a contract-named field-table property. Option pins both
+        # tokens in one class: `label` is a required slot, the rest are optional.
+        # Inverting the ternary (required<->optional) must fail this.
+        result = runner.invoke(main, ["spec", "option"])
+        assert result.exit_code == 0
+        lines = result.output.splitlines()
+
+        def field_line(name: str) -> str:
+            return next(ln for ln in lines if ln.strip().startswith(name + " "))
+
+        label = field_line("label")
+        assert "required" in label and "optional" not in label
+        for optional_field in ("id", "description", "excluded"):
+            ln = field_line(optional_field)
+            assert "optional" in ln and "required" not in ln
+
+    def test_field_table_flattens_field_descriptions_to_first_sentence(self, runner: CliRunner):
+        # First-sentence flattening is an accepted judgment call and load-bearing:
+        # Recipe.command carries a multi-paragraph template description that would
+        # dump into the table verbatim if `_first_sentence` were dropped. Only the
+        # opening sentence survives; the later-paragraph body does not.
+        result = runner.invoke(main, ["spec", "recipe"])
+        assert result.exit_code == 0
+        out = result.output
+        assert "POSIX shell command to execute" in out
+        # Tokens exclusive to later paragraphs of the command description; their
+        # presence would mean the field description was rendered verbatim.
+        assert "{inputs.<id>}" not in out
+        assert "placeholders" not in out
+        assert "Runners substitute" not in out
+
+    def test_full_includes_every_schema_group(self, runner: CliRunner):
+        # --full completeness is the whole point of the command. Pin at least one
+        # heading from each of the three schema buckets so a regression dropping a
+        # whole group (e.g. the insight per-schema loop) is caught, not just the
+        # already-guarded analysis/universe ones.
+        result = runner.invoke(main, ["spec", "--full"])
+        assert result.exit_code == 0
+        out = result.output
+        for heading in (
+            "# Analysis",  # analysis group
+            "# Universe",  # universe group
+            "# Evidence",  # insight group
+            "# Insight",
+            "# InsightCollection",
+            "# TextQuoteSelector",
+        ):
+            assert heading in out, f"{heading} missing from --full"
+
     def test_full_with_term_is_rejected(self, runner: CliRunner):
         # --full and a positional TERM are mutually exclusive; passing both
         # errors rather than silently dumping the whole reference.
