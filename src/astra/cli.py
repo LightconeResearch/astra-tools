@@ -736,6 +736,8 @@ def spec(term: str | None, full: bool) -> None:
     """
     from astra import spec_render
 
+    if full and term:
+        raise click.UsageError("--full dumps every entry; drop TERM or drop --full.")
     if full:
         click.echo(spec_render.render_full(), nl=False)
         return
