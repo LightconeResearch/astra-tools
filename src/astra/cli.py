@@ -10,6 +10,7 @@ from typing import Any
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 from rich.tree import Tree
 
@@ -744,7 +745,10 @@ def spec(term: str | None, full: bool) -> None:
     if term:
         rendered = spec_render.render_term(term)
         if not rendered:
-            console.print(f"[red]Unknown term:[/red] {term}")
+            # Escape the user-supplied term: unescaped bracket syntax would be
+            # parsed as Rich markup, crashing with MarkupError (e.g. `[/red]`)
+            # or silently swallowing `[foo]`-style fragments.
+            console.print(f"[red]Unknown term:[/red] {escape(term)}")
             console.print("Valid terms: " + ", ".join(spec_render.list_terms()))
             raise SystemExit(1)
         click.echo(rendered, nl=False)
