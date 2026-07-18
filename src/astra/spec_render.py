@@ -38,13 +38,16 @@ def _first_sentence(text: str | None) -> str:
     return (head if sep else flat).rstrip(".") + "."
 
 
+def _wrap_at(text: str, indent: int) -> list[str]:
+    """Wrap text to the terminal width with every line indented `indent` spaces."""
+    cols = max(shutil.get_terminal_size(fallback=(100, 24)).columns, indent + 20)
+    return [" " * indent + line for line in textwrap.wrap(text, width=cols - indent)] or [""]
+
+
 def _two_col(name: str, desc: str, width: int) -> list[str]:
     """One vocabulary-map row: name column, then desc wrapped within its own column."""
-    indent = " " * (2 + width + 2)
-    cols = max(shutil.get_terminal_size(fallback=(100, 24)).columns, len(indent) + 20)
-    lines = textwrap.wrap(desc, width=cols - len(indent)) or [""]
-    first = f"  {name:<{width}}  {lines[0]}".rstrip()
-    return [first] + [indent + line for line in lines[1:]]
+    lines = _wrap_at(desc, 2 + width + 2)
+    return [f"  {name:<{width}}  {lines[0].lstrip()}".rstrip()] + lines[1:]
 
 
 def _humanize(token: str) -> str:
@@ -178,7 +181,7 @@ def _render_field_table(name: str) -> list[str]:
             line += f"  {r['flags']}"
         out.append(line.rstrip())
         if r["desc"]:
-            out.append(f"      {r['desc']}")
+            out.extend(_wrap_at(r["desc"], 6))
         if r["pattern"]:
             out.append(f"      pattern: {r['pattern']}")
     return out
@@ -229,7 +232,7 @@ def _render_rules(name: str) -> list[str]:
             for r, _ in members:
                 out.append(f"  {_humanize(r.title)}")
                 if r.description:
-                    out.append(f"      {_first_sentence(r.description)}")
+                    out.extend(_wrap_at(_first_sentence(r.description), 6))
     return out
 
 
