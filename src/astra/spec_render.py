@@ -7,6 +7,8 @@ Pure transformation: every string emitted here comes from the schema via
 from __future__ import annotations
 
 import os
+import shutil
+import textwrap
 from functools import lru_cache
 from typing import Any
 
@@ -33,7 +35,16 @@ def _first_sentence(text: str | None) -> str:
         return ""
     flat = " ".join(text.split())
     head, sep, _ = flat.partition(". ")
-    return head + "." if sep else flat
+    return (head if sep else flat).rstrip(".") + "."
+
+
+def _two_col(name: str, desc: str, width: int) -> list[str]:
+    """One vocabulary-map row: name column, then desc wrapped within its own column."""
+    indent = " " * (2 + width + 2)
+    cols = max(shutil.get_terminal_size(fallback=(100, 24)).columns, len(indent) + 20)
+    lines = textwrap.wrap(desc, width=cols - len(indent)) or [""]
+    first = f"  {name:<{width}}  {lines[0]}".rstrip()
+    return [first] + [indent + line for line in lines[1:]]
 
 
 def _humanize(token: str) -> str:
@@ -288,9 +299,11 @@ def render_summary() -> str:
         out.append(f"{schema.upper()}")
         width = max((len(n) for n in names + enums), default=0)
         for n in names:
-            out.append(f"  {n:<{width}}  {_first_sentence(sv.get_class(n).description)}")
+            out.extend(_two_col(n, _first_sentence(sv.get_class(n).description), width))
         for n in enums:
-            out.append(f"  {n:<{width}}  (enum) {_first_sentence(sv.get_enum(n).description)}")
+            out.extend(
+                _two_col(n, "(enum) " + _first_sentence(sv.get_enum(n).description), width)
+            )
         out.append("")
     out.append(
         "astra spec <term> for detail; astra spec --full dumps the entire reference (very long)."
