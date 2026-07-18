@@ -579,8 +579,11 @@ class TestSpecCommand:
         out = result.output
         # Sanity: substantial, spanning far more than any single entry.
         assert len(out.splitlines()) > 300
-        for heading in ("# Analysis", "# Decision", "# Universe", "# InputType"):
+        for heading in ("# Analysis", "# Decision", "# Universe"):
             assert heading in out
+        # Enums are inlined into the fields that use them, not standalone entries.
+        assert "# InputType" not in out
+        assert "data | analysis" in out
 
     def test_cross_references_link_related_terms(self, runner: CliRunner):
         result = runner.invoke(main, ["spec", "decision"])

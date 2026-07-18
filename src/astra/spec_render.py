@@ -134,8 +134,9 @@ def _used_by(target: str) -> list[str]:
 
 
 def _references(name: str) -> list[str]:
+    # Enums are inlined into field rows, so only classes count as references.
     sv = _view()
-    known = set(sv.all_classes()) | set(sv.all_enums())
+    known = set(sv.all_classes())
     seen: list[str] = []
     for s in sv.class_induced_slots(name):
         if s.range in known and s.range not in seen:
@@ -157,9 +158,26 @@ def _term_ref(name: str, current: str) -> str:
 # --------------------------------------------------------------------------
 
 
+def _enum_inline(name: str) -> tuple[str, str]:
+    """(range text, description suffix) inlining an enum's values into a field row.
+
+    Enums are rendered as facts about the fields that use them, not standalone
+    concepts: the range column carries the literal values, and any per-value
+    glosses fold into the field description.
+    """
+    values = _view().get_enum(name).permissible_values or {}
+    rng = " | ".join(values)
+    glosses = "; ".join(
+        f"{v}: {_first_sentence(pv.description).rstrip('.')}"
+        for v, pv in values.items()
+        if pv.description
+    )
+    return rng, f" ({glosses})." if glosses else ""
+
+
 def _render_field_table(name: str) -> list[str]:
     sv = _view()
-    known = set(sv.all_classes()) | set(sv.all_enums())
+    enums = set(sv.all_enums())
     rows = []
     for s in sv.class_induced_slots(name):
         flags = []
@@ -167,11 +185,13 @@ def _render_field_table(name: str) -> list[str]:
             flags.append("multivalued")
         if s.inlined or s.inlined_as_list:
             flags.append("inlined")
-        rng = (
-            f"-> astra spec {s.range.lower()}"
-            if s.range in known
-            else (s.range or sv.schema.default_range)
-        )
+        desc_suffix = ""
+        if s.range in enums:
+            rng, desc_suffix = _enum_inline(s.range)
+        elif s.range in sv.all_classes():
+            rng = f"-> astra spec {s.range.lower()}"
+        else:
+            rng = s.range or sv.schema.default_range
         rows.append(
             {
                 "name": s.name,
@@ -179,7 +199,9 @@ def _render_field_table(name: str) -> list[str]:
                 "range": rng,
                 "flags": " ".join(flags),
                 "pattern": s.pattern or "",
-                "desc": _first_sentence(s.description),
+                "desc": (_first_sentence(s.description).rstrip(".") + desc_suffix)
+                if desc_suffix
+                else _first_sentence(s.description),
             }
         )
     if not rows:
@@ -313,15 +335,12 @@ def render_summary() -> str:
     out = ["ASTRA specification -- concept vocabulary", ""]
     for schema in _schema_display_order(class_groups, enum_groups):
         names = class_groups.get(schema, [])
-        enums = enum_groups.get(schema, [])
-        if not names and not enums:
+        if not names:
             continue
         out.append(f"{schema.upper()}")
-        width = max((len(n) for n in names + enums), default=0)
+        width = max((len(n) for n in names), default=0)
         for n in names:
             out.extend(_two_col(n, _first_sentence(sv.get_class(n).description), width))
-        for n in enums:
-            out.extend(_two_col(n, "(enum) " + _first_sentence(sv.get_enum(n).description), width))
         out.append("")
     out.append(
         "astra spec <term> for detail; astra spec --full dumps the entire reference (very long)."
@@ -339,7 +358,7 @@ def render_full() -> str:
     enum_groups = _enums_by_schema()
     sep = "\n" + "=" * 74 + "\n\n"
     for schema in _schema_display_order(class_groups, enum_groups):
-        for name in class_groups.get(schema, []) + enum_groups.get(schema, []):
+        for name in class_groups.get(schema, []):
             parts.append(render_term(name).rstrip())
     return sep.join(parts) + "\n"
 
