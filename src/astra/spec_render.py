@@ -50,6 +50,16 @@ def _wrap_at(text: str, indent: int, hang: int = 0) -> list[str]:
     ) or [""]
 
 
+def _hard_wrap_at(text: str, indent: int, hang: int = 0) -> list[str]:
+    """Like ``_wrap_at`` but chunks unbreakable text (regexes) at the width limit."""
+    cols = max(shutil.get_terminal_size(fallback=(100, 24)).columns, indent + hang + 20)
+    out, pos, width = [f"{' ' * indent}{text[: cols - indent]}"], cols - indent, cols - indent - hang
+    while pos < len(text):
+        out.append(f"{' ' * (indent + hang)}{text[pos : pos + width]}")
+        pos += width
+    return out
+
+
 def _two_col(name: str, desc: str, width: int) -> list[str]:
     """One vocabulary-map row: name column, then desc wrapped within its own column."""
     lines = _wrap_at(desc, 2 + width + 2)
@@ -189,7 +199,7 @@ def _render_field_table(name: str) -> list[str]:
         if r["desc"]:
             out.extend(_wrap_at(r["desc"], 6, hang=2))
         if r["pattern"]:
-            out.append(f"      pattern: {r['pattern']}")
+            out.extend(_hard_wrap_at(f"pattern: {r['pattern']}", 6, hang=2))
     return out
 
 
