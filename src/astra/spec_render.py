@@ -38,10 +38,16 @@ def _first_sentence(text: str | None) -> str:
     return (head if sep else flat).rstrip(".") + "."
 
 
-def _wrap_at(text: str, indent: int) -> list[str]:
-    """Wrap text to the terminal width with every line indented `indent` spaces."""
-    cols = max(shutil.get_terminal_size(fallback=(100, 24)).columns, indent + 20)
-    return [" " * indent + line for line in textwrap.wrap(text, width=cols - indent)] or [""]
+def _wrap_at(text: str, indent: int, hang: int = 0) -> list[str]:
+    """Wrap text to the terminal width, indented `indent` spaces; continuation
+    lines hang `hang` further so they read as part of the paragraph above."""
+    cols = max(shutil.get_terminal_size(fallback=(100, 24)).columns, indent + hang + 20)
+    return textwrap.wrap(
+        text,
+        width=cols,
+        initial_indent=" " * indent,
+        subsequent_indent=" " * (indent + hang),
+    ) or [""]
 
 
 def _two_col(name: str, desc: str, width: int) -> list[str]:
@@ -181,7 +187,7 @@ def _render_field_table(name: str) -> list[str]:
             line += f"  {r['flags']}"
         out.append(line.rstrip())
         if r["desc"]:
-            out.extend(_wrap_at(r["desc"], 6))
+            out.extend(_wrap_at(r["desc"], 6, hang=2))
         if r["pattern"]:
             out.append(f"      pattern: {r['pattern']}")
     return out
@@ -232,7 +238,7 @@ def _render_rules(name: str) -> list[str]:
             for r, _ in members:
                 out.append(f"  {_humanize(r.title)}")
                 if r.description:
-                    out.extend(_wrap_at(_first_sentence(r.description), 6))
+                    out.extend(_wrap_at(_first_sentence(r.description), 6, hang=2))
     return out
 
 
