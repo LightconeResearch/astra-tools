@@ -53,7 +53,8 @@ def _wrap_at(text: str, indent: int, hang: int = 0) -> list[str]:
 def _hard_wrap_at(text: str, indent: int, hang: int = 0) -> list[str]:
     """Like ``_wrap_at`` but chunks unbreakable text (regexes) at the width limit."""
     cols = max(shutil.get_terminal_size(fallback=(100, 24)).columns, indent + hang + 20)
-    out, pos, width = [f"{' ' * indent}{text[: cols - indent]}"], cols - indent, cols - indent - hang
+    pos, width = cols - indent, cols - indent - hang
+    out = [f"{' ' * indent}{text[:pos]}"]
     while pos < len(text):
         out.append(f"{' ' * (indent + hang)}{text[pos : pos + width]}")
         pos += width
@@ -320,9 +321,7 @@ def render_summary() -> str:
         for n in names:
             out.extend(_two_col(n, _first_sentence(sv.get_class(n).description), width))
         for n in enums:
-            out.extend(
-                _two_col(n, "(enum) " + _first_sentence(sv.get_enum(n).description), width)
-            )
+            out.extend(_two_col(n, "(enum) " + _first_sentence(sv.get_enum(n).description), width))
         out.append("")
     out.append(
         "astra spec <term> for detail; astra spec --full dumps the entire reference (very long)."
