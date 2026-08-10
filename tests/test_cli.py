@@ -225,21 +225,13 @@ class TestJsonOutput:
         report = json.loads(result.output)
         assert "validation errors" in report
 
-    def test_info_brief(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--brief"])
+    def test_info_json(self, runner: CliRunner, full_analysis_path: Path):
+        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--json"])
         assert result.exit_code == 0
-        assert "Inputs: 2 | Outputs: 6 | Decisions: 4" in result.output
-        # Header only — no detail tables or trees.
-        assert "┏" not in result.output
-        assert "Options:" not in result.output
-
-    def test_info_brief_json(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--brief", "--json"])
-        assert result.exit_code == 0
-        header = json.loads(result.output)
-        assert isinstance(header, str)
-        assert "Full Analysis" in header
-        assert "Inputs: 2 | Outputs: 6 | Decisions: 4" in header
+        report = json.loads(result.output)
+        assert isinstance(report, str)
+        assert "Full Analysis" in report
+        assert "Inputs: 2 | Outputs: 6 | Decisions: 4" in report
 
     def test_json_is_plain_even_when_color_is_forced(
         self, runner: CliRunner, minimal_analysis_path: Path, monkeypatch

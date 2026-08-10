@@ -575,11 +575,6 @@ def _verify_insights_evidence(insights: dict[str, Any], label: str = "prior_insi
 @click.option("--inputs", "-i", is_flag=True, help="Show input details")
 @click.option("--outputs", "-o", is_flag=True, help="Show output details")
 @click.option(
-    "--brief",
-    is_flag=True,
-    help="Header only: name, version, description, element counts, layout",
-)
-@click.option(
     "--json",
     "output_json",
     is_flag=True,
@@ -590,7 +585,6 @@ def info(
     decisions: bool,
     inputs: bool,
     outputs: bool,
-    brief: bool,
     output_json: bool,
 ) -> None:
     """Show information about an analysis.
@@ -599,7 +593,7 @@ def info(
     safe to embed verbatim in any JSON document.
     """
     with _json_string_output(output_json):
-        _run_info(file, decisions, inputs, outputs, brief)
+        _run_info(file, decisions, inputs, outputs)
 
 
 def _run_info(
@@ -607,7 +601,6 @@ def _run_info(
     decisions: bool,
     inputs: bool,
     outputs: bool,
-    brief: bool,
 ) -> None:
     file = _require_analysis(file)
     data = load_yaml(file)
@@ -632,9 +625,6 @@ def _run_info(
     layout = _describe_layout(data, file.parent)
     if layout:
         console.print(f"[dim]Layout: {escape(layout)}[/dim]")
-
-    if brief:
-        return
 
     # Show all by default if no flags
     show_all = not (decisions or inputs or outputs)
