@@ -7,6 +7,7 @@ avoiding the need for Pydantic model imports in the validation path.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +61,25 @@ def _collect_node_decisions(node: dict[str, Any]) -> dict[str, Any]:
     return decisions
 
 
+def external_spec_path(base_path: Path, sub_path: str) -> Path:
+    """The astra.yaml file a sub-analysis ``path:`` reference points at."""
+    return (base_path / sub_path).resolve() / "astra.yaml"
+
+
+def iter_sub_analyses(node: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    """Yield every sub-analysis dict declared in ``node``'s ``analyses`` tree.
+
+    Recurses into inline sub-analyses only; external (``path:``) sub-analyses
+    are yielded but not read — their own tree is not visible from this spec.
+    """
+    for sub in (node.get("analyses") or {}).values():
+        if not isinstance(sub, dict):
+            continue
+        yield sub
+        if not sub.get("path"):
+            yield from iter_sub_analyses(sub)
+
+
 def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, Any]:
     """Resolve external sub-analysis references in an analysis tree.
 
@@ -86,9 +106,8 @@ def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, An
     for analysis_id, analysis_node in analyses.items():
         sub_path = analysis_node.get("path")
         if sub_path:
-            # Resolve relative path
-            resolved_dir = (base_path / sub_path).resolve()
-            sub_yaml_path = resolved_dir / "astra.yaml"
+            sub_yaml_path = external_spec_path(base_path, sub_path)
+            resolved_dir = sub_yaml_path.parent
             if sub_yaml_path.exists():
                 sub_data = load_yaml(sub_yaml_path)
                 # Keep the path field for reference

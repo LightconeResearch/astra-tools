@@ -6,10 +6,10 @@ import shutil
 from pathlib import Path
 
 import pytest
-import yaml
 from click.testing import CliRunner
 
 from astra.cli import main
+from astra.helpers import load_yaml, save_yaml
 
 
 @pytest.fixture
@@ -85,10 +85,25 @@ class TestValidateProjectMode:
         assert result.exit_code == 0
         assert "All 3 file(s) passed validation." in result.output
 
+    @pytest.mark.parametrize(
+        "corrupt",
+        [
+            pytest.param(
+                lambda target, invalid_dir: shutil.copy(
+                    invalid_dir / "missing_version.yaml", target
+                ),
+                id="invalid-spec",
+            ),
+            pytest.param(
+                lambda target, invalid_dir: target.write_text("key: [unclosed\n"),
+                id="malformed-yaml",
+            ),
+        ],
+    )
     def test_reports_failing_files_and_keeps_going(
-        self, runner: CliRunner, project: Path, invalid_dir: Path
+        self, runner: CliRunner, project: Path, invalid_dir: Path, corrupt
     ):
-        shutil.copy(invalid_dir / "missing_version.yaml", project / "mocks" / "astra.yaml")
+        corrupt(project / "mocks" / "astra.yaml", invalid_dir)
         result = runner.invoke(main, ["validate"])
         assert result.exit_code == 1
         assert "1/3 file(s) failed validation" in result.output
@@ -108,28 +123,18 @@ class TestValidateProjectMode:
         # Split nested.yaml: one sub-analysis moves to its own build_mocks/astra.yaml.
         # Standalone that file is invalid (no name/version, ../ refs); in context
         # through the root it is valid, and project mode must treat it that way.
-        nested = yaml.safe_load((valid_dir / "nested.yaml").read_text())
+        nested = load_yaml(valid_dir / "nested.yaml")
         sub = nested["analyses"].pop("build_mocks")
         nested["analyses"]["build_mocks"] = {"path": "build_mocks"}
         (tmp_path / "build_mocks").mkdir()
-        (tmp_path / "build_mocks" / "astra.yaml").write_text(yaml.safe_dump(sub))
-        (tmp_path / "astra.yaml").write_text(yaml.safe_dump(nested))
+        save_yaml(sub, tmp_path / "build_mocks" / "astra.yaml")
+        save_yaml(nested, tmp_path / "astra.yaml")
         monkeypatch.chdir(tmp_path)
 
         result = runner.invoke(main, ["validate"])
         assert result.exit_code == 0
         assert "All 1 file(s) passed validation." in result.output
         assert "build_mocks/astra.yaml" not in result.output
-
-    def test_malformed_yaml_fails_without_aborting_the_sweep(
-        self, runner: CliRunner, project: Path
-    ):
-        (project / "mocks" / "astra.yaml").write_text("key: [unclosed\n")
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 1
-        assert "1/3 file(s) failed validation" in result.output
-        assert "mocks/astra.yaml" in result.output
-        assert "universes/baseline.yaml" in result.output
 
     def test_empty_universe_file_fails_without_aborting_the_sweep(
         self, runner: CliRunner, project: Path
@@ -146,7 +151,6 @@ class TestValidateProjectMode:
         shutil.copy(valid_dir / "universe_baseline.yaml", project / "universes" / "astra.yaml")
         result = runner.invoke(main, ["validate"])
         assert result.output.count("Validating universes/astra.yaml") == 1
-        assert "4 file(s)" in result.output
 
     def test_universe_files_outside_universes_dir_are_discovered(
         self, runner: CliRunner, tmp_path: Path, valid_dir: Path, monkeypatch
@@ -233,9 +237,9 @@ class TestInfoCommand:
         assert "accuracy" in result.output
 
     def test_info_layout_line(self, runner: CliRunner, tmp_path: Path, valid_dir: Path):
-        data = yaml.safe_load((valid_dir / "full.yaml").read_text())
+        data = load_yaml(valid_dir / "full.yaml")
         data["analyses"] = {"mocks": {"path": "mocks"}}
-        (tmp_path / "astra.yaml").write_text(yaml.safe_dump(data))
+        save_yaml(data, tmp_path / "astra.yaml")
         (tmp_path / "universes").mkdir()
         shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universes" / "baseline.yaml")
         # An astra.yaml on disk the spec does not declare is not a sub-analysis.

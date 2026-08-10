@@ -18,10 +18,12 @@ from rich.tree import Tree
 from astra.helpers import (
     _collect_node_decisions,
     create_universe_from_defaults,
+    external_spec_path,
     get_analysis_decisions,
     get_decisions,
     get_inputs,
     get_outputs,
+    iter_sub_analyses,
     load_yaml,
     save_yaml,
 )
@@ -271,39 +273,38 @@ def validate(
     if file is None:
         if analysis is not None:
             raise click.UsageError("--analysis requires a FILE argument.")
-        root = Path.cwd()
-        targets = _discover_validation_targets(root)
-        if not targets:
-            console.print("[red]Error:[/red] No astra.yaml or universe files found here.")
-            raise SystemExit(1)
-        failed = []
-        for index, target in enumerate(targets):
-            if index:
-                console.print()
-            try:
-                _validate_one(
-                    target.relative_to(root),
-                    None,
-                    verify_evidence,
-                    skip_evidence,
-                    search_root=root,
-                )
-            except SystemExit:
-                failed.append(target)
-            except Exception as exc:
-                console.print(f"[red]Error:[/red] {escape(str(exc))}")
-                failed.append(target)
-        console.print()
-        if failed:
-            console.print(
-                f"[red]{len(failed)}/{len(targets)} file(s) failed validation:[/red] "
-                + ", ".join(escape(str(f.relative_to(root))) for f in failed)
-            )
-            raise SystemExit(1)
-        console.print(f"[green]All {len(targets)} file(s) passed validation.[/green]")
-        return
+        _validate_project(verify_evidence, skip_evidence)
+    else:
+        _validate_one(file, analysis, verify_evidence, skip_evidence)
 
-    _validate_one(file, analysis, verify_evidence, skip_evidence)
+
+def _validate_project(verify_evidence: bool, skip_evidence: bool) -> None:
+    """Validate every discovered spec and universe file under cwd."""
+    root = Path.cwd()
+    targets = _discover_validation_targets(root)
+    if not targets:
+        console.print("[red]Error:[/red] No astra.yaml or universe files found here.")
+        raise SystemExit(1)
+    failed = []
+    for index, target in enumerate(targets):
+        if index:
+            console.print()
+        rel = target.relative_to(root)
+        try:
+            _validate_one(rel, None, verify_evidence, skip_evidence, search_root=root)
+        except SystemExit:
+            failed.append(rel)
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {escape(str(exc))}")
+            failed.append(rel)
+    console.print()
+    if failed:
+        console.print(
+            f"[red]{len(failed)}/{len(targets)} file(s) failed validation:[/red] "
+            + ", ".join(escape(str(f)) for f in failed)
+        )
+        raise SystemExit(1)
+    console.print(f"[green]All {len(targets)} file(s) passed validation.[/green]")
 
 
 _SKIP_DIR_NAMES = {"node_modules", "venv", "__pycache__"}
@@ -325,9 +326,7 @@ def _discover_validation_targets(root: Path) -> list[Path]:
     specs: list[Path] = []
     universes: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(
-            d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIR_NAMES
-        )
+        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIR_NAMES]
         directory = Path(dirpath)
         for filename in filenames:
             if not filename.endswith(".yaml"):
@@ -351,23 +350,13 @@ def _external_subspecs(spec: Path) -> set[Path]:
         data = load_yaml(spec)
     except Exception:
         return set()  # unreadable specs fail their own validation later
-
-    found: set[Path] = set()
-
-    def walk(node: Any, base: Path) -> None:
-        if not isinstance(node, dict):
-            return
-        for sub in (node.get("analyses") or {}).values():
-            if not isinstance(sub, dict):
-                continue
-            sub_path = sub.get("path")
-            if sub_path:
-                found.add((base / str(sub_path)).resolve() / "astra.yaml")
-            else:
-                walk(sub, base)
-
-    walk(data, spec.parent)
-    return found
+    if not isinstance(data, dict):
+        return set()
+    return {
+        external_spec_path(spec.parent, str(sub["path"]))
+        for sub in iter_sub_analyses(data)
+        if sub.get("path")
+    }
 
 
 def _validate_one(
@@ -624,28 +613,16 @@ def info(
 def _describe_layout(data: dict[str, Any], project_dir: Path) -> str:
     """One-line shape of the analysis: the sub-analyses the spec declares
     (with directories for external ``path:`` ones) and universe files on disk."""
-    total = 0
-    external = 0
-    external_dirs: set[str] = set()
+    subs = list(iter_sub_analyses(data))
+    external_paths = [str(sub["path"]) for sub in subs if sub.get("path")]
+    external = len(external_paths)
+    external_dirs = sorted({f"./{Path(p).as_posix()}/" for p in external_paths})
 
-    def count_subs(node: dict[str, Any]) -> None:
-        nonlocal total, external
-        for sub in (node.get("analyses") or {}).values():
-            if not isinstance(sub, dict):
-                continue
-            total += 1
-            sub_path = sub.get("path")
-            if sub_path:
-                external += 1
-                external_dirs.add(f"./{Path(str(sub_path)).as_posix()}/")
-            else:
-                count_subs(sub)
-
-    count_subs(data)
     parts: list[str] = []
-    if total:
+    if subs:
+        total = len(subs)
         noun = "sub-analysis" if total == 1 else "sub-analyses"
-        dirs = ", ".join(sorted(external_dirs))
+        dirs = ", ".join(external_dirs)
         if external == total:
             parts.append(f"{total} {noun} in {dirs}")
         elif external:
