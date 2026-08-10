@@ -207,6 +207,55 @@ class TestValidateProjectMode:
         assert "--analysis requires a FILE argument" in result.output
 
 
+class TestJsonOutput:
+    """--json: the report as one JSON-encoded string, exit code unchanged."""
+
+    def test_validate_json_pass(self, runner: CliRunner, minimal_analysis_path: Path):
+        result = runner.invoke(main, ["validate", str(minimal_analysis_path), "--json"])
+        assert result.exit_code == 0
+        report = json.loads(result.output)
+        assert isinstance(report, str)
+        assert "Validation successful" in report
+
+    def test_validate_json_fail(self, runner: CliRunner, invalid_dir: Path):
+        result = runner.invoke(
+            main, ["validate", str(invalid_dir / "missing_version.yaml"), "--json"]
+        )
+        assert result.exit_code == 1
+        report = json.loads(result.output)
+        assert "validation errors" in report
+
+    def test_info_brief(self, runner: CliRunner, full_analysis_path: Path):
+        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--brief"])
+        assert result.exit_code == 0
+        assert "Inputs: 2 | Outputs: 6 | Decisions: 4" in result.output
+        # Header only — no detail tables or trees.
+        assert "┏" not in result.output
+        assert "Options:" not in result.output
+
+    def test_info_brief_json(self, runner: CliRunner, full_analysis_path: Path):
+        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--brief", "--json"])
+        assert result.exit_code == 0
+        header = json.loads(result.output)
+        assert isinstance(header, str)
+        assert "Full Analysis" in header
+        assert "Inputs: 2 | Outputs: 6 | Decisions: 4" in header
+
+    def test_json_is_plain_even_when_color_is_forced(
+        self, runner: CliRunner, minimal_analysis_path: Path, monkeypatch
+    ):
+        from rich.console import Console
+
+        import astra.cli
+
+        monkeypatch.setattr(astra.cli, "console", Console(force_terminal=True))
+        result = runner.invoke(main, ["validate", str(minimal_analysis_path), "--json"])
+        assert result.exit_code == 0
+        report = json.loads(result.output)
+        assert "\x1b" not in report
+        assert "Validation successful" in report
+
+
 class TestInfoCommand:
     """Tests for the info command."""
 

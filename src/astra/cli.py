@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -252,8 +255,18 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
     is_flag=True,
     help="Skip evidence verification even if prior insights or findings are present",
 )
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    help="Emit the report as a single JSON-encoded string (exit code unchanged)",
+)
 def validate(
-    file: Path | None, analysis: Path | None, verify_evidence: bool, skip_evidence: bool
+    file: Path | None,
+    analysis: Path | None,
+    verify_evidence: bool,
+    skip_evidence: bool,
+    output_json: bool,
 ) -> None:
     """Validate an ASTRA specification file, or the whole project.
 
@@ -265,17 +278,45 @@ def validate(
     through its root spec, not standalone.
     For universe files, use --analysis to specify the analysis file.
 
+    With --json, the full report is emitted as one JSON-encoded string on
+    stdout — safe to embed verbatim in any JSON document — while the exit
+    code still carries pass/fail.
+
     Evidence verification (--verify-evidence) checks that quotes in prior_insights
     and findings actually exist in the source papers. Papers must be cached first
     using 'astra paper add'. Artifact-backed evidence (typical for findings whose
     artifacts are not yet materialized) is reported as SKIPPED.
     """
-    if file is None:
-        if analysis is not None:
-            raise click.UsageError("--analysis requires a FILE argument.")
-        _validate_project(verify_evidence, skip_evidence)
-    else:
-        _validate_one(file, analysis, verify_evidence, skip_evidence)
+    with _json_string_output(output_json):
+        if file is None:
+            if analysis is not None:
+                raise click.UsageError("--analysis requires a FILE argument.")
+            _validate_project(verify_evidence, skip_evidence)
+        else:
+            _validate_one(file, analysis, verify_evidence, skip_evidence)
+
+
+# Any ANSI escape sequence (CSI form). --json output is for embedding in other
+# documents, so it must be plain text even when the environment forces color.
+_ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+
+@contextmanager
+def _json_string_output(enabled: bool) -> Iterator[None]:
+    """When enabled, capture everything the body prints on the shared console
+    and re-emit it as a single JSON-encoded string, preserving the exit code."""
+    if not enabled:
+        yield
+        return
+    code = 0
+    with console.capture() as capture:
+        try:
+            yield
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+    click.echo(json.dumps(_ANSI_RE.sub("", capture.get())))
+    if code:
+        raise SystemExit(code)
 
 
 def _validate_project(verify_evidence: bool, skip_evidence: bool) -> None:
@@ -533,18 +574,46 @@ def _verify_insights_evidence(insights: dict[str, Any], label: str = "prior_insi
 @click.option("--decisions", "-d", is_flag=True, help="Show decision details")
 @click.option("--inputs", "-i", is_flag=True, help="Show input details")
 @click.option("--outputs", "-o", is_flag=True, help="Show output details")
+@click.option(
+    "--brief",
+    is_flag=True,
+    help="Header only: name, version, description, element counts, layout",
+)
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    help="Emit the output as a single JSON-encoded string",
+)
 def info(
     file: Path | None,
     decisions: bool,
     inputs: bool,
     outputs: bool,
+    brief: bool,
+    output_json: bool,
 ) -> None:
-    """Show information about an analysis."""
+    """Show information about an analysis.
+
+    With --json, the output is emitted as one JSON-encoded string on stdout —
+    safe to embed verbatim in any JSON document.
+    """
+    with _json_string_output(output_json):
+        _run_info(file, decisions, inputs, outputs, brief)
+
+
+def _run_info(
+    file: Path | None,
+    decisions: bool,
+    inputs: bool,
+    outputs: bool,
+    brief: bool,
+) -> None:
     file = _require_analysis(file)
     data = load_yaml(file)
 
     # Header
-    console.print(f"\n[bold]{data.get('name', 'Unknown')}[/bold]")
+    console.print(f"[bold]{data.get('name', 'Unknown')}[/bold]")
     console.print(f"Version: {data.get('version', 'Unknown')}")
     description = data.get("description")
     if isinstance(description, str) and description.strip():
@@ -563,6 +632,9 @@ def info(
     layout = _describe_layout(data, file.parent)
     if layout:
         console.print(f"[dim]Layout: {escape(layout)}[/dim]")
+
+    if brief:
+        return
 
     # Show all by default if no flags
     show_all = not (decisions or inputs or outputs)
