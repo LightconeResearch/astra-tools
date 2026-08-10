@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -35,17 +36,23 @@ from astra.validation.semantic import validate_analysis, validate_universe_file
 console = Console()
 
 
-def find_analysis_file(start_path: Path | None = None) -> Path | None:
-    """Find the astra.yaml file in the current or parent directories."""
+def find_analysis_file(start_path: Path | None = None, stop_at: Path | None = None) -> Path | None:
+    """Find the astra.yaml file in the current or parent directories.
+
+    With ``stop_at``, the search does not climb above that directory.
+    """
     if start_path is None:
         start_path = Path.cwd()
 
     # Resolve to absolute path to ensure parent traversal works correctly
     current = start_path.resolve()
+    boundary = stop_at.resolve() if stop_at is not None else None
     while current != current.parent:
         astra_file = current / "astra.yaml"
         if astra_file.exists():
             return astra_file
+        if current == boundary:
+            return None
         current = current.parent
 
     return None
@@ -249,8 +256,11 @@ def validate(
     """Validate an ASTRA specification file, or the whole project.
 
     FILE can be an analysis (astra.yaml) or universe file. With no FILE,
-    every analysis (astra.yaml at any depth, sub-analyses included) and every
-    universe file (universes/*.yaml) under the current directory is validated.
+    every root analysis spec (astra.yaml) and universe file (in a universes/
+    directory, or with "universe" in its name) under the current directory is
+    validated; hidden and vendored directories are skipped. An astra.yaml
+    referenced as an external ``path:`` sub-analysis is validated in context
+    through its root spec, not standalone.
     For universe files, use --analysis to specify the analysis file.
 
     Evidence verification (--verify-evidence) checks that quotes in prior_insights
@@ -259,9 +269,10 @@ def validate(
     artifacts are not yet materialized) is reported as SKIPPED.
     """
     if file is None:
-        targets = sorted(Path.cwd().rglob("astra.yaml")) + sorted(
-            Path.cwd().rglob("universes/*.yaml")
-        )
+        if analysis is not None:
+            raise click.UsageError("--analysis requires a FILE argument.")
+        root = Path.cwd()
+        targets = _discover_validation_targets(root)
         if not targets:
             console.print("[red]Error:[/red] No astra.yaml or universe files found here.")
             raise SystemExit(1)
@@ -270,14 +281,23 @@ def validate(
             if index:
                 console.print()
             try:
-                _validate_one(target.relative_to(Path.cwd()), None, verify_evidence, skip_evidence)
+                _validate_one(
+                    target.relative_to(root),
+                    None,
+                    verify_evidence,
+                    skip_evidence,
+                    search_root=root,
+                )
             except SystemExit:
+                failed.append(target)
+            except Exception as exc:
+                console.print(f"[red]Error:[/red] {escape(str(exc))}")
                 failed.append(target)
         console.print()
         if failed:
             console.print(
                 f"[red]{len(failed)}/{len(targets)} file(s) failed validation:[/red] "
-                + ", ".join(str(f.relative_to(Path.cwd())) for f in failed)
+                + ", ".join(escape(str(f.relative_to(root))) for f in failed)
             )
             raise SystemExit(1)
         console.print(f"[green]All {len(targets)} file(s) passed validation.[/green]")
@@ -286,22 +306,94 @@ def validate(
     _validate_one(file, analysis, verify_evidence, skip_evidence)
 
 
+_SKIP_DIR_NAMES = {"node_modules", "venv", "__pycache__"}
+
+
+def _is_universe_path(file: Path) -> bool:
+    """Universe-file heuristic, shared by single-file validation and discovery."""
+    return "universe" in file.stem.lower() or file.parent.name == "universes"
+
+
+def _discover_validation_targets(root: Path) -> list[Path]:
+    """Find every root analysis spec and universe file under ``root``.
+
+    Hidden and vendored directories are skipped. An astra.yaml referenced as
+    an external ``path:`` sub-analysis of another discovered spec is excluded:
+    it is validated in context through its root spec, and standalone it would
+    spuriously fail (``path:`` subs omit name/version and may use ``../`` refs).
+    """
+    specs: list[Path] = []
+    universes: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(
+            d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIR_NAMES
+        )
+        directory = Path(dirpath)
+        for filename in filenames:
+            if not filename.endswith(".yaml"):
+                continue
+            path = directory / filename
+            if _is_universe_path(path):
+                universes.append(path)
+            elif filename == "astra.yaml":
+                specs.append(path)
+    referenced: set[Path] = set()
+    for spec in specs:
+        referenced |= _external_subspecs(spec)
+    roots = [spec for spec in specs if spec.resolve() not in referenced]
+    return sorted(roots) + sorted(universes)
+
+
+def _external_subspecs(spec: Path) -> set[Path]:
+    """The astra.yaml files ``spec`` references as external ``path:`` sub-analyses,
+    including references nested inside inline sub-analyses."""
+    try:
+        data = load_yaml(spec)
+    except Exception:
+        return set()  # unreadable specs fail their own validation later
+
+    found: set[Path] = set()
+
+    def walk(node: Any, base: Path) -> None:
+        if not isinstance(node, dict):
+            return
+        for sub in (node.get("analyses") or {}).values():
+            if not isinstance(sub, dict):
+                continue
+            sub_path = sub.get("path")
+            if sub_path:
+                found.add((base / str(sub_path)).resolve() / "astra.yaml")
+            else:
+                walk(sub, base)
+
+    walk(data, spec.parent)
+    return found
+
+
 def _validate_one(
-    file: Path, analysis: Path | None, verify_evidence: bool, skip_evidence: bool
+    file: Path,
+    analysis: Path | None,
+    verify_evidence: bool,
+    skip_evidence: bool,
+    search_root: Path | None = None,
 ) -> None:
-    """Validate one file, printing as it goes; raises SystemExit(1) on failure."""
+    """Validate one file, printing as it goes; raises SystemExit(1) on failure.
+
+    ``search_root``, when given, bounds the upward search for a universe's
+    analysis file (project mode must not resolve against a spec above cwd).
+    """
     # Determine file type
-    is_universe = "universe" in file.stem.lower() or file.parent.name == "universes"
+    is_universe = _is_universe_path(file)
 
     if is_universe and analysis is None:
         # Try to find analysis file
-        analysis = find_analysis_file(file.parent)
+        analysis = find_analysis_file(file.parent, stop_at=search_root)
         if analysis is None:
             console.print("[red]Error:[/red] Universe validation requires an analysis file.")
             console.print("Use --analysis to specify the analysis file.")
             raise SystemExit(1)
 
-    console.print(f"Validating [cyan]{file}[/cyan]...")
+    console.print(f"Validating [cyan]{escape(str(file))}[/cyan]...")
 
     # Load once — all downstream checks take data dicts.
     data = load_yaml(file)
@@ -479,9 +571,9 @@ def info(
         f"Outputs: {len(output_list)} | "
         f"Decisions: {len(decision_dict)}[/dim]"
     )
-    layout = _describe_layout(file.parent)
+    layout = _describe_layout(data, file.parent)
     if layout:
-        console.print(f"[dim]Layout: {layout}[/dim]")
+        console.print(f"[dim]Layout: {escape(layout)}[/dim]")
 
     # Show all by default if no flags
     show_all = not (decisions or inputs or outputs)
@@ -529,22 +621,38 @@ def info(
         _display_analysis_decisions(decision_tree.get("analyses", {}))
 
 
-def _describe_layout(project_dir: Path) -> str:
-    """On-disk shape of the analysis: sub-analysis specs and universe files —
-    counts plus the directories holding them, one line no matter how many."""
-    root = project_dir
-    spec = root / "astra.yaml"
-    subs = sorted(
-        path
-        for path in root.rglob("astra.yaml")
-        if path != spec and "universes" not in path.relative_to(root).parts
-    )
+def _describe_layout(data: dict[str, Any], project_dir: Path) -> str:
+    """One-line shape of the analysis: the sub-analyses the spec declares
+    (with directories for external ``path:`` ones) and universe files on disk."""
+    total = 0
+    external = 0
+    external_dirs: set[str] = set()
+
+    def count_subs(node: dict[str, Any]) -> None:
+        nonlocal total, external
+        for sub in (node.get("analyses") or {}).values():
+            if not isinstance(sub, dict):
+                continue
+            total += 1
+            sub_path = sub.get("path")
+            if sub_path:
+                external += 1
+                external_dirs.add(f"./{Path(str(sub_path)).as_posix()}/")
+            else:
+                count_subs(sub)
+
+    count_subs(data)
     parts: list[str] = []
-    if subs:
-        dirs = sorted({f"./{path.parent.relative_to(root)}/" for path in subs})
-        noun = "sub-analysis" if len(subs) == 1 else "sub-analyses"
-        parts.append(f"{len(subs)} {noun} in {', '.join(dirs)}")
-    universe_count = len(list((root / "universes").glob("*.yaml")))
+    if total:
+        noun = "sub-analysis" if total == 1 else "sub-analyses"
+        dirs = ", ".join(sorted(external_dirs))
+        if external == total:
+            parts.append(f"{total} {noun} in {dirs}")
+        elif external:
+            parts.append(f"{total} {noun} ({external} external in {dirs})")
+        else:
+            parts.append(f"{total} {noun}")
+    universe_count = len(list((project_dir / "universes").glob("*.yaml")))
     if universe_count:
         noun = "universe" if universe_count == 1 else "universes"
         parts.append(f"{universe_count} {noun} in ./universes/")
