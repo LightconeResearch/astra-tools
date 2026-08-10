@@ -76,46 +76,13 @@ class TestGuideCommand:
         assert result.exit_code == 0
         assert result.output == "# ASTRA\npackaged briefing\n"
 
-    def test_guide_falls_back_to_published_copy(self, runner: CliRunner, monkeypatch):
-        import httpx
-
+    def test_guide_errors_when_unpackaged(self, runner: CliRunner, monkeypatch):
         import astra.cli
 
-        class FakeResponse:
-            text = "# ASTRA\npublished briefing\n"
-
-            def raise_for_status(self) -> None:
-                pass
-
         monkeypatch.setattr(astra.cli, "_packaged_guide", lambda: None)
-        monkeypatch.setattr(httpx, "get", lambda url, **kwargs: FakeResponse())
-        result = runner.invoke(main, ["guide"])
-        assert result.exit_code == 0
-        assert "published briefing" in result.output
-        # The provenance note goes to stderr, keeping stdout pure guide content.
-        assert "# Note: fetched from" not in result.stdout
-
-    def test_guide_errors_when_offline_and_unpackaged(self, runner: CliRunner, monkeypatch):
-        import httpx
-
-        import astra.cli
-
-        def refuse(url, **kwargs):
-            raise httpx.ConnectError("no network")
-
-        monkeypatch.setattr(astra.cli, "_packaged_guide", lambda: None)
-        monkeypatch.setattr(httpx, "get", refuse)
         result = runner.invoke(main, ["guide"])
         assert result.exit_code == 1
         assert "astra-spec.org" in result.output
-
-    @pytest.mark.network
-    def test_guide_live(self, runner: CliRunner):
-        # End to end against the real environment: packaged copy if the
-        # installed astra-spec ships it, otherwise the live website.
-        result = runner.invoke(main, ["guide"])
-        assert result.exit_code == 0
-        assert "# ASTRA" in result.output
 
 
 class TestInfoCommand:

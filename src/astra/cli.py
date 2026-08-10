@@ -726,21 +726,21 @@ def _viz_mermaid_node(lines: list[str], node: dict[str, Any], node_prefix: str) 
         lines.append("    end")
 
 
-_GUIDE_URL = "https://astra-spec.org/llms.txt"
-
-
 @main.command()
 def guide() -> None:
     """Print the agent guide to the ASTRA format.
 
-    Prefers the guide (llms.txt) shipped inside the installed astra-spec
-    package, which matches the schema the validator enforces. When the
-    installed release predates the packaged copy, falls back to fetching
-    the latest published guide from https://astra-spec.org/llms.txt.
+    The guide (llms.txt) ships inside the installed astra-spec package, so it
+    always matches the schema the validator enforces. It is also published at
+    https://astra-spec.org/llms.txt.
     """
     text = _packaged_guide()
     if text is None:
-        text = _fetch_published_guide()
+        console.print(
+            "[red]Error:[/red] the installed astra-spec release predates the packaged "
+            "agent guide. Upgrade astra-spec, or read it at https://astra-spec.org/llms.txt."
+        )
+        raise SystemExit(1)
     click.echo(text, nl=False)
 
 
@@ -752,29 +752,6 @@ def _packaged_guide() -> str | None:
         return (resources.files("astra") / "docs" / "llms.txt").read_text(encoding="utf-8")
     except (FileNotFoundError, ModuleNotFoundError, OSError):
         return None
-
-
-def _fetch_published_guide() -> str:
-    """Fetch the published guide; exits with an error when unreachable."""
-    import httpx
-
-    try:
-        response = httpx.get(_GUIDE_URL, timeout=10.0, follow_redirects=True)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        console.print(
-            "[red]Error:[/red] the installed astra-spec release does not ship the "
-            f"agent guide, and fetching {_GUIDE_URL} failed ({escape(str(exc))})."
-        )
-        console.print(f"Upgrade astra-spec, or read the guide at {_GUIDE_URL}.")
-        raise SystemExit(1) from None
-    # Keep stdout pure guide content; the provenance note goes to stderr.
-    click.echo(
-        f"# Note: fetched from {_GUIDE_URL}; describes the latest published spec, "
-        "which may be newer than the installed astra-spec.",
-        err=True,
-    )
-    return response.text
 
 
 @main.command()
