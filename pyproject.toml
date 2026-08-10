@@ -62,6 +62,9 @@ dev = [
 
 [project.scripts]
 astra = "astra.cli:main"
+# Alias matching the package name, so `uvx astra-tools@<version> <command>`
+# works without `--from astra-tools astra`.
+astra-tools = "astra.cli:main"
 
 [project.urls]
 Homepage = "https://astra-spec.org/"
