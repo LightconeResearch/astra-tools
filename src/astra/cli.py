@@ -935,6 +935,34 @@ def _viz_mermaid_node(lines: list[str], node: dict[str, Any], node_prefix: str) 
 
 
 @main.command()
+def guide() -> None:
+    """Print the agent guide to the ASTRA format.
+
+    The guide (llms.txt) ships inside the installed astra-spec package, so it
+    always matches the schema the validator enforces. It is also published at
+    https://astra-spec.org/llms.txt.
+    """
+    text = _packaged_guide()
+    if text is None:
+        console.print(
+            "[red]Error:[/red] the installed astra-spec release predates the packaged "
+            "agent guide. Upgrade astra-spec, or read it at https://astra-spec.org/llms.txt."
+        )
+        raise SystemExit(1)
+    click.echo(text, nl=False)
+
+
+def _packaged_guide() -> str | None:
+    """The llms.txt shipped inside the installed astra-spec package, if any."""
+    from importlib import resources
+
+    try:
+        return (resources.files("astra") / "docs" / "llms.txt").read_text(encoding="utf-8")
+    except (FileNotFoundError, ModuleNotFoundError, OSError):
+        return None
+
+
+@main.command()
 @click.argument("term", required=False)
 @click.option("--full", is_flag=True, help="Dump the entire reference (VERY long).")
 def spec(term: str | None, full: bool) -> None:
