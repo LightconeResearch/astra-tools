@@ -65,6 +65,26 @@ class TestValidateCommand:
         assert result.exit_code != 0
 
 
+class TestGuideCommand:
+    """Tests for the guide command."""
+
+    def test_guide_prints_packaged_guide(self, runner: CliRunner, monkeypatch):
+        import astra.cli
+
+        monkeypatch.setattr(astra.cli, "_packaged_guide", lambda: "# ASTRA\npackaged briefing\n")
+        result = runner.invoke(main, ["guide"])
+        assert result.exit_code == 0
+        assert result.output == "# ASTRA\npackaged briefing\n"
+
+    def test_guide_errors_when_unpackaged(self, runner: CliRunner, monkeypatch):
+        import astra.cli
+
+        monkeypatch.setattr(astra.cli, "_packaged_guide", lambda: None)
+        result = runner.invoke(main, ["guide"])
+        assert result.exit_code == 1
+        assert "astra-spec.org" in result.output
+
+
 class TestInfoCommand:
     """Tests for the info command."""
 
