@@ -26,7 +26,7 @@ uv tool install astra-tools
 ```bash
 astra init my-analysis
 cd my-analysis
-astra validate astra.yaml
+astra validate            # validates every spec and universe file in the project
 ```
 
 See [examples/iris/](examples/iris/) for a complete working example.
@@ -36,11 +36,15 @@ See [examples/iris/](examples/iris/) for a complete working example.
 Run `astra --help` for the full command list. Key commands:
 
 - `astra init` – scaffold a new analysis project
-- `astra validate` – validate a spec or universe (add `--verify-evidence` to check quotes)
+- `astra validate` – validate the whole project, or one spec/universe file (add `--verify-evidence` to check quotes)
 - `astra info` / `astra viz` – inspect the analysis and decision space
 - `astra universe generate|check` – manage universes
+- `astra spec` – render the schema as agent-friendly reference text
+- `astra guide` – print the agent briefing (llms.txt) shipped with astra-spec
 - `astra schema export|show` – work with JSON schemas
 - `astra paper ...` – download, cache, and verify quotes against papers
+
+`astra validate` and `astra info` accept `--json` to emit their report as a single JSON-encoded string (exit codes unchanged), convenient for embedding in agent tool output.
 
 ## Links
 
