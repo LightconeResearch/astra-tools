@@ -65,6 +65,43 @@ class TestValidateCommand:
         assert result.exit_code != 0
 
 
+class TestValidateProjectMode:
+    """Tests for `astra validate` with no FILE (whole-project validation)."""
+
+    @pytest.fixture
+    def project(self, tmp_path: Path, valid_dir: Path, monkeypatch) -> Path:
+        """A project: root spec, one sub-analysis, one universe file."""
+        shutil.copy(valid_dir / "full.yaml", tmp_path / "astra.yaml")
+        (tmp_path / "universes").mkdir()
+        shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universes" / "baseline.yaml")
+        (tmp_path / "mocks").mkdir()
+        shutil.copy(valid_dir / "minimal.yaml", tmp_path / "mocks" / "astra.yaml")
+        monkeypatch.chdir(tmp_path)
+        return tmp_path
+
+    def test_validates_every_spec_and_universe(self, runner: CliRunner, project: Path):
+        result = runner.invoke(main, ["validate"])
+        assert result.exit_code == 0
+        assert "All 3 file(s) passed validation." in result.output
+
+    def test_reports_failing_files_and_keeps_going(
+        self, runner: CliRunner, project: Path, invalid_dir: Path
+    ):
+        shutil.copy(invalid_dir / "missing_version.yaml", project / "mocks" / "astra.yaml")
+        result = runner.invoke(main, ["validate"])
+        assert result.exit_code == 1
+        assert "1/3 file(s) failed validation" in result.output
+        assert "mocks/astra.yaml" in result.output
+        # The other files were still validated.
+        assert "universes/baseline.yaml" in result.output
+
+    def test_empty_directory_errors(self, runner: CliRunner, tmp_path: Path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(main, ["validate"])
+        assert result.exit_code == 1
+        assert "No astra.yaml or universe files found" in result.output
+
+
 class TestInfoCommand:
     """Tests for the info command."""
 
@@ -93,6 +130,22 @@ class TestInfoCommand:
         assert result.exit_code == 0
         assert "Outputs:" in result.output
         assert "accuracy" in result.output
+
+    def test_info_layout_line(self, runner: CliRunner, tmp_path: Path, valid_dir: Path):
+        shutil.copy(valid_dir / "full.yaml", tmp_path / "astra.yaml")
+        (tmp_path / "universes").mkdir()
+        shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universes" / "baseline.yaml")
+        (tmp_path / "mocks").mkdir()
+        shutil.copy(valid_dir / "minimal.yaml", tmp_path / "mocks" / "astra.yaml")
+
+        result = runner.invoke(main, ["info", "-f", str(tmp_path / "astra.yaml")])
+        assert result.exit_code == 0
+        assert "Layout: 1 sub-analysis in ./mocks/, 1 universe in ./universes/" in result.output
+
+    def test_info_no_layout_line_when_flat(self, runner: CliRunner, full_analysis_path: Path):
+        result = runner.invoke(main, ["info", "-f", str(full_analysis_path)])
+        assert result.exit_code == 0
+        assert "Layout:" not in result.output
 
     def test_info_no_file(self, runner: CliRunner, tmp_path: Path):
         # Run in a directory without astra.yaml

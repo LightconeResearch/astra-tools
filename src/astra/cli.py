@@ -222,7 +222,7 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
 
 
 @main.command()
-@click.argument("file", type=click.Path(exists=True, path_type=Path))
+@click.argument("file", type=click.Path(exists=True, path_type=Path), required=False)
 @click.option(
     "--analysis",
     "-a",
@@ -243,10 +243,14 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
     is_flag=True,
     help="Skip evidence verification even if prior insights or findings are present",
 )
-def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evidence: bool) -> None:
-    """Validate an ASTRA specification file.
+def validate(
+    file: Path | None, analysis: Path | None, verify_evidence: bool, skip_evidence: bool
+) -> None:
+    """Validate an ASTRA specification file, or the whole project.
 
-    FILE can be an analysis (astra.yaml) or universe file.
+    FILE can be an analysis (astra.yaml) or universe file. With no FILE,
+    every analysis (astra.yaml at any depth, sub-analyses included) and every
+    universe file (universes/*.yaml) under the current directory is validated.
     For universe files, use --analysis to specify the analysis file.
 
     Evidence verification (--verify-evidence) checks that quotes in prior_insights
@@ -254,6 +258,38 @@ def validate(file: Path, analysis: Path | None, verify_evidence: bool, skip_evid
     using 'astra paper add'. Artifact-backed evidence (typical for findings whose
     artifacts are not yet materialized) is reported as SKIPPED.
     """
+    if file is None:
+        targets = sorted(Path.cwd().rglob("astra.yaml")) + sorted(
+            Path.cwd().rglob("universes/*.yaml")
+        )
+        if not targets:
+            console.print("[red]Error:[/red] No astra.yaml or universe files found here.")
+            raise SystemExit(1)
+        failed = []
+        for index, target in enumerate(targets):
+            if index:
+                console.print()
+            try:
+                _validate_one(target.relative_to(Path.cwd()), None, verify_evidence, skip_evidence)
+            except SystemExit:
+                failed.append(target)
+        console.print()
+        if failed:
+            console.print(
+                f"[red]{len(failed)}/{len(targets)} file(s) failed validation:[/red] "
+                + ", ".join(str(f.relative_to(Path.cwd())) for f in failed)
+            )
+            raise SystemExit(1)
+        console.print(f"[green]All {len(targets)} file(s) passed validation.[/green]")
+        return
+
+    _validate_one(file, analysis, verify_evidence, skip_evidence)
+
+
+def _validate_one(
+    file: Path, analysis: Path | None, verify_evidence: bool, skip_evidence: bool
+) -> None:
+    """Validate one file, printing as it goes; raises SystemExit(1) on failure."""
     # Determine file type
     is_universe = "universe" in file.stem.lower() or file.parent.name == "universes"
 
@@ -443,6 +479,9 @@ def info(
         f"Outputs: {len(output_list)} | "
         f"Decisions: {len(decision_dict)}[/dim]"
     )
+    layout = _describe_layout(file.parent)
+    if layout:
+        console.print(f"[dim]Layout: {layout}[/dim]")
 
     # Show all by default if no flags
     show_all = not (decisions or inputs or outputs)
@@ -488,6 +527,28 @@ def info(
         decision_tree = get_analysis_decisions(data)
         _display_decisions(decision_tree.get("decisions", {}))
         _display_analysis_decisions(decision_tree.get("analyses", {}))
+
+
+def _describe_layout(project_dir: Path) -> str:
+    """On-disk shape of the analysis: sub-analysis specs and universe files —
+    counts plus the directories holding them, one line no matter how many."""
+    root = project_dir
+    spec = root / "astra.yaml"
+    subs = sorted(
+        path
+        for path in root.rglob("astra.yaml")
+        if path != spec and "universes" not in path.relative_to(root).parts
+    )
+    parts: list[str] = []
+    if subs:
+        dirs = sorted({f"./{path.parent.relative_to(root)}/" for path in subs})
+        noun = "sub-analysis" if len(subs) == 1 else "sub-analyses"
+        parts.append(f"{len(subs)} {noun} in {', '.join(dirs)}")
+    universe_count = len(list((root / "universes").glob("*.yaml")))
+    if universe_count:
+        noun = "universe" if universe_count == 1 else "universes"
+        parts.append(f"{universe_count} {noun} in ./universes/")
+    return ", ".join(parts)
 
 
 def _display_decisions(decisions: dict[str, Any], indent: str = "") -> None:
