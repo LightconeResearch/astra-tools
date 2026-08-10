@@ -50,7 +50,8 @@ ASTRA/
 
 2. **CLI** (`src/astra/cli.py`)
    - Built with Click and Rich
-   - Commands: init, validate, info, universe, viz, schema, paper
+   - Commands: init, validate, info, universe, viz, spec, guide, schema, paper
+   - `validate` with no FILE validates the whole project; `validate` and `info` accept `--json`
 
 3. **Helpers** (`src/astra/helpers.py`)
    - Dict-based utilities: `load_yaml`, `get_decision`, `get_default_universe`
