@@ -84,43 +84,68 @@ def main() -> None:
 @main.command()
 @click.argument("directory", type=click.Path(path_type=Path), default=".")
 @click.option("--no-git", is_flag=True, help="Don't initialize git repository")
-def init(directory: Path, no_git: bool) -> None:
-    """Create a minimal ASTRA analysis scaffold.
+@click.option(
+    "--check",
+    "check_only",
+    is_flag=True,
+    help=(
+        "Report what would be created without writing anything; "
+        "exit 1 if the scaffold is not converged."
+    ),
+)
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    help="Emit the convergence report as JSON on stdout.",
+)
+def init(directory: Path, no_git: bool, check_only: bool, as_json: bool) -> None:
+    """Converge DIRECTORY into a minimal ASTRA analysis scaffold (idempotent).
 
-    Creates astra.yaml, universes/baseline.yaml, and .gitignore.
+    Safe to re-run at any time: creates whatever is missing (astra.yaml
+    + universes/baseline.yaml, src/, .gitignore, git repo) and never
+    overwrites existing files. A directory that already holds an
+    astra.yaml — or any other files — is adopted, not rejected.
 
-    DIRECTORY is the project folder to create (default: current directory).
+    DIRECTORY is the project folder to converge (default: current directory).
 
     Examples:
         astra init my-analysis
         astra init my-analysis --no-git
+        astra init --check --json   # is this directory scaffolded? (for scripts/agents)
     """
-    # Check if this is already an ASTRA project
-    if (directory / "astra.yaml").exists():
-        console.print(
-            f"[red]Error:[/red] [cyan]{directory}[/cyan] is already an ASTRA project "
-            f"(astra.yaml exists)."
-        )
-        console.print(
-            "Use [cyan]astra validate[/cyan] to check it, or delete astra.yaml to re-init."
-        )
-        raise SystemExit(1)
+    write = not check_only
+    report: dict[str, list[str]] = {
+        "created": [],
+        "repaired": [],
+        "unchanged": [],
+        "warnings": [],
+    }
 
-    # Create project directory
-    if directory != Path("."):
-        if directory.exists() and any(directory.iterdir()):
-            console.print(
-                f"[red]Error:[/red] [cyan]{directory}[/cyan] already exists and is not empty. "
-                "Please specify an empty or non-existing directory."
-            )
-            raise SystemExit(1)
-        directory.mkdir(parents=True, exist_ok=True)
+    # Snapshot presence before scaffolding: create_boilerplate also
+    # makes universes/ and src/, and they must be attributed to this
+    # run, not reported as pre-existing.
+    had_spec = (directory / "astra.yaml").exists()
+    had_dir = {sub: (directory / sub).is_dir() for sub in ("universes", "src")}
 
-    # Create directory structure
-    (directory / "universes").mkdir(parents=True, exist_ok=True)
-    (directory / "src").mkdir(parents=True, exist_ok=True)
+    # The boilerplate astra.yaml and universes/baseline.yaml are one
+    # unit: baseline references the boilerplate's example decision, so
+    # writing it next to a user-authored astra.yaml would be wrong.
+    if had_spec:
+        report["unchanged"].append("astra.yaml")
+    else:
+        report["created"].append("astra.yaml")
+        if write:
+            create_boilerplate(directory)
 
-    # Create .gitignore
+    for subdir, present in had_dir.items():
+        if present:
+            report["unchanged"].append(f"{subdir}/")
+        else:
+            report["created"].append(f"{subdir}/")
+            if write:
+                (directory / subdir).mkdir(parents=True, exist_ok=True)
+
     gitignore = """# ASTRA Analysis
 __pycache__/
 *.py[cod]
@@ -128,16 +153,58 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 """
-    (directory / ".gitignore").write_text(gitignore)
+    if (directory / ".gitignore").exists():
+        report["unchanged"].append(".gitignore")
+    else:
+        report["created"].append(".gitignore")
+        if write:
+            (directory / ".gitignore").write_text(gitignore)
 
-    # Create boilerplate astra.yaml
+    if not no_git:
+        if (directory / ".git").exists():
+            report["unchanged"].append(".git")
+        else:
+            report["created"].append(".git")
+            if write:
+                _init_git_repo(directory, no_git, quiet=as_json)
+
+    converged = not report["created"]
+
+    if as_json:
+        print(json.dumps({"converged": converged, **report}, indent=2))
+    elif check_only:
+        if converged:
+            console.print(f"[green]✓[/green] [cyan]{directory}[/cyan] is converged — nothing to do")
+        else:
+            for item in report["created"]:
+                console.print(f"  [yellow]would create[/yellow] {item}")
+    elif converged:
+        console.print(f"[green]✓[/green] [cyan]{directory}[/cyan] already converged")
+    else:
+        for item in report["created"]:
+            console.print(f"[green]✓[/green] created {item}")
+        console.print(
+            f"[green]✓[/green] Converged ASTRA analysis scaffold: [cyan]{directory}[/cyan]"
+        )
+
+    if check_only and not converged:
+        raise SystemExit(1)
+
+
+def create_boilerplate(directory: Path) -> None:
+    """Write the boilerplate spec scaffold into ``directory``.
+
+    Creates ``universes/`` and ``src/`` and writes the boilerplate
+    ``astra.yaml`` and ``universes/baseline.yaml``. Touches nothing
+    else — no ``.gitignore``, no git init, no emptiness checks — so
+    downstream tools (e.g. lightcone-cli) can scaffold into existing
+    directories under their own conventions. Existing files are
+    overwritten; callers guard on ``astra.yaml`` presence.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "universes").mkdir(parents=True, exist_ok=True)
+    (directory / "src").mkdir(parents=True, exist_ok=True)
     _create_boilerplate_astra_yaml(directory)
-
-    # Initialize git repository
-    _init_git_repo(directory, no_git)
-
-    # Print success message
-    console.print(f"[green]✓[/green] Created ASTRA analysis scaffold: [cyan]{directory}[/cyan]")
 
 
 def _create_boilerplate_astra_yaml(directory: Path) -> None:
@@ -205,7 +272,7 @@ decisions:
     (directory / "universes" / "baseline.yaml").write_text(baseline_universe)
 
 
-def _init_git_repo(directory: Path, no_git: bool) -> None:
+def _init_git_repo(directory: Path, no_git: bool, quiet: bool = False) -> None:
     """Initialize git repository if requested."""
     if no_git or (directory / ".git").exists():
         return
@@ -217,7 +284,8 @@ def _init_git_repo(directory: Path, no_git: bool) -> None:
             capture_output=True,
             check=True,
         )
-        console.print("[green]✓[/green] Initialized git repository")
+        if not quiet:
+            console.print("[green]✓[/green] Initialized git repository")
         # Try to create initial commit
         try:
             subprocess.run(["git", "add", "."], cwd=directory, capture_output=True, check=True)
