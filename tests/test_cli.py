@@ -582,9 +582,7 @@ class TestInitCommand:
         assert (project_dir / "universes").is_dir()
         assert (project_dir / "src").is_dir()
 
-    def test_init_check_reports_drift_without_writing(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_init_check_reports_drift_without_writing(self, runner: CliRunner, tmp_path: Path):
         """--check exits 1 on drift and writes nothing, --json is parseable."""
         project_dir = tmp_path / "check-test"
         result = runner.invoke(
@@ -597,9 +595,7 @@ class TestInitCommand:
         assert "astra.yaml" in report["created"]
         assert not project_dir.exists()
 
-    def test_init_check_passes_on_converged_project(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_init_check_passes_on_converged_project(self, runner: CliRunner, tmp_path: Path):
         project_dir = tmp_path / "check-ok"
         result = runner.invoke(main, ["init", str(project_dir), "--no-git"])
         assert result.exit_code == 0
