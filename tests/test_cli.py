@@ -484,9 +484,11 @@ class TestInitCommand:
         assert (project_dir / ".gitignore").exists()
         assert (project_dir / "universes").is_dir()
         assert (project_dir / "universes" / "baseline.yaml").exists()
-        assert (project_dir / "src").is_dir()
 
-        # Agentic scaffolding NOT created (init produces only the minimal spec scaffold)
+        # User-owned layout NOT created (init produces only the minimal spec
+        # scaffold; where code lives is the user's choice — recipes name
+        # their paths explicitly)
+        assert not (project_dir / "src").exists()
         assert not (project_dir / ".claude").exists()
         assert not (project_dir / "CLAUDE.md").exists()
         assert not (project_dir / "workflows").exists()
@@ -578,9 +580,8 @@ class TestInitCommand:
         assert result.exit_code == 0
         assert (project_dir / "astra.yaml").read_text() == "# user spec\n"
         assert not (project_dir / "universes" / "baseline.yaml").exists()
-        # The bare directories are still converged.
+        # The bare universes/ directory is still converged.
         assert (project_dir / "universes").is_dir()
-        assert (project_dir / "src").is_dir()
 
     def test_init_check_reports_drift_without_writing(self, runner: CliRunner, tmp_path: Path):
         """--check exits 1 on drift and writes nothing, --json is parseable."""
@@ -683,15 +684,15 @@ class TestCreateBoilerplate:
     """Tests for the public create_boilerplate scaffold helper."""
 
     def test_writes_spec_scaffold(self, tmp_path: Path):
-        """Creates universes/, src/, astra.yaml, and baseline.yaml."""
+        """Creates universes/, astra.yaml, and baseline.yaml."""
         from astra.cli import create_boilerplate
 
         project_dir = tmp_path / "proj"
         create_boilerplate(project_dir)
         assert (project_dir / "astra.yaml").exists()
         assert (project_dir / "universes" / "baseline.yaml").exists()
-        assert (project_dir / "src").is_dir()
         # No side effects beyond the spec scaffold.
+        assert not (project_dir / "src").exists()
         assert not (project_dir / ".gitignore").exists()
         assert not (project_dir / ".git").exists()
 

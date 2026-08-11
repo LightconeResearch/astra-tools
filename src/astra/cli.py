@@ -103,7 +103,7 @@ def init(directory: Path, no_git: bool, check_only: bool, as_json: bool) -> None
     """Converge DIRECTORY into a minimal ASTRA analysis scaffold (idempotent).
 
     Safe to re-run at any time: creates whatever is missing (astra.yaml
-    + universes/baseline.yaml, src/, .gitignore, git repo) and never
+    + universes/baseline.yaml, .gitignore, git repo) and never
     overwrites existing files. A directory that already holds an
     astra.yaml — or any other files — is adopted, not rejected.
 
@@ -123,10 +123,10 @@ def init(directory: Path, no_git: bool, check_only: bool, as_json: bool) -> None
     }
 
     # Snapshot presence before scaffolding: create_boilerplate also
-    # makes universes/ and src/, and they must be attributed to this
-    # run, not reported as pre-existing.
+    # makes universes/, and it must be attributed to this run, not
+    # reported as pre-existing.
     had_spec = (directory / "astra.yaml").exists()
-    had_dir = {sub: (directory / sub).is_dir() for sub in ("universes", "src")}
+    had_dir = {sub: (directory / sub).is_dir() for sub in ("universes",)}
 
     # The boilerplate astra.yaml and universes/baseline.yaml are one
     # unit: baseline references the boilerplate's example decision, so
@@ -194,8 +194,8 @@ __pycache__/
 def create_boilerplate(directory: Path) -> None:
     """Write the boilerplate spec scaffold into ``directory``.
 
-    Creates ``universes/`` and ``src/`` and writes the boilerplate
-    ``astra.yaml`` and ``universes/baseline.yaml``. Touches nothing
+    Creates ``universes/`` and writes the boilerplate ``astra.yaml``
+    and ``universes/baseline.yaml``. Touches nothing
     else — no ``.gitignore``, no git init, no emptiness checks — so
     downstream tools (e.g. lightcone-cli) can scaffold into existing
     directories under their own conventions. Existing files are
@@ -203,7 +203,6 @@ def create_boilerplate(directory: Path) -> None:
     """
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "universes").mkdir(parents=True, exist_ok=True)
-    (directory / "src").mkdir(parents=True, exist_ok=True)
     _create_boilerplate_astra_yaml(directory)
 
 
