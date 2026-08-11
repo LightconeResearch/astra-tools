@@ -477,7 +477,7 @@ class TestInitCommand:
             ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 0
-        assert "Created ASTRA analysis scaffold" in result.output
+        assert "Converged ASTRA analysis scaffold" in result.output
 
         # Check directory structure (minimal scaffold)
         assert (project_dir / "astra.yaml").exists()
@@ -525,54 +525,86 @@ class TestInitCommand:
         assert ".venv/" in gitignore
         assert "outputs/" not in gitignore
 
-    def test_init_existing_nonempty_dir_fails(self, runner: CliRunner, tmp_path: Path):
-        """Test that init fails on existing non-empty directory."""
+    def test_init_adopts_existing_nonempty_dir(self, runner: CliRunner, tmp_path: Path):
+        """Init converges a non-empty directory, leaving existing files alone."""
         project_dir = tmp_path / "existing"
         project_dir.mkdir()
         (project_dir / "some_file.txt").write_text("existing content")
+        (project_dir / ".gitignore").write_text("*.log\n")
 
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 1
-        assert "not empty" in result.output
-        assert not (project_dir / "astra.yaml").exists()
-
-    def test_init_refuses_if_astra_yaml_exists(self, runner: CliRunner, tmp_path: Path):
-        """Test that init refuses to run in an existing ASTRA project."""
-        project_dir = tmp_path / "already-init"
-        # First init should succeed
         result = runner.invoke(
             main,
             ["init", str(project_dir), "--no-git"],
         )
         assert result.exit_code == 0
         assert (project_dir / "astra.yaml").exists()
+        assert (project_dir / "some_file.txt").read_text() == "existing content"
+        # Existing .gitignore is never overwritten.
+        assert (project_dir / ".gitignore").read_text() == "*.log\n"
 
-        # Second init should fail
+    def test_init_is_idempotent(self, runner: CliRunner, tmp_path: Path):
+        """A second init reports converged and rewrites nothing."""
+        project_dir = tmp_path / "already-init"
         result = runner.invoke(
             main,
             ["init", str(project_dir), "--no-git"],
         )
+        assert result.exit_code == 0
+        before = {p: p.read_text() for p in project_dir.rglob("*") if p.is_file()}
+
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "--no-git", "--json"],
+        )
+        assert result.exit_code == 0
+        report = json.loads(result.output)
+        assert report["converged"] is True
+        assert report["created"] == []
+        assert {p: p.read_text() for p in project_dir.rglob("*") if p.is_file()} == before
+
+    def test_init_does_not_scaffold_baseline_next_to_user_spec(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        """astra.yaml + baseline are one unit: a user-authored spec must not
+        get the boilerplate baseline (it references the example decision)."""
+        project_dir = tmp_path / "user-spec"
+        project_dir.mkdir()
+        (project_dir / "astra.yaml").write_text("# user spec\n")
+
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "--no-git"],
+        )
+        assert result.exit_code == 0
+        assert (project_dir / "astra.yaml").read_text() == "# user spec\n"
+        assert not (project_dir / "universes" / "baseline.yaml").exists()
+        # The bare directories are still converged.
+        assert (project_dir / "universes").is_dir()
+        assert (project_dir / "src").is_dir()
+
+    def test_init_check_reports_drift_without_writing(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        """--check exits 1 on drift and writes nothing, --json is parseable."""
+        project_dir = tmp_path / "check-test"
+        result = runner.invoke(
+            main,
+            ["init", str(project_dir), "--no-git", "--check", "--json"],
+        )
         assert result.exit_code == 1
-        assert "already an ASTRA project" in result.output
+        report = json.loads(result.output)
+        assert report["converged"] is False
+        assert "astra.yaml" in report["created"]
+        assert not project_dir.exists()
 
-    def test_init_refuses_if_astra_yaml_exists_current_dir(self, runner: CliRunner, tmp_path: Path):
-        """Test that init refuses to run in current dir if astra.yaml exists."""
-        old_cwd = os.getcwd()
-        try:
-            os.chdir(tmp_path)
-            # First init
-            result = runner.invoke(main, ["init", "--no-git"])
-            assert result.exit_code == 0
-
-            # Second init should fail
-            result = runner.invoke(main, ["init", "--no-git"])
-            assert result.exit_code == 1
-            assert "already an ASTRA project" in result.output
-        finally:
-            os.chdir(old_cwd)
+    def test_init_check_passes_on_converged_project(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        project_dir = tmp_path / "check-ok"
+        result = runner.invoke(main, ["init", str(project_dir), "--no-git"])
+        assert result.exit_code == 0
+        result = runner.invoke(main, ["init", str(project_dir), "--no-git", "--check"])
+        assert result.exit_code == 0
 
     def test_init_existing_empty_dir_succeeds(self, runner: CliRunner, tmp_path: Path):
         """Test that init succeeds on existing empty directory."""
