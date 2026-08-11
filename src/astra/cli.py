@@ -116,9 +116,8 @@ def init(directory: Path, no_git: bool) -> None:
             raise SystemExit(1)
         directory.mkdir(parents=True, exist_ok=True)
 
-    # Create directory structure
-    (directory / "universes").mkdir(parents=True, exist_ok=True)
-    (directory / "src").mkdir(parents=True, exist_ok=True)
+    # Create boilerplate directory structure and spec
+    create_boilerplate(directory)
 
     # Create .gitignore
     gitignore = """# ASTRA Analysis
@@ -130,14 +129,27 @@ __pycache__/
 """
     (directory / ".gitignore").write_text(gitignore)
 
-    # Create boilerplate astra.yaml
-    _create_boilerplate_astra_yaml(directory)
-
     # Initialize git repository
     _init_git_repo(directory, no_git)
 
     # Print success message
     console.print(f"[green]✓[/green] Created ASTRA analysis scaffold: [cyan]{directory}[/cyan]")
+
+
+def create_boilerplate(directory: Path) -> None:
+    """Write the boilerplate spec scaffold into ``directory``.
+
+    Creates ``universes/`` and ``src/`` and writes the boilerplate
+    ``astra.yaml`` and ``universes/baseline.yaml``. Touches nothing
+    else — no ``.gitignore``, no git init, no emptiness checks — so
+    downstream tools (e.g. lightcone-cli) can scaffold into existing
+    directories under their own conventions. Existing files are
+    overwritten; callers guard on ``astra.yaml`` presence.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "universes").mkdir(parents=True, exist_ok=True)
+    (directory / "src").mkdir(parents=True, exist_ok=True)
+    _create_boilerplate_astra_yaml(directory)
 
 
 def _create_boilerplate_astra_yaml(directory: Path) -> None:

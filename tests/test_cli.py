@@ -651,6 +651,37 @@ class TestInitCommand:
         assert not (project_dir / ".git").exists()
 
 
+class TestCreateBoilerplate:
+    """Tests for the public create_boilerplate scaffold helper."""
+
+    def test_writes_spec_scaffold(self, tmp_path: Path):
+        """Creates universes/, src/, astra.yaml, and baseline.yaml."""
+        from astra.cli import create_boilerplate
+
+        project_dir = tmp_path / "proj"
+        create_boilerplate(project_dir)
+        assert (project_dir / "astra.yaml").exists()
+        assert (project_dir / "universes" / "baseline.yaml").exists()
+        assert (project_dir / "src").is_dir()
+        # No side effects beyond the spec scaffold.
+        assert not (project_dir / ".gitignore").exists()
+        assert not (project_dir / ".git").exists()
+
+    def test_scaffolds_into_nonempty_directory(self, tmp_path: Path):
+        """Unlike `astra init`, works in a directory with existing files
+        (downstream tools adopt existing codebases) and leaves them alone."""
+        from astra.cli import create_boilerplate
+
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        (project_dir / "notes.txt").write_text("keep me")
+        (project_dir / ".gitignore").write_text("*.log\n")
+        create_boilerplate(project_dir)
+        assert (project_dir / "astra.yaml").exists()
+        assert (project_dir / "notes.txt").read_text() == "keep me"
+        assert (project_dir / ".gitignore").read_text() == "*.log\n"
+
+
 class TestBatchQuoteVerification:
     """Tests for the batch quote verification command (astra paper verify-quotes)."""
 
