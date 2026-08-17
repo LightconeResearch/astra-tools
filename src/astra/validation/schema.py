@@ -9,8 +9,6 @@ models expect an explicit ``id`` on each object.
 from __future__ import annotations
 
 import copy
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +16,11 @@ from astra.datamodel.astra_pydantic import Analysis, Universe
 from pydantic import ValidationError as PydanticValidationError
 
 from astra.helpers import load_yaml
+
+# Re-exported: `installed_spec_version` moved to its own stdlib-only module
+# so scaffolding can reach it without importing the datamodel, but it stays
+# importable from here — including for tests that patch it by this name.
+from astra.spec_version import installed_spec_version
 
 
 def _inject_ids_inplace(data: dict[str, Any]) -> None:
@@ -107,14 +110,6 @@ def validate_universe_data(data: dict[str, Any]) -> list[str]:
         return []
     except PydanticValidationError as exc:
         return _format_pydantic_errors(exc)
-
-
-def installed_spec_version() -> str | None:
-    """Return the installed ``astra-spec`` package version, or None if unknown."""
-    try:
-        return _pkg_version("astra-spec")
-    except PackageNotFoundError:
-        return None
 
 
 def _normalize_version(v: str) -> tuple[int, ...] | None:
