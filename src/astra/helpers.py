@@ -67,6 +67,28 @@ def parse_from_path(ref: str) -> tuple[int, list[str]] | None:
     return (up, segments)
 
 
+def parse_option_ref(ref: str) -> tuple[str, str] | None:
+    """Parse a ``decision_id.option_id`` reference.
+
+    The grammar behind ``when:``, ``requires:`` and ``incompatible_with:``:
+    one decision, one of its options. Negation (``~``) belongs to the
+    condition rather than the reference, so callers strip it first.
+
+    Args:
+        ref: The reference as written, e.g. ``"scaling.standard"``.
+
+    Returns:
+        ``(decision_id, option_id)``, or ``None`` if the reference is not
+        exactly two dot-separated parts. Malformed is the validator's to
+        report — ``INVALID_WHEN_REF``, ``INVALID_CONSTRAINT_FORMAT`` —
+        which it cannot do if parsing raises first.
+    """
+    decision_id, dot, option_id = ref.partition(".")
+    if not dot or "." in option_id:
+        return None
+    return (decision_id, option_id)
+
+
 def is_condition_met(
     when: str | list[str] | None,
     universe_decisions: dict[str, str],
@@ -81,16 +103,20 @@ def is_condition_met(
 
     Returns:
         True if the condition is met (or when is None), False otherwise.
+        A malformed reference is a condition nothing can satisfy, negated
+        or not — reporting it belongs to the validator, and raising here
+        took `astra universe check` down on a typo.
     """
     if when is None:
         return True
     conditions = [when] if isinstance(when, str) else when
     for cond in conditions:
         negate = cond.startswith("~")
-        ref = cond.lstrip("~")
-        decision_id, option_id = ref.split(".")
-        selected = universe_decisions.get(decision_id)
-        match = selected == option_id
+        parsed = parse_option_ref(cond.lstrip("~"))
+        if parsed is None:
+            return False
+        decision_id, option_id = parsed
+        match = universe_decisions.get(decision_id) == option_id
         if negate:
             match = not match
         if not match:

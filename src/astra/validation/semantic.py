@@ -18,6 +18,7 @@ from astra.helpers import (
     is_condition_met,
     load_yaml,
     parse_from_path,
+    parse_option_ref,
     resolve_analysis_tree,
 )
 
@@ -467,9 +468,8 @@ def _validate_decisions(
         if when:
             conditions = [when] if isinstance(when, str) else when
             for cond in conditions:
-                ref = cond.lstrip("~")
-                when_parts = ref.split(".")
-                if len(when_parts) != 2:
+                parsed_when = parse_option_ref(cond.lstrip("~"))
+                if parsed_when is None:
                     errors.append(
                         SemanticError(
                             "INVALID_WHEN_REF",
@@ -478,7 +478,7 @@ def _validate_decisions(
                         )
                     )
                     continue
-                when_decision_id, when_option_id = when_parts
+                when_decision_id, when_option_id = parsed_when
                 scope = constraint_scope or {}
                 if when_decision_id not in decisions and when_decision_id not in scope:
                     errors.append(
@@ -594,9 +594,8 @@ def _validate_output_when(
         output_path = f"{outputs_prefix}.{out_id}"
 
         for cond in conditions:
-            ref = cond.lstrip("~")
-            parts = ref.split(".")
-            if len(parts) != 2:
+            parsed = parse_option_ref(cond.lstrip("~"))
+            if parsed is None:
                 errors.append(
                     SemanticError(
                         "INVALID_WHEN_REF",
@@ -605,7 +604,7 @@ def _validate_output_when(
                     )
                 )
                 continue
-            decision_id, option_id = parts
+            decision_id, option_id = parsed
             if decision_id not in decisions:
                 errors.append(
                     SemanticError(
@@ -1020,8 +1019,8 @@ def _validate_constraint_ref(
     option_path: str,
 ) -> list[SemanticError]:
     """Validate a constraint reference (decision.option format)."""
-    parts = ref.split(".")
-    if len(parts) != 2:
+    parsed = parse_option_ref(ref)
+    if parsed is None:
         return [
             SemanticError(
                 "INVALID_CONSTRAINT_FORMAT",
@@ -1030,7 +1029,7 @@ def _validate_constraint_ref(
             ),
         ]
 
-    decision_id, option_id = parts
+    decision_id, option_id = parsed
 
     if decision_id not in decisions:
         return [
@@ -1259,14 +1258,6 @@ def _validate_universe_node(
     return errors
 
 
-def _parse_constraint_ref(ref: str) -> tuple[str, str] | None:
-    """Parse a constraint reference into (decision_id, option_id)."""
-    parts = ref.split(".")
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return None
-
-
 def _validate_node_universe_constraints(
     universe_decisions: dict[str, str],
     analysis_decisions: dict[str, Any],
@@ -1288,7 +1279,7 @@ def _validate_node_universe_constraints(
 
         # Check incompatible_with
         for ref in option.get("incompatible_with") or []:
-            parsed = _parse_constraint_ref(ref)
+            parsed = parse_option_ref(ref)
             if parsed and universe_decisions.get(parsed[0]) == parsed[1]:
                 errors.append(
                     SemanticError(
@@ -1300,7 +1291,7 @@ def _validate_node_universe_constraints(
 
         # Check requires
         for ref in option.get("requires") or []:
-            parsed = _parse_constraint_ref(ref)
+            parsed = parse_option_ref(ref)
             if parsed and universe_decisions.get(parsed[0]) != parsed[1]:
                 actual = universe_decisions.get(parsed[0], "(not set)")
                 errors.append(

@@ -125,23 +125,35 @@ def _selected_universe(
     node: Mapping[str, Any],
     universe_node: Mapping[str, Any],
     base_path: Path | None,
+    where: str,
 ) -> Mapping[str, Any]:
     """Follow a ``universe:`` reference to the file it names.
 
     Only an external (``path:``) sub-analysis has a ``universes/``
     directory of its own, so only one can be referred to this way.
     Anything unresolvable leaves the node as it stands — a missing file is
-    the validator's to report, not this module's to raise on.
+    the validator's to report, not this module's to raise on — but it is
+    logged, because ``semantic.py`` validates nothing about ``universe:``
+    and silence here would leave a whole subtree unsettled with no
+    diagnostic from either layer.
     """
     name = universe_node.get("universe")
+    if not name:
+        return universe_node
     sub_path = node.get("path")
-    if not name or not sub_path or base_path is None:
+    if not sub_path:
+        logger.warning(
+            "universe '%s' selected for '%s', which is an inline sub-analysis "
+            "and has no universes/ directory to name it in",
+            name,
+            where,
+        )
+        return universe_node
+    if base_path is None:
         return universe_node
     path = external_spec_path(base_path, str(sub_path)).parent / "universes" / f"{name}.yaml"
     if not path.is_file():
-        logger.warning(
-            "universe '%s' selected for '%s' but %s does not exist", name, sub_path, path
-        )
+        logger.warning("universe '%s' selected for '%s' but %s does not exist", name, where, path)
         return universe_node
     loaded = load_yaml(path)
     # An empty or comment-only file parses to `None`; that is the
@@ -204,7 +216,7 @@ def _settle(
         if not isinstance(sub, dict):
             continue
         sub_universe = (universe_node.get("analyses") or {}).get(str(sub_id)) or {}
-        sub_universe = _selected_universe(sub, sub_universe, base_path)
+        sub_universe = _selected_universe(sub, sub_universe, base_path, qualify(scope, str(sub_id)))
         sub_base = base_path
         if base_path is not None and sub.get("path"):
             sub_base = external_spec_path(base_path, str(sub["path"])).parent

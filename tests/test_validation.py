@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from astra.helpers import load_yaml
 from astra.validation.schema import (
     is_valid_analysis,
@@ -800,6 +802,73 @@ class TestIsConditionMet:
 
         # ~model.svm with model not set: selected is None, match=(None==svm)=False, negated=True
         assert is_condition_met("~model.svm", {}) is True
+
+    @pytest.mark.parametrize("ref", ["model", "model.svm.extra", "", "~model", "~model.svm.extra"])
+    def test_a_malformed_reference_is_a_condition_nothing_satisfies(self, ref: str):
+        """Not an exception. `is_condition_met` is reached from the
+        validator as well as the resolver, so raising took `astra universe
+        check` and `astra universe generate` down on a typo the validator
+        is perfectly able to report."""
+        from astra.helpers import is_condition_met
+
+        assert is_condition_met(ref, {"model": "svm"}) is False
+
+    def test_a_malformed_reference_fails_the_whole_and(self):
+        from astra.helpers import is_condition_met
+
+        assert is_condition_met(["model.svm", "sample"], {"model": "svm"}) is False
+
+
+class TestMalformedWhenIsReportedNotRaised:
+    """A `when:` that does not parse is the validator's to report.
+
+    Every command that reads a spec goes through `is_condition_met`, so a
+    single typo used to surface as an uncaught `ValueError` traceback from
+    `astra universe check` and `astra universe generate` — while `astra
+    validate`, on the same file, described the problem precisely.
+    """
+
+    SPEC = {
+        "version": "1.0",
+        "name": "Malformed",
+        "inputs": [{"id": "seed", "type": "data", "source": "s3://raw"}],
+        "outputs": [{"id": "out", "type": "data", "recipe": {"command": "run {output}"}}],
+        "decisions": {
+            "method": {"options": {"pca": {}, "mlp": {}}, "default": "pca"},
+            "trees": {"when": ["method"], "options": {"fifty": {}}, "default": "fifty"},
+        },
+    }
+
+    def test_validate_universe_reports_instead_of_raising(self):
+        errors = validate_universe({"decisions": {"method": "pca", "trees": "fifty"}}, self.SPEC)
+        assert all(isinstance(e, SemanticError) for e in errors)
+
+    def test_the_analysis_validator_still_names_the_typo(self):
+        codes = {e.code for e in validate_analysis(self.SPEC)}
+        assert "INVALID_WHEN_REF" in codes
+
+    def test_an_output_when_is_reported_too(self):
+        spec = {
+            **self.SPEC,
+            "decisions": {"method": {"options": {"pca": {}}, "default": "pca"}},
+            "outputs": [
+                {
+                    "id": "out",
+                    "type": "data",
+                    "when": ["method.pca.extra"],
+                    "recipe": {"command": "run {output}"},
+                }
+            ],
+        }
+        codes = {e.code for e in validate_analysis(spec)}
+        assert "INVALID_WHEN_REF" in codes
+
+    def test_defaults_do_not_raise_either(self):
+        """`astra universe generate` reads `when:` through
+        `get_default_universe`."""
+        from astra.helpers import get_default_universe
+
+        assert get_default_universe(self.SPEC)["decisions"] == {"method": "pca"}
 
 
 class TestDefaultUniverseConditional:
