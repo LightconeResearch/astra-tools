@@ -7,6 +7,7 @@ avoiding the need for Pydantic model imports in the validation path.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,46 @@ from typing import Any
 import yaml
 
 logger = logging.getLogger(__name__)
+
+#: The id grammar the schema enforces. It is what makes ``.`` an
+#: unambiguous separator in a ``from:`` reference or a qualified id.
+ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+# A unified path expression that any `from:` slot can take:
+#
+#   ../id              -- escape one scope upward, then `id`
+#   ../../id           -- escape two scopes upward, then `id`
+#   ../scope.id        -- escape upward, then descend into a named child
+#   scope.id           -- descend from current scope into a named child
+#   scope.sub.id       -- descend through nested children
+#
+# Direction restrictions are per-slot and belong to the validator, not here.
+def parse_from_path(ref: str) -> tuple[int, list[str]] | None:
+    """Parse a ``from:`` reference into ``(up_levels, descent_segments)``.
+
+    Args:
+        ref: The reference as written, e.g. ``"../feature_extraction.features"``.
+
+    Returns:
+        The number of ``../`` steps and the remaining dotted segments, or
+        ``None`` if the reference is malformed (empty or invalid segments).
+
+    Examples:
+        ``"../id"`` → ``(1, ["id"])``; ``"../scope.id"`` → ``(1, ["scope",
+        "id"])``; ``"scope.sub.id"`` → ``(0, ["scope", "sub", "id"])``.
+    """
+    up = 0
+    rest = ref
+    while rest.startswith("../"):
+        up += 1
+        rest = rest[3:]
+    if not rest or rest.startswith(".") or rest.endswith("."):
+        return None
+    segments = rest.split(".")
+    if not all(ID_PATTERN.match(seg) for seg in segments):
+        return None
+    return (up, segments)
 
 
 def is_condition_met(

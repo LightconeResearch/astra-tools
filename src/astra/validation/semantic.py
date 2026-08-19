@@ -6,7 +6,6 @@ using dict-based data structures loaded from YAML files.
 
 from __future__ import annotations
 
-import re
 import string
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,7 @@ from astra.helpers import (
     get_output_ids,
     is_condition_met,
     load_yaml,
+    parse_from_path,
     resolve_analysis_tree,
 )
 
@@ -38,52 +38,15 @@ class SemanticError:
 
 
 # ---------------------------------------------------------------------------
-# `from:` path grammar
+# `from:` direction restrictions
 # ---------------------------------------------------------------------------
 #
-# A unified path expression that any `from:` slot can take:
+# The path grammar itself is `helpers.parse_from_path`. Which directions a
+# slot may take is this module's to enforce, per slot:
 #
-#   ../id              -- escape one scope upward, then `id`
-#   ../../id           -- escape two scopes upward, then `id`
-#   ../scope.id        -- escape upward, then descend into a named child
-#   scope.id           -- descend from current scope into a named child
-#   scope.sub.id       -- descend through nested children
-#
-# Direction restrictions are applied per-slot by the caller:
 #   Input.from    : up, or up-then-into-sibling
 #   Output.from   : down (re-export)
 #   Decision.from : up only
-#
-# The Pydantic schema validator already enforces the regex grammar at load
-# time; the helper here is for resolution against the actual analysis tree.
-
-_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
-
-
-def _parse_from_path(ref: str) -> tuple[int, list[str]] | None:
-    """Parse a `from:` path into ``(up_levels, descent_segments)``.
-
-    Returns ``None`` if the path is malformed (empty segments, invalid
-    identifier characters, etc.). Examples:
-
-        "../id"               -> (1, ["id"])
-        "../../id"            -> (2, ["id"])
-        "../scope.id"         -> (1, ["scope", "id"])
-        "scope.id"            -> (0, ["scope", "id"])
-        "scope.sub.id"        -> (0, ["scope", "sub", "id"])
-    """
-    up = 0
-    rest = ref
-    while rest.startswith("../"):
-        up += 1
-        rest = rest[3:]
-    if not rest or rest.startswith(".") or rest.endswith("."):
-        return None
-    segments = rest.split(".")
-    for seg in segments:
-        if not _ID_PATTERN.match(seg):
-            return None
-    return (up, segments)
 
 
 def _check_path_exclusivity(
@@ -332,7 +295,7 @@ def _validate_analysis_node(
         ref = decision.get("from")
         if not ref:
             continue
-        parsed = _parse_from_path(ref)
+        parsed = parse_from_path(ref)
         if parsed is None:
             continue
         up, segments = parsed
@@ -880,7 +843,7 @@ def _validate_decision_from(
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_DECISION_FROM", message, decision_path)]
 
-    parsed = _parse_from_path(ref)
+    parsed = parse_from_path(ref)
     if parsed is None:
         return _error(f"Decision.from '{ref}' has invalid path syntax")
     up, segments = parsed
@@ -927,7 +890,7 @@ def _validate_option_insight_ref(
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_INSIGHT_REF", message, ref_path)]
 
-    parsed = _parse_from_path(ref)
+    parsed = parse_from_path(ref)
     if parsed is None:
         return _error(f"Option insight '{ref}' has invalid path syntax")
     up, segments = parsed
@@ -977,7 +940,7 @@ def _validate_input_from(
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_FROM", message, node_path)]
 
-    parsed = _parse_from_path(ref)
+    parsed = parse_from_path(ref)
     if parsed is None:
         return _error(f"Input.from '{ref}' has invalid path syntax")
     up, segments = parsed
@@ -1037,7 +1000,7 @@ def _validate_output_from(
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_OUTPUT_FROM", message, output_path)]
 
-    parsed = _parse_from_path(ref)
+    parsed = parse_from_path(ref)
     if parsed is None:
         return _error(f"Output.from '{ref}' has invalid path syntax")
     up, segments = parsed
@@ -1252,7 +1215,7 @@ def _validate_universe_node(
     effective_decisions = dict(universe_decisions)
     for decision_id in from_decision_ids:
         ref = all_analysis_decisions[decision_id].get("from", "")
-        parsed = _parse_from_path(ref)
+        parsed = parse_from_path(ref)
         if parsed is None:
             continue
         up, segments = parsed
