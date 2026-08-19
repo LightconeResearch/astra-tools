@@ -231,3 +231,46 @@ class TestRenderCommand:
         and means something else."""
         with pytest.raises(ValueError):
             render_command(command, inputs={"data": "d"}, decisions={"seed": "s"}, output="o")
+
+
+class TestSelectedUniverse:
+    """A sub-analysis node may name one of its *own* universes instead of
+    listing decisions inline. Loading that file is what `semantic.py` says
+    is "done by the caller/resolver"."""
+
+    def _project(self, tmp_path: Path) -> tuple[dict, Path]:
+        sub = tmp_path / "stage"
+        (sub / "universes").mkdir(parents=True)
+        (sub / "astra.yaml").write_text(
+            "id: stage\nversion: '1.0'\nname: Stage\n"
+            "decisions:\n  method:\n    options:\n      pca: {}\n      mlp: {}\n"
+            "outputs:\n  - id: features\n    type: data\n    decisions: [method]\n"
+            "    recipe:\n      command: run --method {decisions.method}\n"
+        )
+        (sub / "universes" / "fast.yaml").write_text("id: fast\ndecisions:\n  method: pca\n")
+        (sub / "universes" / "deep.yaml").write_text("id: deep\ndecisions:\n  method: mlp\n")
+        data = {"analyses": {"stage": {"path": "stage", **load_yaml(sub / "astra.yaml")}}}
+        return data, tmp_path
+
+    def test_the_named_universe_supplies_the_decisions(self, tmp_path: Path):
+        data, base = self._project(tmp_path)
+        chosen = {"analyses": {"stage": {"universe": "deep"}}}
+        assert resolve_universe(data, chosen, base) == {"stage.method": "mlp"}
+
+    def test_a_different_name_selects_differently(self, tmp_path: Path):
+        data, base = self._project(tmp_path)
+        chosen = {"analyses": {"stage": {"universe": "fast"}}}
+        assert resolve_universe(data, chosen, base) == {"stage.method": "pca"}
+        outputs = by_id(resolve_outputs(data, chosen, base))
+        assert outputs["stage.features"].decisions == {"method": "pca"}
+
+    def test_without_a_base_path_the_reference_is_skipped(self, tmp_path: Path):
+        """There is nothing to resolve it against, and inventing a root
+        would be worse than leaving the decision unsettled."""
+        data, _ = self._project(tmp_path)
+        assert resolve_universe(data, {"analyses": {"stage": {"universe": "deep"}}}) == {}
+
+    def test_inline_decisions_still_work_beside_it(self, tmp_path: Path):
+        data, base = self._project(tmp_path)
+        chosen = {"analyses": {"stage": {"decisions": {"method": "pca"}}}}
+        assert resolve_universe(data, chosen, base) == {"stage.method": "pca"}
