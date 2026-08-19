@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from astra.helpers import load_yaml, parse_from_path
+from astra.helpers import iter_sub_analyses, load_yaml, parse_from_path
 from astra.resolve import (
     iter_analysis_nodes,
     render_command,
@@ -60,6 +60,24 @@ class TestIterAnalysisNodes:
         node = nodes[("classification",)]
         assert {o["id"] for o in node["outputs"]} == {"predictions", "accuracy"}
 
+    def test_iter_sub_analyses_is_the_same_walk_without_the_scope(self, pipeline: dict):
+        """Two views of one walker, so what counts as a sub-analysis cannot
+        drift between the tooling that needs the scope and the tooling that
+        does not."""
+        scoped = [node for scope, node in iter_analysis_nodes(pipeline) if scope]
+        assert list(iter_sub_analyses(pipeline)) == scoped
+
+    def test_a_resolved_externals_children_are_reached_too(self):
+        """An external sub-analysis is descended into like any other: before
+        `resolve_analysis_tree` it has nothing to descend into, and after it
+        that content is the sub-analysis."""
+        data = {"analyses": {"stage": {"path": "stage", "analyses": {"inner": {"id": "inner"}}}}}
+        assert [scope for scope, _ in iter_analysis_nodes(data)] == [
+            (),
+            ("stage",),
+            ("stage", "inner"),
+        ]
+
 
 class TestResolveUniverse:
     def test_a_sub_analysis_decision_is_qualified(self, pipeline: dict):
@@ -74,6 +92,29 @@ class TestResolveUniverse:
         assert settled["random_seed"] == "seed_42"
         assert settled["feature_extraction.seed"] == "seed_42"
         assert settled["classification.split"] == settled["test_split"]
+
+    def test_a_conditional_decision_declared_before_its_condition_is_kept(self):
+        """`when:` reads the whole universe, not the decisions that happen
+        to be declared above it — which is what the validator compares
+        against, so the two must agree on what a universe settles."""
+        spec = {
+            "decisions": {
+                "trees": {"when": "model.forest", "options": {"fifty": {}, "hundred": {}}},
+                "model": {"options": {"forest": {}, "logistic": {}}},
+            }
+        }
+        chosen = {"decisions": {"model": "forest", "trees": "fifty"}}
+        assert resolve_universe(spec, chosen) == {"model": "forest", "trees": "fifty"}
+
+    def test_an_unmet_condition_still_drops_the_decision(self):
+        spec = {
+            "decisions": {
+                "trees": {"when": "model.forest", "options": {"fifty": {}}},
+                "model": {"options": {"forest": {}, "logistic": {}}},
+            }
+        }
+        chosen = {"decisions": {"model": "logistic", "trees": "fifty"}}
+        assert resolve_universe(spec, chosen) == {"model": "logistic"}
 
     def test_universes_differ_where_the_universe_file_differs(self, pipeline: dict):
         baseline = resolve_universe(pipeline, universe("baseline"))
@@ -133,6 +174,53 @@ class TestResolveOutputs:
         found = by_id(resolve_outputs(pipeline, universe("baseline")))
         (predictions,) = found["classification.accuracy"].inputs
         assert predictions.produced_by == "classification.predictions"
+
+    def test_an_input_naming_a_sub_analysis_output_resolves_to_it(self):
+        """`inputs: [stage.features]` is the qualified form the validator
+        accepts alongside a plain sibling id — a consumer building a DAG
+        loses the edge if it does not resolve."""
+        spec = {
+            "outputs": [{"id": "report", "inputs": ["stage.features"], "recipe": {"command": "x"}}],
+            "analyses": {"stage": {"outputs": [{"id": "features", "recipe": {"command": "y"}}]}},
+        }
+        found = by_id(resolve_outputs(spec, {}))
+        (features,) = found["report"].inputs
+        assert features.id == "stage.features"
+        assert features.produced_by == "stage.features"
+        assert features.source is None
+
+    def test_a_qualified_input_follows_the_re_export_beneath_it(self):
+        spec = {
+            "outputs": [{"id": "report", "inputs": ["stage.features"], "recipe": {"command": "x"}}],
+            "analyses": {
+                "stage": {
+                    "outputs": [{"id": "features", "from": "inner.features"}],
+                    "analyses": {
+                        "inner": {"outputs": [{"id": "features", "recipe": {"command": "y"}}]}
+                    },
+                }
+            },
+        }
+        (features,) = by_id(resolve_outputs(spec, {}))["report"].inputs
+        assert features.produced_by == "stage.inner.features"
+
+    def test_an_ancestor_alias_reads_that_scopes_inputs_not_its_outputs(self):
+        """`from: ../data` names an ancestor *input*, which is what
+        `_validate_input_from` checks it against — a same-named output
+        there must not stand in for it and lose the source."""
+        spec = {
+            "inputs": [{"id": "data", "source": "s3://raw"}],
+            "outputs": [{"id": "data", "recipe": {"command": "x"}}],
+            "analyses": {
+                "stage": {
+                    "inputs": [{"id": "d", "from": "../data"}],
+                    "outputs": [{"id": "fit", "inputs": ["d"], "recipe": {"command": "y"}}],
+                }
+            },
+        }
+        (d,) = by_id(resolve_outputs(spec, {}))["stage.fit"].inputs
+        assert d.source == "s3://raw"
+        assert d.produced_by is None
 
     def test_decisions_are_keyed_by_the_id_the_recipe_writes(self, pipeline: dict):
         """A recipe inside a sub-analysis writes `{decisions.method}`, not
@@ -202,6 +290,50 @@ class TestConditionalOutputs:
         assert "fe.loadings" not in by_id(resolve_outputs(spec, other))
 
 
+class TestConditionalReExports:
+    """A re-export carries no `when:` of its own, so it is exactly as
+    conditional as the output it stands for. Returning one whose target was
+    conditioned away hands a runner a target it cannot build."""
+
+    SPEC = {
+        "outputs": [{"id": "plot", "from": "stage.plot"}],
+        "analyses": {
+            "stage": {
+                "decisions": {"m": {"options": {"a": {}, "b": {}}}},
+                "outputs": [{"id": "plot", "when": "m.a", "recipe": {"command": "x"}}],
+            }
+        },
+    }
+
+    def test_the_re_export_goes_when_its_target_goes(self):
+        chosen = {"analyses": {"stage": {"decisions": {"m": "b"}}}}
+        assert by_id(resolve_outputs(self.SPEC, chosen)) == {}
+
+    def test_and_stays_when_its_target_stays(self):
+        chosen = {"analyses": {"stage": {"decisions": {"m": "a"}}}}
+        found = by_id(resolve_outputs(self.SPEC, chosen))
+        assert set(found) == {"plot", "stage.plot"}
+        assert found["plot"].reexports == "stage.plot"
+
+    def test_dropping_cascades_through_a_chain_of_re_exports(self):
+        spec = {
+            "outputs": [{"id": "plot", "from": "stage.plot"}],
+            "analyses": {
+                "stage": {
+                    "outputs": [{"id": "plot", "from": "inner.plot"}],
+                    "analyses": {
+                        "inner": {
+                            "decisions": {"m": {"options": {"a": {}, "b": {}}}},
+                            "outputs": [{"id": "plot", "when": "m.a", "recipe": {"command": "x"}}],
+                        }
+                    },
+                }
+            },
+        }
+        chosen = {"analyses": {"stage": {"analyses": {"inner": {"decisions": {"m": "b"}}}}}}
+        assert by_id(resolve_outputs(spec, chosen)) == {}
+
+
 class TestRenderCommand:
     def test_every_placeholder_form(self):
         rendered = render_command(
@@ -269,6 +401,14 @@ class TestSelectedUniverse:
         would be worse than leaving the decision unsettled."""
         data, _ = self._project(tmp_path)
         assert resolve_universe(data, {"analyses": {"stage": {"universe": "deep"}}}) == {}
+
+    def test_an_empty_universe_file_leaves_the_node_as_it_stands(self, tmp_path: Path):
+        """A file that parses to `None` is the validator's to report; this
+        module promises not to raise on anything unresolvable."""
+        data, base = self._project(tmp_path)
+        (base / "stage" / "universes" / "blank.yaml").write_text("# nothing here\n")
+        chosen = {"analyses": {"stage": {"universe": "blank"}}}
+        assert resolve_universe(data, chosen, base) == {}
 
     def test_inline_decisions_still_work_beside_it(self, tmp_path: Path):
         data, base = self._project(tmp_path)

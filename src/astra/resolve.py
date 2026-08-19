@@ -35,12 +35,22 @@ from __future__ import annotations
 
 import logging
 import string
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from astra.helpers import external_spec_path, is_condition_met, load_yaml, parse_from_path
+from astra.helpers import (
+    Scope,
+    ancestor_at,
+    external_spec_path,
+    get_input,
+    get_output_ids,
+    is_condition_met,
+    iter_analysis_nodes,
+    load_yaml,
+    parse_from_path,
+)
 
 __all__ = [
     "ResolvedInput",
@@ -56,8 +66,6 @@ logger = logging.getLogger(__name__)
 
 _FORMATTER = string.Formatter()
 
-Scope = tuple[str, ...]
-
 
 def qualify(scope: Scope, local_id: str) -> str:
     """Join a scope path and a local id into a qualified id.
@@ -70,35 +78,6 @@ def qualify(scope: Scope, local_id: str) -> str:
         ``"a.b.id"`` inside sub-analyses, or ``"id"`` at the root.
     """
     return ".".join((*scope, local_id))
-
-
-def iter_analysis_nodes(data: Mapping[str, Any]) -> Iterator[tuple[Scope, dict[str, Any]]]:
-    """Yield every node in the analysis tree with the scope it sits at.
-
-    The root comes first, with an empty scope, then each sub-analysis
-    depth-first. Unlike ``iter_sub_analyses`` this yields the scope path —
-    which is what lets anything declared inside a sub-analysis be named
-    unambiguously — and it descends into external (``path:``)
-    sub-analyses, whose content ``resolve_analysis_tree`` has already
-    inlined by the time this runs.
-
-    Args:
-        data: The analysis, with external sub-analyses already resolved.
-
-    Yields:
-        ``(scope, node)`` pairs, root first.
-    """
-    yield ((), dict(data))
-    yield from _descend(data, ())
-
-
-def _descend(node: Mapping[str, Any], scope: Scope) -> Iterator[tuple[Scope, dict[str, Any]]]:
-    for sub_id, sub in (node.get("analyses") or {}).items():
-        if not isinstance(sub, dict):
-            continue
-        here = (*scope, str(sub_id))
-        yield (here, sub)
-        yield from _descend(sub, here)
 
 
 # =============================================================================
@@ -164,7 +143,10 @@ def _selected_universe(
             "universe '%s' selected for '%s' but %s does not exist", name, sub_path, path
         )
         return universe_node
-    return load_yaml(path)
+    loaded = load_yaml(path)
+    # An empty or comment-only file parses to `None`; that is the
+    # validator's to report, and this module promises not to raise on it.
+    return loaded if isinstance(loaded, Mapping) else universe_node
 
 
 def _settle(
@@ -198,18 +180,20 @@ def _settle(
         if parsed is None:
             continue
         up, segments = parsed
-        if len(segments) != 1 or not 0 < up <= len(chain):
-            continue
-        target = chain[len(chain) - up]
-        if segments[0] in target:
+        target = ancestor_at(chain, up) if len(segments) == 1 else None
+        if target is not None and segments[0] in target:
             here[str(decision_id)] = target[segments[0]]
 
+    # A condition reads everything this universe settles at or above this
+    # node, not just what happens to be declared before it — which is what
+    # `_validate_universe_node` compares against.
+    in_scope = {**ancestors, **chosen}
     for decision_id, decision in declared.items():
         name = str(decision_id)
         if name in here or name not in chosen:
             continue
         when = decision.get("when") if isinstance(decision, dict) else None
-        if when and not is_condition_met(when, {**ancestors, **here}):
+        if when and not is_condition_met(when, {**in_scope, **here}):
             continue
         here[name] = chosen[name]
 
@@ -295,7 +279,7 @@ def resolve_outputs(
     """
     settled = resolve_universe(data, universe, base_path)
     nodes = dict(iter_analysis_nodes(data))
-    resolved: list[ResolvedOutput] = []
+    declared_here: list[tuple[str, Scope, dict[str, Any], dict[str, str]]] = []
     reexports: dict[str, str] = {}
 
     for scope, node in nodes.items():
@@ -305,30 +289,51 @@ def resolve_outputs(
                 continue
             if not is_condition_met(declared.get("when") or None, local):
                 continue
-            output_id = str(declared["id"])
+            qualified = qualify(scope, str(declared["id"]))
             target = _reexport_target(scope, str(declared.get("from") or ""))
             if target:
-                reexports[qualify(scope, output_id)] = target
-            resolved.append(
-                ResolvedOutput(
-                    id=qualify(scope, output_id),
-                    scope=scope,
-                    definition=declared,
-                    command=(declared.get("recipe") or {}).get("command") or None,
-                    decisions={
-                        name: local[name]
-                        for name in declared.get("decisions") or []
-                        if name in local
-                    },
-                    inputs=tuple(
-                        _resolve_input(nodes, scope, str(name))
-                        for name in declared.get("inputs") or []
-                    ),
-                    reexports=target,
-                )
-            )
+                reexports[qualified] = target
+            declared_here.append((qualified, scope, declared, local))
+
+    live = _live_ids({entry[0] for entry in declared_here}, reexports)
+    resolved = [
+        ResolvedOutput(
+            id=qualified,
+            scope=scope,
+            definition=declared,
+            command=(declared.get("recipe") or {}).get("command") or None,
+            decisions={
+                name: local[name] for name in declared.get("decisions") or [] if name in local
+            },
+            inputs=tuple(
+                _resolve_input(nodes, scope, str(name)) for name in declared.get("inputs") or []
+            ),
+            reexports=reexports.get(qualified),
+        )
+        for qualified, scope, declared, local in declared_here
+        if qualified in live
+    ]
 
     return [_follow(out, reexports) for out in resolved]
+
+
+def _live_ids(declared: set[str], reexports: Mapping[str, str]) -> set[str]:
+    """Drop every re-export of an output this universe does not produce.
+
+    A re-export carries no ``when:`` of its own — it is exactly as
+    conditional as the output it stands for, and returning one whose target
+    was conditioned away would hand a runner a target it cannot build.
+    Dropping cascades, since a re-export may stand for another.
+    """
+    live = set(declared)
+    dropping = True
+    while dropping:
+        dropping = False
+        for qualified, target in reexports.items():
+            if qualified in live and target not in live:
+                live.discard(qualified)
+                dropping = True
+    return live
 
 
 def _scope_decisions(settled: Mapping[str, str], scope: Scope) -> dict[str, str]:
@@ -340,6 +345,11 @@ def _scope_decisions(settled: Mapping[str, str], scope: Scope) -> dict[str, str]
     }
 
 
+def _descent_target(scope: Scope, segments: Sequence[str]) -> tuple[Scope, str]:
+    """Split a downward path into the scope it lands in and the id there."""
+    return ((*scope, *(str(seg) for seg in segments[:-1])), str(segments[-1]))
+
+
 def _reexport_target(scope: Scope, ref: str) -> str | None:
     """The qualified id an ``Output.from`` re-export stands for."""
     parsed = parse_from_path(ref) if ref else None
@@ -348,28 +358,41 @@ def _reexport_target(scope: Scope, ref: str) -> str | None:
     up, segments = parsed
     if up or len(segments) < 2:
         return None
-    return qualify((*scope, *segments[:-1]), segments[-1])
+    return qualify(*_descent_target(scope, segments))
 
 
-def _resolve_input(
-    nodes: Mapping[Scope, Mapping[str, Any]], scope: Scope, name: str
-) -> ResolvedInput:
+def _resolve_input(nodes: Mapping[Scope, dict[str, Any]], scope: Scope, name: str) -> ResolvedInput:
     """What supplies *name* for an output declared at *scope*.
 
-    An input naming an output of its own scope is that output. Otherwise
-    it is one of the scope's declared inputs, which either carries a
-    ``source:`` or points elsewhere with ``from:`` — upward to an
-    ancestor's input, which is resolved in turn, or across to a
-    sub-analysis's output.
+    An output may name one of its own scope's outputs, or a sub-analysis's
+    output qualified as ``sub.out_id``. Otherwise the name is one of the
+    scope's declared inputs, which either carries a ``source:`` or points
+    elsewhere with ``from:`` — upward to an ancestor's input, which is
+    resolved in turn, or across to a sub-analysis's output.
     """
-    node = nodes.get(scope) or {}
-    if any(str(o.get("id")) == name for o in node.get("outputs") or [] if isinstance(o, dict)):
-        return ResolvedInput(id=name, produced_by=qualify(scope, name), source=None)
+    if "." in name:
+        # Ids match `^[a-z][a-z0-9_]*$`, so a dot only ever separates the
+        # sub-analyses descended through from the output at the end.
+        target, output_id = _descent_target(scope, name.split("."))
+        if output_id in get_output_ids(nodes.get(target) or {}):
+            return ResolvedInput(id=name, produced_by=qualify(target, output_id), source=None)
+        return ResolvedInput(id=name, produced_by=None, source=None)
 
-    declared = next(
-        (i for i in node.get("inputs") or [] if isinstance(i, dict) and str(i.get("id")) == name),
-        None,
-    )
+    if name in get_output_ids(nodes.get(scope) or {}):
+        return ResolvedInput(id=name, produced_by=qualify(scope, name), source=None)
+    return _resolve_declared_input(nodes, scope, name)
+
+
+def _resolve_declared_input(
+    nodes: Mapping[Scope, dict[str, Any]], scope: Scope, name: str
+) -> ResolvedInput:
+    """What supplies one of *scope*'s own declared inputs.
+
+    Kept apart from `_resolve_input` because ``from: ../id`` names an
+    *input* of the ancestor scope — which `_validate_input_from` checks it
+    against — and a same-named output there must not stand in for it.
+    """
+    declared = get_input(nodes.get(scope) or {}, name)
     if declared is None:
         return ResolvedInput(id=name, produced_by=None, source=None)
 
@@ -381,14 +404,12 @@ def _resolve_input(
         target = scope[: len(scope) - up]
         if len(segments) == 1:
             # An ancestor's input, which may itself be sourced or aliased.
-            inherited = _resolve_input(nodes, target, segments[0])
+            inherited = _resolve_declared_input(nodes, target, segments[0])
             return ResolvedInput(
                 id=name, produced_by=inherited.produced_by, source=inherited.source
             )
         return ResolvedInput(
-            id=name,
-            produced_by=qualify((*target, *segments[:-1]), segments[-1]),
-            source=None,
+            id=name, produced_by=qualify(*_descent_target(target, segments)), source=None
         )
 
     source = declared.get("source")
