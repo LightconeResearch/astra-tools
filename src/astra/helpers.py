@@ -2,6 +2,11 @@
 
 These utilities work with raw dict data structures loaded from YAML files,
 avoiding the need for Pydantic model imports in the validation path.
+
+Everything here but ``load_yaml`` and ``save_yaml`` operates on dicts that
+are already in hand, so PyYAML — ~18 ms, more than the rest of this module
+put together — is imported by those two functions rather than by everyone
+who imports this one.
 """
 
 from __future__ import annotations
@@ -11,8 +16,6 @@ import re
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypeVar
-
-import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +245,8 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     Returns:
         The parsed YAML content as a dictionary.
     """
+    import yaml
+
     with open(path) as f:
         data: dict[str, Any] = yaml.safe_load(f)
     return data
@@ -254,6 +259,8 @@ def save_yaml(data: dict[str, Any], path: str | Path) -> None:
         data: The data to save.
         path: Path to write the YAML file.
     """
+    import yaml
+
     with open(path, "w") as f:
         yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
 

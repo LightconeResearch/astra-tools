@@ -1,6 +1,6 @@
 """The installed astra-spec version.
 
-Its own module, importing stdlib only, so callers that just need the
+Its own module, importing nothing at all, so callers that just need the
 version string are not forced through the validation stack — see
 :mod:`astra.scaffold`. Re-exported from :mod:`astra.validation` for
 backward compatibility.
@@ -8,13 +8,15 @@ backward compatibility.
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as _pkg_version
-
 
 def installed_spec_version() -> str | None:
     """Return the installed ``astra-spec`` package version, or None if unknown."""
+    # `importlib.metadata` costs ~13 ms and drags in email, inspect and
+    # zipfile behind it. Asking for the version pays that; importing a
+    # module that could ask for it does not.
+    from importlib.metadata import PackageNotFoundError, version
+
     try:
-        return _pkg_version("astra-spec")
+        return version("astra-spec")
     except PackageNotFoundError:
         return None

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -197,6 +196,8 @@ def _init_git_repo(directory: Path, no_git: bool, quiet: bool = False) -> None:
     """Initialize git repository if requested."""
     if no_git or (directory / ".git").exists():
         return
+
+    import subprocess
 
     try:
         subprocess.run(

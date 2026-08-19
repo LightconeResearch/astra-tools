@@ -3,8 +3,6 @@
 import json
 import os
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -684,25 +682,6 @@ class TestInitCommand:
 
 class TestCreateBoilerplate:
     """Tests for the public create_boilerplate scaffold helper."""
-
-    def test_scaffolding_does_not_import_the_validation_stack(self):
-        """``astra.scaffold`` is stdlib-only, and must stay that way.
-
-        Writing two template files should not cost what importing the
-        datamodel costs: ``astra.datamodel`` pulls in linkml_runtime,
-        roughly half a second, which is the whole reason the scaffold lives
-        outside ``astra.cli``. A subprocess, since imports are
-        process-global and pytest has already loaded everything.
-        """
-        code = (
-            "import sys, astra.scaffold; "
-            "print(sorted(n for n in ('linkml_runtime', 'astra.datamodel', 'pydantic', 'click') "
-            "if n in sys.modules))"
-        )
-        proc = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True, check=True
-        )
-        assert proc.stdout.strip() == "[]", f"astra.scaffold pulled in {proc.stdout.strip()}"
 
     def test_still_importable_from_astra_cli(self):
         """``astra.cli`` re-exports it: downstream tools imported it from

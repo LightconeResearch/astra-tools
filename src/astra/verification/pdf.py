@@ -206,21 +206,23 @@ def _normalize_processor(text: str) -> str:
     return default_process(normalized)
 
 
-# pypdf is an optional dependency
+# pypdf is an optional dependency, bound on first use by `_require_pypdf`.
+# Importing it costs ~50 ms, and only text extraction needs it.
 PdfReader: Any = None
 
-try:
-    from pypdf import PdfReader as _PdfReader
 
+def _require_pypdf() -> None:
+    """Import pypdf on first use, or explain how to install it."""
+    global PdfReader
+    if PdfReader is not None:
+        return
+    try:
+        from pypdf import PdfReader as _PdfReader
+    except ImportError:
+        raise ImportError(
+            "pypdf is required for PDF extraction. Install with: pip install pypdf"
+        ) from None
     PdfReader = _PdfReader
-except ImportError:
-    pass
-
-
-def _check_pypdf() -> None:
-    """Raise ImportError if pypdf is not installed."""
-    if PdfReader is None:
-        raise ImportError("pypdf is required for PDF extraction. Install with: pip install pypdf")
 
 
 @dataclass
@@ -344,7 +346,7 @@ def extract_text_from_pdf(pdf_path: Path) -> PDFDocument:
     Raises:
         ImportError: If pypdf is not installed.
     """
-    _check_pypdf()
+    _require_pypdf()
 
     # Read PDF content for SHA-256
     pdf_bytes = pdf_path.read_bytes()

@@ -4,18 +4,25 @@ Validates ASTRA YAML files using the Pydantic models from astra-spec.
 Dict keys are injected as ``id`` fields before validation, since ASTRA YAML
 uses keyed dicts (e.g., ``decisions: {scaling: ...}``) while the Pydantic
 models expect an explicit ``id`` on each object.
+
+The models are imported inside the two functions that validate against
+them. Reaching them costs ~200 ms — an order of magnitude more than the
+rest of ASTRA put together, because ``astra.datamodel`` loads
+``linkml_runtime`` — and the entry points here that every ``astra`` run
+touches (``check_spec_version``, ``installed_spec_version``) need nothing
+from them.
 """
 
 from __future__ import annotations
 
 import copy
 from pathlib import Path
-from typing import Any
-
-from astra.datamodel.astra_pydantic import Analysis, Universe
-from pydantic import ValidationError as PydanticValidationError
+from typing import TYPE_CHECKING, Any
 
 from astra.helpers import load_yaml
+
+if TYPE_CHECKING:
+    from pydantic import ValidationError as PydanticValidationError
 
 # Re-exported: `installed_spec_version` moved to its own stdlib-only module
 # so scaffolding can reach it without importing the datamodel, but it stays
@@ -68,6 +75,9 @@ def validate_analysis_data(data: dict[str, Any]) -> list[str]:
 
     Returns a list of error messages (empty if valid).
     """
+    from astra.datamodel.astra_pydantic import Analysis
+    from pydantic import ValidationError as PydanticValidationError
+
     preprocessed = copy.deepcopy(data)
     preprocessed.setdefault("id", "root")  # root analysis has no id in YAML
     _inject_ids_inplace(preprocessed)
@@ -103,6 +113,9 @@ def validate_universe_data(data: dict[str, Any]) -> list[str]:
 
     Returns a list of error messages (empty if valid).
     """
+    from astra.datamodel.astra_pydantic import Universe
+    from pydantic import ValidationError as PydanticValidationError
+
     preprocessed = copy.deepcopy(data)
     _inject_universe_ids_inplace(preprocessed)
     try:

@@ -9,23 +9,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# Optional dependency for HTTP requests
+# Optional dependency for HTTP requests, bound on first use by
+# `_require_httpx`. Importing it costs ~60 ms, which every reader of the
+# paper cache would otherwise pay to reach a class that only touches disk.
 httpx: Any = None
 
-try:
-    import httpx as _httpx  # type: ignore[import-not-found,unused-ignore]
 
-    httpx = _httpx
-except ImportError:
-    pass
-
-
-def _check_httpx() -> None:
-    """Raise ImportError if httpx is not installed."""
-    if httpx is None:
+def _require_httpx() -> None:
+    """Import httpx on first use, or explain how to install it."""
+    global httpx
+    if httpx is not None:
+        return
+    try:
+        import httpx as _httpx  # type: ignore[import-not-found,unused-ignore]
+    except ImportError:
         raise ImportError(
             "httpx is required for paper downloading. Install with: pip install astra[verify]"
-        )
+        ) from None
+    httpx = _httpx
 
 
 @dataclass
@@ -61,7 +62,7 @@ def fetch_doi_metadata(doi: str) -> DOIMetadata:
     Returns:
         DOIMetadata with title, authors, etc. Fields may be None if not available.
     """
-    _check_httpx()
+    _require_httpx()
 
     url = f"https://doi.org/{doi}"
     headers = {"Accept": "application/vnd.citationstyles.csl+json"}
@@ -172,7 +173,7 @@ def _download_arxiv_pdf(arxiv_id: str, doi: str, version: int | None = None) -> 
     Returns:
         PaperDownloadResult with PDF content or error.
     """
-    _check_httpx()
+    _require_httpx()
 
     # Construct URL
     if version is not None:
@@ -233,7 +234,7 @@ def _try_unpaywall(doi: str) -> PaperDownloadResult:
     Returns:
         PaperDownloadResult with PDF content or error.
     """
-    _check_httpx()
+    _require_httpx()
 
     # Unpaywall requires an email for polite use
     # Using a generic ASTRA email - users should configure their own
@@ -324,7 +325,7 @@ def resolve_doi(doi: str) -> str:
     Returns:
         Target URL.
     """
-    _check_httpx()
+    _require_httpx()
 
     url = f"https://doi.org/{doi}"
     response = httpx.head(url, follow_redirects=True, timeout=30.0)
