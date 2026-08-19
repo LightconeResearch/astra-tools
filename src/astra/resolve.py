@@ -277,13 +277,12 @@ def resolve_outputs(
     Returns:
         Every active output, root scope first, in declaration order.
     """
-    settled = resolve_universe(data, universe, base_path)
-    nodes = dict(iter_analysis_nodes(data))
+    tree = _index(data, resolve_universe(data, universe, base_path))
     declared_here: list[tuple[str, Scope, dict[str, Any], dict[str, str]]] = []
     reexports: dict[str, str] = {}
 
-    for scope, node in nodes.items():
-        local = _scope_decisions(settled, scope)
+    for scope, node in tree.nodes.items():
+        local = tree.decisions.get(scope) or {}
         for declared in node.get("outputs") or []:
             if not isinstance(declared, dict) or not declared.get("id"):
                 continue
@@ -306,7 +305,7 @@ def resolve_outputs(
                 name: local[name] for name in declared.get("decisions") or [] if name in local
             },
             inputs=tuple(
-                _resolve_input(nodes, scope, str(name)) for name in declared.get("inputs") or []
+                _resolve_input(tree, scope, str(name)) for name in declared.get("inputs") or []
             ),
             reexports=reexports.get(qualified),
         )
@@ -336,13 +335,37 @@ def _live_ids(declared: set[str], reexports: Mapping[str, str]) -> set[str]:
     return live
 
 
-def _scope_decisions(settled: Mapping[str, str], scope: Scope) -> dict[str, str]:
-    """The decisions settled *in* one scope, by their local ids."""
-    return {
-        key.rsplit(".", 1)[-1]: value
-        for key, value in settled.items()
-        if tuple(key.split(".")[:-1]) == scope
-    }
+@dataclass(frozen=True)
+class _Index:
+    """The analysis tree and its universe, keyed by scope.
+
+    Resolving asks the same questions over and over: what node sits at
+    this scope, does it declare this output, what did this scope settle.
+    Answering each by re-scanning made resolving cost more than everything
+    else in this module put together, and grew with the size of the tree
+    *times* the number of outputs in it.
+    """
+
+    #: The node at each scope.
+    nodes: dict[Scope, dict[str, Any]]
+    #: The output ids each scope declares.
+    output_ids: dict[Scope, set[str]]
+    #: What each scope settled, by the local decision id.
+    decisions: dict[Scope, dict[str, str]]
+
+
+def _index(data: Mapping[str, Any], settled: Mapping[str, str]) -> _Index:
+    """Walk the tree once, and the settled universe once, up front."""
+    nodes = dict(iter_analysis_nodes(data))
+    decisions: dict[Scope, dict[str, str]] = {}
+    for key, option in settled.items():
+        *scope, name = key.split(".")
+        decisions.setdefault(tuple(scope), {})[name] = option
+    return _Index(
+        nodes=nodes,
+        output_ids={scope: get_output_ids(node) for scope, node in nodes.items()},
+        decisions=decisions,
+    )
 
 
 def _descent_target(scope: Scope, segments: Sequence[str]) -> tuple[Scope, str]:
@@ -361,7 +384,7 @@ def _reexport_target(scope: Scope, ref: str) -> str | None:
     return qualify(*_descent_target(scope, segments))
 
 
-def _resolve_input(nodes: Mapping[Scope, dict[str, Any]], scope: Scope, name: str) -> ResolvedInput:
+def _resolve_input(tree: _Index, scope: Scope, name: str) -> ResolvedInput:
     """What supplies *name* for an output declared at *scope*.
 
     An output may name one of its own scope's outputs, or a sub-analysis's
@@ -374,25 +397,23 @@ def _resolve_input(nodes: Mapping[Scope, dict[str, Any]], scope: Scope, name: st
         # Ids match `^[a-z][a-z0-9_]*$`, so a dot only ever separates the
         # sub-analyses descended through from the output at the end.
         target, output_id = _descent_target(scope, name.split("."))
-        if output_id in get_output_ids(nodes.get(target) or {}):
+        if output_id in tree.output_ids.get(target, ()):
             return ResolvedInput(id=name, produced_by=qualify(target, output_id), source=None)
         return ResolvedInput(id=name, produced_by=None, source=None)
 
-    if name in get_output_ids(nodes.get(scope) or {}):
+    if name in tree.output_ids.get(scope, ()):
         return ResolvedInput(id=name, produced_by=qualify(scope, name), source=None)
-    return _resolve_declared_input(nodes, scope, name)
+    return _resolve_declared_input(tree, scope, name)
 
 
-def _resolve_declared_input(
-    nodes: Mapping[Scope, dict[str, Any]], scope: Scope, name: str
-) -> ResolvedInput:
+def _resolve_declared_input(tree: _Index, scope: Scope, name: str) -> ResolvedInput:
     """What supplies one of *scope*'s own declared inputs.
 
     Kept apart from `_resolve_input` because ``from: ../id`` names an
     *input* of the ancestor scope — which `_validate_input_from` checks it
     against — and a same-named output there must not stand in for it.
     """
-    declared = get_input(nodes.get(scope) or {}, name)
+    declared = get_input(tree.nodes.get(scope) or {}, name)
     if declared is None:
         return ResolvedInput(id=name, produced_by=None, source=None)
 
@@ -404,7 +425,7 @@ def _resolve_declared_input(
         target = scope[: len(scope) - up]
         if len(segments) == 1:
             # An ancestor's input, which may itself be sourced or aliased.
-            inherited = _resolve_declared_input(nodes, target, segments[0])
+            inherited = _resolve_declared_input(tree, target, segments[0])
             return ResolvedInput(
                 id=name, produced_by=inherited.produced_by, source=inherited.source
             )
