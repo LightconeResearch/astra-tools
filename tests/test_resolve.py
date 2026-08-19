@@ -6,6 +6,7 @@ appears together — an inherited decision, an input reaching sideways into
 a sibling sub-analysis, and a root output re-exporting a grandchild's.
 """
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -334,6 +335,27 @@ class TestConditionalReExports:
         assert by_id(resolve_outputs(spec, chosen)) == {}
 
 
+class TestMalformedConditions:
+    """A `when:` that does not parse resolves to nothing, rather than
+    raising. Diagnosis belongs to the validator, which reports it as
+    `INVALID_WHEN_REF` — and cannot, if parsing raises first."""
+
+    @pytest.mark.parametrize("when", ["method", "method.pca.extra", "~method"])
+    def test_an_unparseable_output_condition_leaves_the_output_out(self, when: str):
+        spec = {"outputs": [{"id": "out", "when": when, "recipe": {"command": "x"}}]}
+        assert by_id(resolve_outputs(spec, {})) == {}
+
+    def test_an_unparseable_decision_condition_leaves_the_decision_unsettled(self):
+        spec = {
+            "decisions": {
+                "method": {"options": {"pca": {}, "mlp": {}}},
+                "trees": {"when": "method", "options": {"fifty": {}}},
+            }
+        }
+        chosen = {"decisions": {"method": "pca", "trees": "fifty"}}
+        assert resolve_universe(spec, chosen) == {"method": "pca"}
+
+
 class TestRenderCommand:
     def test_every_placeholder_form(self):
         rendered = render_command(
@@ -409,6 +431,26 @@ class TestSelectedUniverse:
         (base / "stage" / "universes" / "blank.yaml").write_text("# nothing here\n")
         chosen = {"analyses": {"stage": {"universe": "blank"}}}
         assert resolve_universe(data, chosen, base) == {}
+
+    def test_an_inline_sub_analysis_cannot_name_one_and_says_so(self, caplog):
+        """Only an external sub-analysis has a `universes/` directory.
+        `semantic.py` validates nothing about `universe:`, so without this
+        line the whole subtree resolves to no decisions and neither layer
+        says why."""
+        spec = {"analyses": {"stage": {"decisions": {"m": {"options": {"a": {}, "b": {}}}}}}}
+        chosen = {"analyses": {"stage": {"universe": "fast"}}}
+        with caplog.at_level(logging.WARNING, logger="astra.resolve"):
+            assert resolve_universe(spec, chosen, Path(".")) == {}
+        assert "inline sub-analysis" in caplog.text
+        assert "stage" in caplog.text
+
+    def test_a_missing_file_names_the_scope_it_was_selected_for(self, tmp_path: Path, caplog):
+        data, base = self._project(tmp_path)
+        chosen = {"analyses": {"stage": {"universe": "nope"}}}
+        with caplog.at_level(logging.WARNING, logger="astra.resolve"):
+            assert resolve_universe(data, chosen, base) == {}
+        assert "does not exist" in caplog.text
+        assert "stage" in caplog.text
 
     def test_inline_decisions_still_work_beside_it(self, tmp_path: Path):
         data, base = self._project(tmp_path)

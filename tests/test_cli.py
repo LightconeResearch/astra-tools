@@ -683,9 +683,17 @@ class TestInitCommand:
 class TestCreateBoilerplate:
     """Tests for the public create_boilerplate scaffold helper."""
 
+    def test_still_importable_from_astra_cli(self):
+        """``astra.cli`` re-exports it: downstream tools imported it from
+        there before it moved, and that path keeps working."""
+        from astra.cli import create_boilerplate as from_cli
+        from astra.scaffold import create_boilerplate as from_scaffold
+
+        assert from_cli is from_scaffold
+
     def test_writes_spec_scaffold(self, tmp_path: Path):
         """Creates universes/, astra.yaml, and baseline.yaml."""
-        from astra.cli import create_boilerplate
+        from astra.scaffold import create_boilerplate
 
         project_dir = tmp_path / "proj"
         create_boilerplate(project_dir)

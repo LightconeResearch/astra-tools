@@ -10,10 +10,10 @@ import os
 import shutil
 import textwrap
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from astra.datamodel import SCHEMA_DIRECTORY
-from linkml_runtime.utils.schemaview import SchemaView
+if TYPE_CHECKING:
+    from linkml_runtime.utils.schemaview import SchemaView
 
 # The three schema files map to the three conceptual layers ASTRA groups by.
 # `from_schema` on each class carries the source schema URI; we key on its tail.
@@ -22,6 +22,12 @@ SCHEMA_ORDER = ["analysis", "universe", "insight"]
 
 @lru_cache(maxsize=1)
 def _view() -> SchemaView:
+    # Imported here rather than at module scope: `linkml_runtime` costs
+    # ~200 ms to import, and every renderer below goes through this cache,
+    # so nothing pays it until a `spec` command actually renders.
+    from astra.datamodel import SCHEMA_DIRECTORY
+    from linkml_runtime.utils.schemaview import SchemaView
+
     # analysis.yaml imports insight + universe, so one load closes over all three.
     return SchemaView(os.path.join(SCHEMA_DIRECTORY, "analysis.yaml"))
 

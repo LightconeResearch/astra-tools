@@ -1,8 +1,8 @@
 """Validation utilities for ASTRA specifications."""
 
+from astra.spec_version import installed_spec_version
 from astra.validation.schema import (
     check_spec_version,
-    installed_spec_version,
     is_valid_analysis,
     is_valid_universe,
     validate_analysis_data,

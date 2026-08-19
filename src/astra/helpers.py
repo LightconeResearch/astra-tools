@@ -2,6 +2,11 @@
 
 These utilities work with raw dict data structures loaded from YAML files,
 avoiding the need for Pydantic model imports in the validation path.
+
+Everything here but ``load_yaml`` and ``save_yaml`` operates on dicts that
+are already in hand, so PyYAML — ~18 ms, more than the rest of this module
+put together — is imported by those two functions rather than by everyone
+who imports this one.
 """
 
 from __future__ import annotations
@@ -11,8 +16,6 @@ import re
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypeVar
-
-import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +67,28 @@ def parse_from_path(ref: str) -> tuple[int, list[str]] | None:
     return (up, segments)
 
 
+def parse_option_ref(ref: str) -> tuple[str, str] | None:
+    """Parse a ``decision_id.option_id`` reference.
+
+    The grammar behind ``when:``, ``requires:`` and ``incompatible_with:``:
+    one decision, one of its options. Negation (``~``) belongs to the
+    condition rather than the reference, so callers strip it first.
+
+    Args:
+        ref: The reference as written, e.g. ``"scaling.standard"``.
+
+    Returns:
+        ``(decision_id, option_id)``, or ``None`` if the reference is not
+        exactly two dot-separated parts. Malformed is the validator's to
+        report — ``INVALID_WHEN_REF``, ``INVALID_CONSTRAINT_FORMAT`` —
+        which it cannot do if parsing raises first.
+    """
+    decision_id, dot, option_id = ref.partition(".")
+    if not dot or "." in option_id:
+        return None
+    return (decision_id, option_id)
+
+
 def is_condition_met(
     when: str | list[str] | None,
     universe_decisions: dict[str, str],
@@ -78,16 +103,20 @@ def is_condition_met(
 
     Returns:
         True if the condition is met (or when is None), False otherwise.
+        A malformed reference is a condition nothing can satisfy, negated
+        or not — reporting it belongs to the validator, and raising here
+        took `astra universe check` down on a typo.
     """
     if when is None:
         return True
     conditions = [when] if isinstance(when, str) else when
     for cond in conditions:
         negate = cond.startswith("~")
-        ref = cond.lstrip("~")
-        decision_id, option_id = ref.split(".")
-        selected = universe_decisions.get(decision_id)
-        match = selected == option_id
+        parsed = parse_option_ref(cond.lstrip("~"))
+        if parsed is None:
+            return False
+        decision_id, option_id = parsed
+        match = universe_decisions.get(decision_id) == option_id
         if negate:
             match = not match
         if not match:
@@ -242,6 +271,8 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     Returns:
         The parsed YAML content as a dictionary.
     """
+    import yaml
+
     with open(path) as f:
         data: dict[str, Any] = yaml.safe_load(f)
     return data
@@ -254,6 +285,8 @@ def save_yaml(data: dict[str, Any], path: str | Path) -> None:
         data: The data to save.
         path: Path to write the YAML file.
     """
+    import yaml
+
     with open(path, "w") as f:
         yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
 
