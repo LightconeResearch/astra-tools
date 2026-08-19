@@ -6,17 +6,18 @@ using dict-based data structures loaded from YAML files.
 
 from __future__ import annotations
 
-import re
 import string
 from pathlib import Path
 from typing import Any
 
 from astra.helpers import (
     _collect_node_decisions,
+    ancestor_at,
     get_input_ids,
     get_output_ids,
     is_condition_met,
     load_yaml,
+    parse_from_path,
     resolve_analysis_tree,
 )
 
@@ -38,52 +39,15 @@ class SemanticError:
 
 
 # ---------------------------------------------------------------------------
-# `from:` path grammar
+# `from:` direction restrictions
 # ---------------------------------------------------------------------------
 #
-# A unified path expression that any `from:` slot can take:
+# The path grammar itself is `helpers.parse_from_path`. Which directions a
+# slot may take is this module's to enforce, per slot:
 #
-#   ../id              -- escape one scope upward, then `id`
-#   ../../id           -- escape two scopes upward, then `id`
-#   ../scope.id        -- escape upward, then descend into a named child
-#   scope.id           -- descend from current scope into a named child
-#   scope.sub.id       -- descend through nested children
-#
-# Direction restrictions are applied per-slot by the caller:
 #   Input.from    : up, or up-then-into-sibling
 #   Output.from   : down (re-export)
 #   Decision.from : up only
-#
-# The Pydantic schema validator already enforces the regex grammar at load
-# time; the helper here is for resolution against the actual analysis tree.
-
-_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
-
-
-def _parse_from_path(ref: str) -> tuple[int, list[str]] | None:
-    """Parse a `from:` path into ``(up_levels, descent_segments)``.
-
-    Returns ``None`` if the path is malformed (empty segments, invalid
-    identifier characters, etc.). Examples:
-
-        "../id"               -> (1, ["id"])
-        "../../id"            -> (2, ["id"])
-        "../scope.id"         -> (1, ["scope", "id"])
-        "scope.id"            -> (0, ["scope", "id"])
-        "scope.sub.id"        -> (0, ["scope", "sub", "id"])
-    """
-    up = 0
-    rest = ref
-    while rest.startswith("../"):
-        up += 1
-        rest = rest[3:]
-    if not rest or rest.startswith(".") or rest.endswith("."):
-        return None
-    segments = rest.split(".")
-    for seg in segments:
-        if not _ID_PATTERN.match(seg):
-            return None
-    return (up, segments)
 
 
 def _check_path_exclusivity(
@@ -208,15 +172,7 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
         _validate_insight_artifacts(data.get("findings") or {}, output_ids, "", "findings")
     )
 
-    # Collect qualified sub-analysis output IDs so root recipes can
-    # reference them (e.g. ``inputs: [hod_fitting.galaxy_mesh]``).
-    sub_analyses = data.get("analyses") or {}
-    sub_output_ids: set[str] = set()
-    for analysis_id, analysis_node in sub_analyses.items():
-        for out in analysis_node.get("outputs") or []:
-            out_id = out.get("id")
-            if out_id:
-                sub_output_ids.add(f"{analysis_id}.{out_id}")
+    sub_output_ids = _sub_output_ids(data)
 
     # `from:` re-exports must be checked before output dependencies, which
     # rely on knowing which output ids are real.
@@ -234,7 +190,7 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
 
     # Validate output when conditions
     errors.extend(_validate_output_when(outputs, root_decisions, ""))
-    for analysis_id, analysis_node in sub_analyses.items():
+    for analysis_id, analysis_node in (data.get("analyses") or {}).items():
         errors.extend(
             _validate_analysis_node(
                 analysis_id,
@@ -332,13 +288,13 @@ def _validate_analysis_node(
         ref = decision.get("from")
         if not ref:
             continue
-        parsed = _parse_from_path(ref)
+        parsed = parse_from_path(ref)
         if parsed is None:
             continue
         up, segments = parsed
         if up <= 0 or len(segments) != 1:
             continue
-        target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+        target_scope = ancestor_at(ancestor_chain, up)
         if target_scope is None:
             continue
         target_decisions = target_scope.get("decisions") or {}
@@ -371,15 +327,8 @@ def _validate_analysis_node(
         )
     )
 
-    # Sub-analysis output IDs are exposed as qualified ids so this node's
-    # outputs can declare them as inputs (e.g. ``inputs: [child.out]``).
     sub_analyses = node.get("analyses") or {}
-    sub_output_ids: set[str] = set()
-    for sub_id, sub_node in sub_analyses.items():
-        for out in sub_node.get("outputs") or []:
-            out_id = out.get("id")
-            if out_id:
-                sub_output_ids.add(f"{sub_id}.{out_id}")
+    sub_output_ids = _sub_output_ids(node)
 
     errors.extend(
         _validate_output_dependencies(
@@ -403,6 +352,20 @@ def _validate_analysis_node(
         )
 
     return errors
+
+
+def _sub_output_ids(node: dict[str, Any]) -> set[str]:
+    """The qualified ids a node's outputs may name as inputs.
+
+    A sub-analysis's outputs are exposed one level up as ``child.out_id``
+    (e.g. ``inputs: [hod_fitting.galaxy_mesh]``), which is how an output
+    consumes what a sub-analysis produces without a re-export.
+    """
+    return {
+        f"{sub_id}.{out_id}"
+        for sub_id, sub_node in (node.get("analyses") or {}).items()
+        for out_id in get_output_ids(sub_node)
+    }
 
 
 def _validate_outputs_from(
@@ -849,21 +812,6 @@ def _detect_output_cycle(dep_graph: dict[str, list[str]]) -> list[str] | None:
     return None
 
 
-def _resolve_ancestor_scope(
-    ancestor_chain: list[dict[str, Any]],
-    up_levels: int,
-) -> dict[str, Any] | None:
-    """Walk ``up_levels`` scopes up from the current node.
-
-    ``ancestor_chain`` is ordered root-first: ``ancestor_chain[-1]`` is the
-    immediate parent. Returns the target scope, or ``None`` if the chain is
-    not deep enough.
-    """
-    if up_levels <= 0 or up_levels > len(ancestor_chain):
-        return None
-    return ancestor_chain[len(ancestor_chain) - up_levels]
-
-
 def _validate_decision_from(
     decision_id: str,
     ref: str,
@@ -880,7 +828,7 @@ def _validate_decision_from(
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_DECISION_FROM", message, decision_path)]
 
-    parsed = _parse_from_path(ref)
+    parsed = parse_from_path(ref)
     if parsed is None:
         return _error(f"Decision.from '{ref}' has invalid path syntax")
     up, segments = parsed
@@ -895,7 +843,7 @@ def _validate_decision_from(
             "lift the decision to a common ancestor instead)"
         )
 
-    target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+    target_scope = ancestor_at(ancestor_chain, up)
     if target_scope is None:
         return _error(
             f"Decision.from '{ref}' escapes {up} level(s) but only "
@@ -927,7 +875,7 @@ def _validate_option_insight_ref(
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_INSIGHT_REF", message, ref_path)]
 
-    parsed = _parse_from_path(ref)
+    parsed = parse_from_path(ref)
     if parsed is None:
         return _error(f"Option insight '{ref}' has invalid path syntax")
     up, segments = parsed
@@ -942,7 +890,7 @@ def _validate_option_insight_ref(
         target_insights = prior_insights
         scope_desc = "this node's prior_insights"
     else:
-        target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+        target_scope = ancestor_at(ancestor_chain, up)
         if target_scope is None:
             return _error(
                 f"Option insight '{ref}' escapes {up} level(s) but only "
@@ -977,7 +925,7 @@ def _validate_input_from(
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_FROM", message, node_path)]
 
-    parsed = _parse_from_path(ref)
+    parsed = parse_from_path(ref)
     if parsed is None:
         return _error(f"Input.from '{ref}' has invalid path syntax")
     up, segments = parsed
@@ -988,7 +936,7 @@ def _validate_input_from(
             "consume sub outputs via Output re-export)"
         )
 
-    target_scope = _resolve_ancestor_scope(ancestor_chain, up)
+    target_scope = ancestor_at(ancestor_chain, up)
     if target_scope is None:
         return _error(
             f"Input.from '{ref}' escapes {up} level(s) but only "
@@ -1037,7 +985,7 @@ def _validate_output_from(
     def _error(message: str) -> list[SemanticError]:
         return [SemanticError("INVALID_OUTPUT_FROM", message, output_path)]
 
-    parsed = _parse_from_path(ref)
+    parsed = parse_from_path(ref)
     if parsed is None:
         return _error(f"Output.from '{ref}' has invalid path syntax")
     up, segments = parsed
@@ -1252,16 +1200,16 @@ def _validate_universe_node(
     effective_decisions = dict(universe_decisions)
     for decision_id in from_decision_ids:
         ref = all_analysis_decisions[decision_id].get("from", "")
-        parsed = _parse_from_path(ref)
+        parsed = parse_from_path(ref)
         if parsed is None:
             continue
         up, segments = parsed
         if up <= 0 or len(segments) != 1:
             continue
         # The ancestor universe is `up` levels above us in the universe chain.
-        if up > len(ancestor_universe_chain):
+        target_universe = ancestor_at(ancestor_universe_chain, up)
+        if target_universe is None:
             continue
-        target_universe = ancestor_universe_chain[len(ancestor_universe_chain) - up]
         target_decision_id = segments[0]
         if target_decision_id in target_universe:
             effective_decisions[decision_id] = target_universe[target_decision_id]

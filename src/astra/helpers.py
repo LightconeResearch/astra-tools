@@ -7,13 +7,61 @@ avoiding the need for Pydantic model imports in the validation path.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+import re
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import yaml
 
 logger = logging.getLogger(__name__)
+
+#: The id grammar the schema enforces. It is what makes ``.`` an
+#: unambiguous separator in a ``from:`` reference or a qualified id.
+ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+
+#: An analysis path: the sub-analysis ids descended through to reach a
+#: node, empty at the root. Joined with ``.`` it qualifies any id declared
+#: there, e.g. ``classification.accuracy``.
+Scope = tuple[str, ...]
+
+_T = TypeVar("_T")
+
+
+# A unified path expression that any `from:` slot can take:
+#
+#   ../id              -- escape one scope upward, then `id`
+#   ../../id           -- escape two scopes upward, then `id`
+#   ../scope.id        -- escape upward, then descend into a named child
+#   scope.id           -- descend from current scope into a named child
+#   scope.sub.id       -- descend through nested children
+#
+# Direction restrictions are per-slot and belong to the validator, not here.
+def parse_from_path(ref: str) -> tuple[int, list[str]] | None:
+    """Parse a ``from:`` reference into ``(up_levels, descent_segments)``.
+
+    Args:
+        ref: The reference as written, e.g. ``"../feature_extraction.features"``.
+
+    Returns:
+        The number of ``../`` steps and the remaining dotted segments, or
+        ``None`` if the reference is malformed (empty or invalid segments).
+
+    Examples:
+        ``"../id"`` → ``(1, ["id"])``; ``"../scope.id"`` → ``(1, ["scope",
+        "id"])``; ``"scope.sub.id"`` → ``(0, ["scope", "sub", "id"])``.
+    """
+    up = 0
+    rest = ref
+    while rest.startswith("../"):
+        up += 1
+        rest = rest[3:]
+    if not rest or rest.startswith(".") or rest.endswith("."):
+        return None
+    segments = rest.split(".")
+    if not all(ID_PATTERN.match(seg) for seg in segments):
+        return None
+    return (up, segments)
 
 
 def is_condition_met(
@@ -66,18 +114,64 @@ def external_spec_path(base_path: Path, sub_path: str) -> Path:
     return (base_path / sub_path).resolve() / "astra.yaml"
 
 
+def iter_analysis_nodes(data: Mapping[str, Any]) -> Iterator[tuple[Scope, dict[str, Any]]]:
+    """Yield every node in the analysis tree with the scope it sits at.
+
+    The root comes first, with an empty scope, then each sub-analysis
+    depth-first. The scope path is what lets anything declared inside a
+    sub-analysis be named unambiguously; where it does not matter,
+    ``iter_sub_analyses`` is the same walk without it.
+
+    An external (``path:``) sub-analysis is descended into like any other:
+    before ``resolve_analysis_tree`` runs it has no content to descend
+    into, and after it runs that content is the sub-analysis.
+
+    Args:
+        data: The analysis, external sub-analyses resolved or not.
+
+    Yields:
+        ``(scope, node)`` pairs, root first.
+    """
+    yield ((), dict(data))
+    yield from _descend_nodes(data, ())
+
+
+def _descend_nodes(node: Mapping[str, Any], scope: Scope) -> Iterator[tuple[Scope, dict[str, Any]]]:
+    for sub_id, sub in (node.get("analyses") or {}).items():
+        if not isinstance(sub, dict):
+            continue
+        here = (*scope, str(sub_id))
+        yield (here, sub)
+        yield from _descend_nodes(sub, here)
+
+
 def iter_sub_analyses(node: dict[str, Any]) -> Iterator[dict[str, Any]]:
     """Yield every sub-analysis dict declared in ``node``'s ``analyses`` tree.
 
-    Recurses into inline sub-analyses only; external (``path:``) sub-analyses
-    are yielded but not read — their own tree is not visible from this spec.
+    Depth-first, parents before children; the node itself is not yielded.
     """
-    for sub in (node.get("analyses") or {}).values():
-        if not isinstance(sub, dict):
-            continue
+    for _, sub in _descend_nodes(node, ()):
         yield sub
-        if not sub.get("path"):
-            yield from iter_sub_analyses(sub)
+
+
+def ancestor_at(chain: Sequence[_T], up: int) -> _T | None:
+    """The entry ``up`` scopes above the current node in a root-first chain.
+
+    What every ``../`` in a ``from:`` reference counts against, whether the
+    chain holds ancestor nodes, ancestor universes, or what each ancestor
+    settled: ``chain[-1]`` is the immediate parent, so ``up=1`` selects it.
+
+    Args:
+        chain: The ancestors of the current node, root first.
+        up: The number of ``../`` steps taken.
+
+    Returns:
+        The entry that many scopes up, or ``None`` if the reference escapes
+        past the root — which the validator reports and the resolver skips.
+    """
+    if up <= 0 or up > len(chain):
+        return None
+    return chain[len(chain) - up]
 
 
 def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, Any]:
