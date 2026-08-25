@@ -154,6 +154,30 @@ class TestResolveOutputs:
         assert found["accuracy"].reexports == "classification.accuracy"
         assert found["feature_plot"].reexports == "feature_extraction.feature_plot"
 
+    def test_format_is_the_declared_serialization(self, pipeline: dict):
+        found = by_id(resolve_outputs(pipeline, universe("baseline")))
+        assert found["classification.accuracy"].format == "json"
+        assert found["feature_extraction.feature_plot"].format == "png"
+
+    def test_a_re_export_inherits_the_format_it_stands_for(self, pipeline: dict):
+        """The schema forbids `format` on an alias, so resolving has to
+        supply the terminal output's — otherwise a consumer holding a
+        re-export cannot tell what it is about to open."""
+        found = by_id(resolve_outputs(pipeline, universe("baseline")))
+        assert found["accuracy"].definition.get("format") is None  # never declared
+        assert found["accuracy"].format == "json"
+        assert found["feature_plot"].format == "png"
+
+    def test_format_is_none_where_the_spec_omits_it(self):
+        """`format` is recommended, not required, so resolving must cope."""
+        data = {
+            "version": "1.0",
+            "name": "No format",
+            "outputs": [{"id": "result", "type": "metric"}],
+        }
+        found = by_id(resolve_outputs(data, {"id": "u", "decisions": {}}))
+        assert found["result"].format is None
+
     def test_an_input_reaching_into_a_sibling_resolves_to_that_output(self, pipeline: dict):
         """`classification.features` is `from: ../feature_extraction.features`
         — the seam between the two stages, and the whole point of the

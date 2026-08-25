@@ -19,7 +19,7 @@ import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from astra.helpers import load_yaml
+from astra.helpers import iter_analysis_nodes, load_yaml
 
 if TYPE_CHECKING:
     from pydantic import ValidationError as PydanticValidationError
@@ -86,6 +86,46 @@ def validate_analysis_data(data: dict[str, Any]) -> list[str]:
         return []
     except PydanticValidationError as exc:
         return _format_pydantic_errors(exc)
+
+
+# Fields the schema marks `recommended: true` rather than `required`. Omitting
+# one is not an error — the document validates — but it will become one, so the
+# validator says so while there is still time to act.
+#
+# `format` is forbidden on a re-exported Output (`from:`), which inherits it
+# from its source, so aliases are skipped rather than flagged for a field they
+# are not allowed to declare. astra-spec's schema is the source of truth; this
+# check exists because the generated Pydantic models carry `recommended` only
+# as prose in the field description.
+_RECOMMENDED_UNTIL = "0.1.0"
+
+
+def collect_recommendations(data: dict[str, Any]) -> list[str]:
+    """Report recommended-but-absent fields anywhere in the analysis tree.
+
+    Returns a list of human-readable messages (empty when nothing to say).
+    These are warnings: they never make an analysis invalid.
+    """
+    missing_format: list[str] = []
+    for scope, node in iter_analysis_nodes(data):
+        for output in node.get("outputs") or []:
+            if not isinstance(output, dict):
+                continue
+            if output.get("from") or output.get("format"):
+                continue
+            local_id = output.get("id")
+            if not local_id:
+                continue
+            missing_format.append(".".join((*scope, str(local_id))))
+
+    if not missing_format:
+        return []
+    subject = "output" if len(missing_format) == 1 else "outputs"
+    return [
+        f"{len(missing_format)} {subject} without a 'format': "
+        f"{', '.join(missing_format)}. Optional today, required from ASTRA "
+        f"{_RECOMMENDED_UNTIL} — add the artifact's file extension, e.g. 'format: png'."
+    ]
 
 
 def validate_universe_schema(path: str | Path) -> list[str]:

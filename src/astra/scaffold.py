@@ -58,6 +58,7 @@ inputs:
 outputs:
   - id: main_result
     type: metric
+    format: json
     description: "TODO: Describe your primary output metric"
     decisions: [example_method]
     recipe:
@@ -65,6 +66,7 @@ outputs:
 
   - id: conclusion
     type: report
+    format: md
     description: "Summary of analysis findings"
     inputs: [main_result]
     recipe:

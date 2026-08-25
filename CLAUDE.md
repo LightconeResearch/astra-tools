@@ -47,6 +47,9 @@ ASTRA/
 1. **Validation** (`src/astra/validation/`)
    - `schema.py`: Structural validation using Pydantic models from `astra.datamodel`
    - `semantic.py`: Cross-reference validation (IDs, constraints, universe coverage)
+   - `schema.collect_recommendations`: advisory pass for fields the schema marks
+     `recommended` rather than `required` (currently `Output.format`, mandatory
+     from ASTRA 0.1.0). Reported as warnings; never affects the exit code.
 
 2. **CLI** (`src/astra/cli.py`)
    - Built with Click and Rich

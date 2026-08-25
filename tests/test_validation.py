@@ -6,6 +6,7 @@ import pytest
 
 from astra.helpers import load_yaml
 from astra.validation.schema import (
+    collect_recommendations,
     is_valid_analysis,
     is_valid_universe,
     validate_analysis_schema,
@@ -48,6 +49,63 @@ class TestSchemaValidation:
     def test_invalid_output_type(self, invalid_dir: Path):
         errors = validate_analysis_schema(invalid_dir / "invalid_output_type.yaml")
         assert len(errors) > 0
+
+
+class TestRecommendations:
+    """`Output.format` is recommended, not required, until ASTRA 0.1.0.
+
+    The point of these is the *severity*: an analysis without `format` must
+    stay valid. Only the advisory channel is allowed to notice.
+    """
+
+    def _analysis(self, outputs: list[dict]) -> dict:
+        return {"version": "1.0", "name": "Recommendations", "outputs": outputs}
+
+    def test_an_output_without_a_format_is_reported(self):
+        data = self._analysis([{"id": "result", "type": "metric"}])
+        messages = collect_recommendations(data)
+        assert len(messages) == 1
+        assert "result" in messages[0] and "format" in messages[0]
+
+    def test_an_output_with_a_format_is_not(self):
+        data = self._analysis([{"id": "result", "type": "metric", "format": "json"}])
+        assert collect_recommendations(data) == []
+
+    def test_a_re_export_is_never_reported(self):
+        """An alias inherits `format` and is forbidden from declaring one,
+        so asking it for a format would be asking for a schema violation."""
+        data = self._analysis([{"id": "result", "from": "child.result"}])
+        assert collect_recommendations(data) == []
+
+    def test_a_nested_output_is_named_by_its_qualified_id(self):
+        data = self._analysis([])
+        data["analyses"] = {
+            "child": {"outputs": [{"id": "result", "type": "metric"}]},
+        }
+        messages = collect_recommendations(data)
+        assert len(messages) == 1
+        assert "child.result" in messages[0]
+
+    def test_every_offender_is_named_in_one_message(self):
+        data = self._analysis(
+            [
+                {"id": "a", "type": "metric"},
+                {"id": "b", "type": "figure", "format": "png"},
+                {"id": "c", "type": "table"},
+            ]
+        )
+        messages = collect_recommendations(data)
+        assert len(messages) == 1
+        assert "a" in messages[0] and "c" in messages[0]
+        assert "2 outputs" in messages[0]
+
+    def test_a_missing_format_does_not_make_the_analysis_invalid(self, tmp_path: Path):
+        """The whole contract of `recommended`: advisory, never fatal."""
+        from astra.validation.schema import validate_analysis_data
+
+        data = self._analysis([{"id": "result", "type": "metric"}])
+        assert validate_analysis_data(data) == []
+        assert collect_recommendations(data)
 
 
 class TestSemanticValidation:

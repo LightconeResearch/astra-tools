@@ -256,6 +256,11 @@ class ResolvedOutput:
     scope: Scope
     #: The output as the spec declares it.
     definition: dict[str, Any]
+    #: The declared serialization (``png``, ``csv``, ``parquet``, …), or
+    #: ``None`` when the spec omits it. A re-export inherits the format of
+    #: the output it stands for, so this is the terminal output's format,
+    #: not the (necessarily absent) one on the alias.
+    format: str | None
     #: ``recipe.command``, or ``None`` for a re-export or a declared-only
     #: output. This is the test of whether the output is executable.
     command: str | None
@@ -320,12 +325,14 @@ def resolve_outputs(
                 _resolve_input(tree, scope, str(name)) for name in declared.get("inputs") or []
             ),
             reexports=reexports.get(qualified),
+            format=None,  # filled in by _follow, which knows the terminal output
         )
         for qualified, scope, declared, local in declared_here
         if qualified in live
     ]
 
-    return [_follow(out, reexports) for out in resolved]
+    definitions = {qualified: declared for qualified, _, declared, _ in declared_here}
+    return [_follow(out, reexports, definitions) for out in resolved]
 
 
 def _live_ids(declared: set[str], reexports: Mapping[str, str]) -> set[str]:
@@ -449,10 +456,19 @@ def _resolve_declared_input(tree: _Index, scope: Scope, name: str) -> ResolvedIn
     return ResolvedInput(id=name, produced_by=None, source=str(source) if source else None)
 
 
-def _follow(out: ResolvedOutput, reexports: Mapping[str, str]) -> ResolvedOutput:
-    """Point every ``produced_by`` past re-exports at what carries the recipe."""
-    if not reexports:
-        return out
+def _follow(
+    out: ResolvedOutput,
+    reexports: Mapping[str, str],
+    definitions: Mapping[str, Mapping[str, Any]],
+) -> ResolvedOutput:
+    """Point every ``produced_by`` past re-exports at what carries the recipe.
+
+    Also settles ``format``: a re-export declares none of its own — the
+    schema forbids it — so it takes the terminal output's.
+    """
+    terminal = _terminal(out.reexports, reexports)
+    source = definitions.get(terminal, out.definition) if terminal else out.definition
+    declared_format = source.get("format")
     inputs = tuple(
         ResolvedInput(id=i.id, produced_by=_terminal(i.produced_by, reexports), source=i.source)
         for i in out.inputs
@@ -464,7 +480,8 @@ def _follow(out: ResolvedOutput, reexports: Mapping[str, str]) -> ResolvedOutput
         command=out.command,
         decisions=out.decisions,
         inputs=inputs,
-        reexports=_terminal(out.reexports, reexports),
+        reexports=terminal,
+        format=str(declared_format) if declared_format else None,
     )
 
 

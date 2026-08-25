@@ -32,6 +32,7 @@ from astra.helpers import (
 from astra.scaffold import create_boilerplate
 from astra.validation.schema import (
     check_spec_version,
+    collect_recommendations,
     validate_analysis_data,
     validate_universe_data,
 )
@@ -452,6 +453,13 @@ def _validate_one(
         raise SystemExit(1)
 
     console.print("[green]✓[/green] Semantic validation passed")
+
+    # Recommended-but-absent fields. Not errors: the analysis is valid, and the
+    # exit code is unaffected. They are surfaced so an author hears about a
+    # field before the release that makes it mandatory, not after.
+    if not is_universe:
+        for recommendation in collect_recommendations(data):
+            console.print(f"[yellow]⚠[/yellow]  [yellow]{escape(recommendation)}[/yellow]")
 
     # Evidence verification (for analysis files with prior insights and/or findings)
     if not is_universe and not skip_evidence:
