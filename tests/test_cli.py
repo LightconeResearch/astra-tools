@@ -397,6 +397,54 @@ class TestUniverseCommands:
         assert result.exit_code == 0
         assert (tmp_path / "universes" / "baseline.yaml").exists()
 
+    def test_universe_generate_refuses_to_overwrite(
+        self, runner: CliRunner, full_analysis_path: Path, tmp_path: Path
+    ):
+        output_path = tmp_path / "generated.yaml"
+        output_path.write_text("id: hand-edited\n")
+
+        result = runner.invoke(
+            main,
+            [
+                "universe",
+                "generate",
+                "-a",
+                str(full_analysis_path),
+                "-n",
+                "test-universe",
+                "-o",
+                str(output_path),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "already exists" in result.output
+        # The hand-edited file must be left untouched.
+        assert output_path.read_text() == "id: hand-edited\n"
+
+    def test_universe_generate_force_overwrites(
+        self, runner: CliRunner, full_analysis_path: Path, tmp_path: Path
+    ):
+        output_path = tmp_path / "generated.yaml"
+        output_path.write_text("id: hand-edited\n")
+
+        result = runner.invoke(
+            main,
+            [
+                "universe",
+                "generate",
+                "-a",
+                str(full_analysis_path),
+                "-n",
+                "test-universe",
+                "-o",
+                str(output_path),
+                "--force",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Generated universe" in result.output
+        assert load_yaml(output_path)["id"] == "test-universe"
+
     def test_universe_check_valid(
         self,
         runner: CliRunner,

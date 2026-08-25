@@ -754,11 +754,18 @@ def universe() -> None:
     help="Output file (default: universes/<name>.yaml)",
 )
 @click.option("--description", "-d", help="Universe description")
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Overwrite the output file if it already exists",
+)
 def generate_universe(
     name: str,
     analysis: Path | None,
     output: Path | None,
     description: str | None,
+    force: bool,
 ) -> None:
     """Generate a universe from analysis defaults."""
     analysis_path = _require_analysis(analysis)
@@ -777,6 +784,11 @@ def generate_universe(
 
     if output is None:
         output = analysis_path.parent / "universes" / f"{name}.yaml"
+
+    if output.exists() and not force:
+        console.print(f"[red]Error:[/red] [cyan]{output}[/cyan] already exists.")
+        console.print("Use [cyan]--force[/cyan] to overwrite it.")
+        raise SystemExit(1)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     save_yaml(uni, output)
