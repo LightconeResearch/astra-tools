@@ -40,9 +40,6 @@ classifiers = [
 ]
 
 dependencies = [
-    # >=0.0.14: first release with Output.format, which the scaffold emits and
-    # the recommended-field check reports on. Earlier models reject it outright
-    # (the generated Pydantic models forbid extra fields).
     "astra-spec>=0.0.14",
     "linkml-runtime>=1.8",
     "click>=8.0",
