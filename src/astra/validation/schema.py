@@ -19,7 +19,7 @@ import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from astra.helpers import load_yaml
+from astra.helpers import iter_analysis_nodes, load_yaml
 
 if TYPE_CHECKING:
     from pydantic import ValidationError as PydanticValidationError
@@ -86,6 +86,72 @@ def validate_analysis_data(data: dict[str, Any]) -> list[str]:
         return []
     except PydanticValidationError as exc:
         return _format_pydantic_errors(exc)
+
+
+# Fields the schema marks `recommended: true` rather than `required`. Omitting
+# one is not an error — the document validates — but it will become one, so the
+# validator says so while there is still time to act.
+#
+# `format` is forbidden on a re-exported Output (`from:`), which inherits it
+# from its source, so aliases are skipped rather than flagged for a field they
+# are not allowed to declare.
+#
+# The deadline is read off the installed spec rather than restated here:
+# astra-spec carries it structurally on the generated model, as the LinkML
+# `required_in` annotation, so a spec that moves the date moves this warning
+# with it. The constant below is only the fallback for a spec that stops
+# publishing the annotation.
+_RECOMMENDED_UNTIL = "0.1.0"
+
+
+def _required_in(field_name: str) -> str:
+    """The spec version *field_name* stops being merely recommended in.
+
+    Read from ``Output``'s LinkML metadata
+    (``linkml_meta.annotations.required_in``); falls back to
+    `_RECOMMENDED_UNTIL` if the installed spec does not carry it.
+    """
+    from astra.datamodel.astra_pydantic import Output
+
+    field = Output.model_fields.get(field_name)
+    node: Any = getattr(field, "json_schema_extra", None)
+    for key in ("linkml_meta", "annotations", "required_in", "value"):
+        if not isinstance(node, dict):
+            return _RECOMMENDED_UNTIL
+        node = node.get(key)
+    return node if isinstance(node, str) and node else _RECOMMENDED_UNTIL
+
+
+def collect_recommendations(data: dict[str, Any]) -> list[str]:
+    """Report recommended-but-absent fields anywhere in the analysis tree.
+
+    Returns a list of human-readable messages (empty when nothing to say).
+    These are warnings: they never make an analysis invalid.
+
+    The whole tree is walked, so *data* should have its external (``path:``)
+    sub-analyses already resolved — otherwise their outputs are stubs here
+    and would go unreported, having also been skipped as standalone files.
+    """
+    missing_format: list[str] = []
+    for scope, node in iter_analysis_nodes(data):
+        for output in node.get("outputs") or []:
+            if not isinstance(output, dict):
+                continue
+            if output.get("from") or output.get("format"):
+                continue
+            local_id = output.get("id")
+            if not local_id:
+                continue
+            missing_format.append(".".join((*scope, str(local_id))))
+
+    if not missing_format:
+        return []
+    subject = "output" if len(missing_format) == 1 else "outputs"
+    return [
+        f"{len(missing_format)} {subject} without a 'format': "
+        f"{', '.join(missing_format)}. Optional today, required from ASTRA "
+        f"{_required_in('format')} — add the artifact's file extension, e.g. 'format: png'."
+    ]
 
 
 def validate_universe_schema(path: str | Path) -> list[str]:

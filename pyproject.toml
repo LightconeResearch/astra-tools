@@ -40,8 +40,7 @@ classifiers = [
 ]
 
 dependencies = [
-    # >=0.0.13: first release shipping the packaged agent guide (astra guide)
-    "astra-spec>=0.0.13",
+    "astra-spec>=0.0.14",
     "linkml-runtime>=1.8",
     "click>=8.0",
     "pydantic>=2.0",

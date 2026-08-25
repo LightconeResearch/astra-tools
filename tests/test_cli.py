@@ -65,6 +65,38 @@ class TestValidateCommand:
         result = runner.invoke(main, ["validate", "nonexistent.yaml"])
         assert result.exit_code != 0
 
+    def test_an_external_sub_analysis_is_checked_for_recommended_fields(
+        self, runner: CliRunner, tmp_path: Path, minimal_analysis_path: Path
+    ):
+        """A `path:` sub-analysis is skipped as a standalone target, so if the
+        recommendation pass ran on the unresolved tree its outputs would be
+        checked nowhere at all — and hard-fail at 0.1.0 with no warning."""
+        child = tmp_path / "child"
+        child.mkdir()
+        save_yaml(
+            {
+                "inputs": [{"id": "raw", "type": "data", "source": "data/raw.csv"}],
+                "outputs": [
+                    {
+                        "id": "child_out",
+                        "type": "metric",
+                        "description": "No format declared",
+                        "inputs": ["raw"],
+                        "recipe": {"command": "python c.py --out {output}"},
+                    }
+                ],
+            },
+            child / "astra.yaml",
+        )
+        root = load_yaml(minimal_analysis_path)
+        root["analyses"] = {"child": {"path": "child"}}
+        save_yaml(root, tmp_path / "astra.yaml")
+
+        result = runner.invoke(main, ["validate", str(tmp_path / "astra.yaml")])
+        assert result.exit_code == 0  # advisory only, never fatal
+        assert "child.child_out" in result.output
+        assert "without a 'format'" in result.output
+
 
 class TestValidateProjectMode:
     """Tests for `astra validate` with no FILE (whole-project validation)."""
