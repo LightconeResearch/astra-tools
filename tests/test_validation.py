@@ -99,6 +99,23 @@ class TestRecommendations:
         assert "a" in messages[0] and "c" in messages[0]
         assert "2 outputs" in messages[0]
 
+    def test_the_deadline_is_read_off_the_installed_spec(self):
+        """Not restated in this repo: astra-spec carries `required_in` on the
+        generated model, so a spec that moves the date moves the warning."""
+        from astra.datamodel.astra_pydantic import Output
+
+        meta = Output.model_fields["format"].json_schema_extra["linkml_meta"]
+        declared = meta["annotations"]["required_in"]["value"]
+        messages = collect_recommendations(self._analysis([{"id": "result", "type": "metric"}]))
+        assert declared in messages[0]
+
+    def test_a_field_without_the_annotation_falls_back(self):
+        """`description` carries no `required_in`, so the pinned constant stands
+        in rather than the message going blank."""
+        from astra.validation.schema import _RECOMMENDED_UNTIL, _required_in
+
+        assert _required_in("description") == _RECOMMENDED_UNTIL
+
     def test_a_missing_format_does_not_make_the_analysis_invalid(self, tmp_path: Path):
         """The whole contract of `recommended`: advisory, never fatal."""
         from astra.validation.schema import validate_analysis_data

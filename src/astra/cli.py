@@ -27,6 +27,7 @@ from astra.helpers import (
     get_outputs,
     iter_sub_analyses,
     load_yaml,
+    resolve_analysis_tree,
     save_yaml,
 )
 from astra.scaffold import create_boilerplate
@@ -457,8 +458,12 @@ def _validate_one(
     # Recommended-but-absent fields. Not errors: the analysis is valid, and the
     # exit code is unaffected. They are surfaced so an author hears about a
     # field before the release that makes it mandatory, not after.
+    #
+    # Walked over the *resolved* tree, as semantic validation is: an external
+    # `path:` sub-analysis is a bare stub here otherwise, and it is skipped as
+    # a standalone target too, so its outputs would be checked nowhere at all.
     if not is_universe:
-        for recommendation in collect_recommendations(data):
+        for recommendation in collect_recommendations(resolve_analysis_tree(data, file.parent)):
             console.print(f"[yellow]⚠[/yellow]  [yellow]{escape(recommendation)}[/yellow]")
 
     # Evidence verification (for analysis files with prior insights and/or findings)
