@@ -126,6 +126,7 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
     inputs = data.get("inputs") or []
     outputs = data.get("outputs") or []
     prior_insights = data.get("prior_insights") or {}
+    findings = data.get("findings") or {}
 
     # Check for duplicate input IDs
     input_ids: set[str] = set()
@@ -161,7 +162,11 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
     root_decisions = _collect_node_decisions(data)
 
     # Validate all decisions
-    errors.extend(_validate_decisions(root_decisions, prior_insights, "", ancestor_chain=[]))
+    errors.extend(
+        _validate_decisions(
+            root_decisions, prior_insights, "", ancestor_chain=[], findings=findings
+        )
+    )
 
     # Validate evidence artifact references in prior_insights and findings
     errors.extend(
@@ -302,10 +307,12 @@ def _validate_analysis_node(
         if segments[0] in target_decisions:
             constraint_scope[decision_id] = target_decisions[segments[0]]
     # `Option.insights` resolves only against this node's own
-    # `prior_insights` map. Cross-scope refs must be written explicitly
-    # as `../id`, `../../id`, ... (matching `Input.from` / `Decision.from`
-    # convention) — `_validate_decisions` parses those via the ancestor chain.
+    # `prior_insights` and `findings` maps. Cross-scope refs must be written
+    # explicitly as `../id`, `../../id`, ... (matching `Input.from` /
+    # `Decision.from` convention) — `_validate_decisions` parses those via
+    # the ancestor chain.
     node_prior_insights = node.get("prior_insights") or {}
+    node_findings = node.get("findings") or {}
     errors.extend(
         _validate_decisions(
             node_decisions,
@@ -313,6 +320,7 @@ def _validate_analysis_node(
             node_path,
             constraint_scope,
             ancestor_chain=ancestor_chain,
+            findings=node_findings,
         )
     )
 
@@ -429,23 +437,30 @@ def _validate_decisions(
     path_prefix: str,
     constraint_scope: dict[str, Any] | None = None,
     ancestor_chain: list[dict[str, Any]] | None = None,
+    findings: dict[str, Any] | None = None,
 ) -> list[SemanticError]:
     """Validate a set of decisions at a given node.
 
     Args:
         prior_insights: Node-local ``prior_insights`` map. Bare-id
-            ``Option.insights`` refs resolve here.
+            ``Option.insights`` refs resolve against the union of this map
+            and ``findings``.
         constraint_scope: Decisions available for constraint resolution. Defaults to
             decisions themselves, but may include parent decisions for sub-analyses.
         ancestor_chain: Root-first chain of ancestor scopes for resolving
-            ``../id``-form ``Option.insights`` refs against ancestor
-            ``prior_insights``. Empty/None at the root.
+            ``../id``-form ``Option.insights`` refs against the union of
+            an ancestor's ``prior_insights`` and ``findings``. Empty/None
+            at the root.
+        findings: Node-local ``findings`` map. Bare-id ``Option.insights``
+            refs may also resolve here (alongside ``prior_insights``).
     """
     errors: list[SemanticError] = []
     if constraint_scope is None:
         constraint_scope = decisions
     if ancestor_chain is None:
         ancestor_chain = []
+    if findings is None:
+        findings = {}
 
     decisions_prefix = f"{path_prefix}.decisions" if path_prefix else "decisions"
     for decision_id, decision in decisions.items():
@@ -522,6 +537,7 @@ def _validate_decisions(
                         prior_insights,
                         ancestor_chain,
                         f"{option_path}.insights[{i}]",
+                        findings=findings,
                     )
                 )
 
@@ -862,13 +878,20 @@ def _validate_option_insight_ref(
     prior_insights: dict[str, Any],
     ancestor_chain: list[dict[str, Any]],
     ref_path: str,
+    findings: dict[str, Any] | None = None,
 ) -> list[SemanticError]:
     """Validate a single ``Option.insights`` reference.
 
-    Bare id resolves against ``prior_insights`` (the node-local map);
-    ``../id``, ``../../id``, ... resolves against the corresponding
-    ancestor's ``prior_insights``. Mirrors the ``../`` grammar used by
-    ``Input.from`` and ``Decision.from``.
+    Bare id resolves against the union of the node-local ``prior_insights``
+    and ``findings`` maps; ``../id``, ``../../id``, ... resolves against the
+    corresponding ancestor's ``prior_insights`` and ``findings`` (also
+    unioned). Mirrors the ``../`` grammar used by ``Input.from`` and
+    ``Decision.from``.
+
+    Options may cite either prior_insights (literature/external claims that
+    motivate the choice) or findings (claims produced by this analysis that
+    in turn justify the choice), reflecting that both are evidence in the
+    Insight sense.
     """
 
     def _error(message: str) -> list[SemanticError]:
@@ -885,9 +908,12 @@ def _validate_option_insight_ref(
         )
     insight_id = segments[0]
 
+    if findings is None:
+        findings = {}
+
     if up == 0:
-        target_insights = prior_insights
-        scope_desc = "this node's prior_insights"
+        target_insights = {**prior_insights, **findings}
+        scope_desc = "this node's prior_insights or findings"
     else:
         target_scope = ancestor_at(ancestor_chain, up)
         if target_scope is None:
@@ -895,8 +921,11 @@ def _validate_option_insight_ref(
                 f"Option insight '{ref}' escapes {up} level(s) but only "
                 f"{len(ancestor_chain)} ancestor scope(s) available"
             )
-        target_insights = target_scope.get("prior_insights") or {}
-        scope_desc = f"{up}-level ancestor's prior_insights"
+        target_insights = {
+            **(target_scope.get("prior_insights") or {}),
+            **(target_scope.get("findings") or {}),
+        }
+        scope_desc = f"{up}-level ancestor's prior_insights or findings"
 
     if insight_id not in target_insights:
         return _error(f"Option insight '{ref}' not found in {scope_desc}")
