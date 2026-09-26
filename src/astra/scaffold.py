@@ -1,4 +1,4 @@
-"""The boilerplate spec scaffold: ``astra.yaml`` + ``universes/baseline.yaml``.
+"""The empty spec scaffold: ``astra.yaml`` + ``universes/baseline.yaml``.
 
 Its own module rather than part of :mod:`astra.cli`, so that scaffolding
 costs what writing two template files should cost. Importing ``astra.cli``
@@ -19,9 +19,9 @@ from astra.spec_version import installed_spec_version
 
 
 def create_boilerplate(directory: Path) -> None:
-    """Write the boilerplate spec scaffold into ``directory``.
+    """Write the empty spec scaffold into ``directory``.
 
-    Creates ``universes/`` and writes the boilerplate ``astra.yaml``
+    Creates ``universes/`` and writes an empty ``astra.yaml``
     and ``universes/baseline.yaml``. Touches nothing
     else — no ``.gitignore``, no git init, no emptiness checks — so
     downstream tools (e.g. lightcone-cli) can scaffold into existing
@@ -34,67 +34,32 @@ def create_boilerplate(directory: Path) -> None:
 
 
 def _create_boilerplate_astra_yaml(directory: Path) -> None:
-    """Create boilerplate astra.yaml with TODOs."""
+    """Create an empty astra.yaml and a baseline universe that selects nothing."""
     name = directory.name if directory != Path(".") else "My Analysis"
     spec_version = installed_spec_version() or "1.0"
 
+    # The root collections are required fields, so an empty analysis
+    # spells them out as empty rather than omitting them.
     astra_yaml = f"""# ASTRA Analysis Specification
 
 version: "{spec_version}"
 name: "{name}"
-container: python:3.12-slim
-description: |
-  TODO: One-paragraph overview of the analysis — its question,
-  scope, and what the reader should take away. A richer write-up
-  (figures, citations, multi-page structure) is authored separately
-  as a report that references this analysis's elements; see the
-  ASTRA documentation.
+description: ""
 
-inputs:
-  - id: primary_data
-    type: data
-    description: "TODO: Describe your primary data source"
+inputs: []
 
-outputs:
-  - id: main_result
-    type: metric
-    format: json
-    description: "TODO: Describe your primary output metric"
-    decisions: [example_method]
-    recipe:
-      command: python src/main.py --method {{decisions.example_method}} --out {{output}}
+outputs: []
 
-  - id: conclusion
-    type: report
-    format: md
-    description: "Summary of analysis findings"
-    inputs: [main_result]
-    recipe:
-      command: python src/main.py --result {{inputs.main_result}} --out {{output}}
-
-decisions:
-  example_method:
-    label: "Example Method Choice"
-    rationale: "TODO: Explain why this decision matters"
-    default: option_a
-    options:
-      option_a:
-        label: "Option A"
-        description: "TODO: Describe option A"
-      option_b:
-        label: "Option B"
-        description: "TODO: Describe option B"
+decisions: {{}}
 """
     (directory / "astra.yaml").write_text(astra_yaml)
 
-    # Create baseline universe
+    # An analysis runs under at least one universe, even with no decisions.
     baseline_universe = """# Baseline Universe
-# Default configuration using standard practices
 
 id: baseline
-description: "Default configuration using standard practices"
+description: "Default configuration"
 
-decisions:
-  example_method: option_a
+decisions: {}
 """
     (directory / "universes" / "baseline.yaml").write_text(baseline_universe)

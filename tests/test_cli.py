@@ -589,9 +589,12 @@ class TestInitCommand:
         content = (project_dir / "astra.yaml").read_text()
         assert "content-test" in content  # Directory name used as analysis name
         assert "version:" in content
-        assert "decisions:" in content
-        assert "recipe:" in content
-        assert "container:" in content
+        # Empty: no example elements for the user to delete first.
+        data = load_yaml(project_dir / "astra.yaml")
+        assert data["inputs"] == []
+        assert data["outputs"] == []
+        assert data["decisions"] == {}
+        assert "container" not in data
 
     def test_init_gitignore_content(self, runner: CliRunner, tmp_path: Path):
         """Test gitignore content."""
@@ -648,7 +651,7 @@ class TestInitCommand:
         self, runner: CliRunner, tmp_path: Path
     ):
         """astra.yaml + baseline are one unit: a user-authored spec must not
-        get the boilerplate baseline (it references the example decision)."""
+        get the scaffold's baseline next to it."""
         project_dir = tmp_path / "user-spec"
         project_dir.mkdir()
         (project_dir / "astra.yaml").write_text("# user spec\n")

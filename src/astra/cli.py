@@ -131,9 +131,9 @@ def init(directory: Path, no_git: bool, check_only: bool, as_json: bool) -> None
     had_spec = (directory / "astra.yaml").exists()
     had_dir = {sub: (directory / sub).is_dir() for sub in ("universes",)}
 
-    # The boilerplate astra.yaml and universes/baseline.yaml are one
-    # unit: baseline references the boilerplate's example decision, so
-    # writing it next to a user-authored astra.yaml would be wrong.
+    # The scaffold astra.yaml and universes/baseline.yaml are one unit:
+    # a user-authored astra.yaml already implies its own universes, so
+    # the baseline is never written next to one.
     if had_spec:
         report["unchanged"].append("astra.yaml")
     else:
