@@ -179,6 +179,20 @@ class TestSemanticValidation:
         assert len(bad) == 1, f"expected 1 INVALID_INSIGHT_REF, got: {bad}"
         assert "escapes" in bad[0].message
 
+    def test_option_insights_resolve_against_findings(self, valid_dir: Path):
+        """`Option.insights` may reference findings (not only prior_insights),
+        at both the node-local scope (bare id) and at ancestor scopes
+        (``../id``). Findings are claims produced by the analysis and are
+        valid evidence for a downstream option, mirroring how prior_insights
+        cite external claims.
+        """
+        errors = validate_analysis_file(valid_dir / "option_insights_reference_finding.yaml")
+        insight_errors = [e for e in errors if e.code == "INVALID_INSIGHT_REF"]
+        assert insight_errors == [], (
+            "Bare-id and `../`-form refs into `findings` should both "
+            f"resolve; got: {insight_errors}"
+        )
+
     def test_invalid_finding_output(self, invalid_dir: Path):
         errors = validate_analysis_file(invalid_dir / "invalid_finding_output.yaml")
         assert any(e.code == "INVALID_ARTIFACT_REF" for e in errors)
