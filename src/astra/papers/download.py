@@ -220,7 +220,7 @@ def _get_arxiv_pdf(url: str) -> tuple[Any, str]:
         for attempt in range(_ARXIV_MAX_ATTEMPTS):
             try:
                 response = httpx.get(attempt_url, follow_redirects=True, timeout=60.0)
-            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            except (httpx.NetworkError, httpx.ConnectTimeout, httpx.RemoteProtocolError) as exc:
                 last_failure = exc
             else:
                 if not _is_transient_arxiv_status(response.status_code):

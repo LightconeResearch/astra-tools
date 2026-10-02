@@ -153,8 +153,13 @@ def test_arxiv_pdf_retries_transient_statuses(
     assert delays == [download_module._ARXIV_RETRY_BACKOFF]
 
 
+@pytest.mark.parametrize(
+    "error",
+    [httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError],
+    ids=["connect", "read-reset", "protocol"],
+)
 def test_arxiv_pdf_retries_connection_errors(
-    monkeypatch: pytest.MonkeyPatch, mock_http_transport
+    monkeypatch: pytest.MonkeyPatch, mock_http_transport, error: type[httpx.TransportError]
 ) -> None:
     calls = 0
     delays: list[float] = []
@@ -163,7 +168,7 @@ def test_arxiv_pdf_retries_connection_errors(
         nonlocal calls
         calls += 1
         if calls == 1:
-            raise httpx.ConnectError("connection refused", request=request)
+            raise error("connection dropped", request=request)
         return httpx.Response(
             200,
             headers={"content-type": "application/pdf"},
