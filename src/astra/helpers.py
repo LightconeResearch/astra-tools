@@ -166,7 +166,10 @@ def iter_analysis_nodes(data: Mapping[str, Any]) -> Iterator[tuple[Scope, dict[s
 
 
 def _descend_nodes(node: Mapping[str, Any], scope: Scope) -> Iterator[tuple[Scope, dict[str, Any]]]:
-    for sub_id, sub in (node.get("analyses") or {}).items():
+    analyses = node.get("analyses")
+    if not isinstance(analyses, dict):
+        return  # absent, or malformed (schema validation reports that)
+    for sub_id, sub in analyses.items():
         if not isinstance(sub, dict):
             continue
         here = (*scope, str(sub_id))
@@ -220,23 +223,27 @@ def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, An
         A new dict with external sub-analyses resolved (deep copy of modified branches).
     """
     analyses = data.get("analyses")
-    if not analyses:
+    if not analyses or not isinstance(analyses, dict):
         return data
 
     resolved_analyses: dict[str, Any] = {}
     changed = False
 
     for analysis_id, analysis_node in analyses.items():
+        if not isinstance(analysis_node, dict):
+            resolved_analyses[analysis_id] = analysis_node
+            continue
         sub_path = analysis_node.get("path")
         if sub_path:
             sub_yaml_path = external_spec_path(base_path, sub_path)
             resolved_dir = sub_yaml_path.parent
             if sub_yaml_path.exists():
                 sub_data = load_yaml(sub_yaml_path)
-                # Keep the path field for reference
-                sub_data["path"] = sub_path
-                # Recursively resolve nested sub-analyses
-                sub_data = resolve_analysis_tree(sub_data, resolved_dir)
+                if isinstance(sub_data, dict):
+                    # Keep the path field for reference
+                    sub_data["path"] = sub_path
+                    # Recursively resolve nested sub-analyses
+                    sub_data = resolve_analysis_tree(sub_data, resolved_dir)
                 resolved_analyses[analysis_id] = sub_data
                 changed = True
             else:

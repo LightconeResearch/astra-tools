@@ -165,6 +165,7 @@ class TestArxivPdfValidation:
         resp = MagicMock()
         resp.content = content
         resp.headers = {"content-type": content_type}
+        resp.status_code = 200
         resp.raise_for_status = MagicMock()
         return resp
 

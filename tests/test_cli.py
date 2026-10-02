@@ -238,6 +238,92 @@ class TestValidateProjectMode:
         assert result.exit_code == 2
         assert "--analysis requires a FILE argument" in result.output
 
+    def test_directory_argument_validates_the_project(self, runner: CliRunner, project: Path):
+        result = runner.invoke(main, ["validate", str(project)])
+        assert result.exit_code == 0
+        assert "All 3 file(s) passed validation." in result.output
+
+    def test_directory_argument_works_outside_current_directory(
+        self, runner: CliRunner, tmp_path: Path, minimal_analysis_path: Path
+    ):
+        shutil.copy(minimal_analysis_path, tmp_path / "astra.yaml")
+        result = runner.invoke(main, ["validate", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "All 1 file(s) passed validation." in result.output
+
+    def test_directory_without_analysis_reports_clean_error(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        result = runner.invoke(main, ["validate", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "No astra.yaml" in result.output
+        assert "Traceback" not in result.output
+        assert "IsADirectoryError" not in result.output
+
+    def test_external_subanalysis_mapping_shape_is_a_schema_error(
+        self, runner: CliRunner, tmp_path: Path, minimal_analysis_path: Path, monkeypatch
+    ):
+        root = load_yaml(minimal_analysis_path)
+        root["analyses"] = {"child": {"path": "child"}}
+        save_yaml(root, tmp_path / "astra.yaml")
+        (tmp_path / "child").mkdir()
+        save_yaml(
+            {
+                "inputs": [{"id": "raw", "type": "data", "source": "data/raw.csv"}],
+                "outputs": [
+                    {
+                        "id": "result",
+                        "type": "metric",
+                        "description": "Child output",
+                        "inputs": ["raw"],
+                        "recipe": {"command": "python run.py"},
+                    }
+                ],
+                "decisions": [{"label": "Malformed"}],
+            },
+            tmp_path / "child" / "astra.yaml",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(main, ["validate", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "Schema validation errors:" in result.output
+        assert "analyses.child.decisions" in result.output
+        assert "list' object has no attribute 'items" not in result.output
+
+    @pytest.mark.parametrize(
+        ("root_analyses", "child_spec", "expected"),
+        [
+            ([{"path": "child"}], None, "analyses: Input should be a valid dictionary"),
+            ({"child": {"path": "child"}}, {"analyses": [{"path": "x"}]}, "analyses.child"),
+            ({"child": {"path": "child"}}, ["not", "a", "mapping"], "analyses.child"),
+        ],
+        ids=["root-analyses-list", "child-analyses-list", "child-spec-list"],
+    )
+    def test_malformed_analyses_shape_is_a_schema_error_in_project_mode(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        minimal_analysis_path: Path,
+        monkeypatch,
+        root_analyses,
+        child_spec,
+        expected: str,
+    ):
+        root = load_yaml(minimal_analysis_path)
+        root["analyses"] = root_analyses
+        save_yaml(root, tmp_path / "astra.yaml")
+        if child_spec is not None:
+            (tmp_path / "child").mkdir()
+            save_yaml(child_spec, tmp_path / "child" / "astra.yaml")
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(main, ["validate"])
+        assert result.exit_code == 1
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        assert "Schema validation errors:" in result.output
+        assert expected in result.output
+
 
 class TestJsonOutput:
     """--json: the report as one JSON-encoded string, exit code unchanged."""
@@ -316,6 +402,25 @@ class TestInfoCommand:
         assert result.exit_code == 0
         assert "Decisions:" in result.output
         assert "preprocessing" in result.output
+
+    def test_info_shows_conditional_decisions_and_incompatibilities(
+        self, runner: CliRunner, valid_dir: Path
+    ):
+        spec = valid_dir / "info_conditions.yaml"
+        result = runner.invoke(main, ["info", "-f", str(spec)])
+        assert result.exit_code == 0
+        assert "When: mode.advanced" in result.output
+        assert "Incompatible with: accelerator.gpu" in result.output
+
+    def test_info_json_shows_conditional_decisions_and_incompatibilities(
+        self, runner: CliRunner, valid_dir: Path
+    ):
+        spec = valid_dir / "info_conditions.yaml"
+        result = runner.invoke(main, ["info", "-f", str(spec), "--json"])
+        assert result.exit_code == 0
+        report = json.loads(result.output)
+        assert "When: mode.advanced" in report
+        assert "Incompatible with: accelerator.gpu" in report
 
     def test_info_inputs_only(self, runner: CliRunner, full_analysis_path: Path):
         result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--inputs"])
@@ -457,6 +562,54 @@ class TestUniverseCommands:
         )
         assert result.exit_code == 0
         assert "Universe is valid" in result.output
+
+    def test_universe_check_json_valid(
+        self, runner: CliRunner, baseline_universe_path: Path, full_analysis_path: Path
+    ):
+        result = runner.invoke(
+            main,
+            [
+                "universe",
+                "check",
+                str(baseline_universe_path),
+                "-a",
+                str(full_analysis_path),
+                "--json",
+            ],
+        )
+        assert result.exit_code == 0
+        report = json.loads(result.output)
+        assert report["valid"] is True
+        assert report["errors"] == []
+        assert report["universe_file"] == str(baseline_universe_path)
+
+    def test_universe_check_json_invalid(
+        self, runner: CliRunner, invalid_dir: Path, full_analysis_path: Path
+    ):
+        universe_file = invalid_dir / "universe_incompatible.yaml"
+        result = runner.invoke(
+            main,
+            ["universe", "check", str(universe_file), "-a", str(full_analysis_path), "--json"],
+        )
+        assert result.exit_code == 1
+        report = json.loads(result.output)
+        assert report["valid"] is False
+        assert report["universe_file"] == str(universe_file)
+        assert report["errors"]
+        assert {"INCOMPATIBLE_OPTIONS"} <= {error["code"] for error in report["errors"]}
+        assert all(set(error) == {"code", "path", "message"} for error in report["errors"])
+
+    def test_universe_check_malformed_universe_is_a_schema_error(
+        self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path
+    ):
+        universe_file = tmp_path / "universe_bad.yaml"
+        save_yaml({"id": "bad", "decisions": [{"preprocessing": "standard"}]}, universe_file)
+        result = runner.invoke(
+            main, ["universe", "check", str(universe_file), "-a", str(full_analysis_path)]
+        )
+        assert result.exit_code == 1
+        assert not isinstance(result.exception, AttributeError)
+        assert "decisions: Input should be a valid dictionary" in result.output
 
     def test_universe_check_invalid(
         self, runner: CliRunner, invalid_dir: Path, full_analysis_path: Path

@@ -1,0 +1,25 @@
+version: "0.0.11"
+name: Conditional Decisions
+inputs: []
+outputs: []
+decisions:
+  mode:
+    label: Mode
+    default: basic
+    options:
+      basic:
+        label: Basic
+        incompatible_with:
+          - accelerator.gpu
+      advanced:
+        label: Advanced
+  accelerator:
+    label: Accelerator
+    when:
+      - mode.advanced
+    default: cpu
+    options:
+      gpu:
+        label: GPU
+      cpu:
+        label: CPU

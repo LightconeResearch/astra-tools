@@ -5,14 +5,22 @@ Downloads papers by DOI, with special handling for arXiv papers.
 
 from __future__ import annotations
 
+import logging
+import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 # Optional dependency for HTTP requests, bound on first use by
 # `_require_httpx`. Importing it costs ~60 ms, which every reader of the
 # paper cache would otherwise pay to reach a class that only touches disk.
 httpx: Any = None
+logger = logging.getLogger(__name__)
+
+_ARXIV_MAX_ATTEMPTS = 3
+_ARXIV_RETRY_BACKOFF = 0.5
 
 
 def _require_httpx() -> None:
@@ -109,11 +117,11 @@ def fetch_doi_metadata(doi: str) -> DOIMetadata:
             container_title=container_title,
         )
 
-    except (httpx.HTTPStatusError, httpx.RequestError):
-        # Return empty metadata on error - don't fail the download
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        logger.warning("DOI metadata lookup failed for %s: %s", doi, exc)
         return DOIMetadata()
-    except (KeyError, ValueError):
-        # JSON parsing issues
+    except (KeyError, ValueError) as exc:
+        logger.warning("Could not parse DOI metadata for %s: %s", doi, exc)
         return DOIMetadata()
 
 
@@ -150,9 +158,41 @@ def is_valid_pdf(content: bytes) -> bool:
     return content[:4] == b"%PDF"
 
 
+_ARXIV_NEW_ID = re.compile(r"\d{4}\.\d{4,}(?:v\d+)?")
+_ARXIV_OLD_ID = re.compile(r"[a-z][a-z0-9-]*(?:\.[a-z]{2})?/\d{7}(?:v\d+)?", re.IGNORECASE)
+_ARXIV_DOI_PREFIX = "10.48550/arXiv."
+
+
 def _is_arxiv_doi(doi: str) -> bool:
     """Check if DOI is an arXiv DOI."""
-    return doi.startswith("10.48550/arXiv.")
+    return doi.startswith(_ARXIV_DOI_PREFIX)
+
+
+def normalize_arxiv_identifier(identifier: str) -> str:
+    """Convert common arXiv identifier forms to their DOI representation."""
+    value = identifier.strip()
+    if _is_arxiv_doi(value):
+        return value
+
+    candidate = value
+    if value.lower().startswith(_ARXIV_DOI_PREFIX.lower()):
+        candidate = value[len(_ARXIV_DOI_PREFIX) :]
+    elif value.lower().startswith("arxiv:"):
+        candidate = value[len("arxiv:") :].strip()
+    else:
+        parsed = urlparse(value)
+        if (
+            parsed.scheme.lower() in {"http", "https"}
+            and parsed.hostname
+            and parsed.hostname.lower() in {"arxiv.org", "www.arxiv.org", "export.arxiv.org"}
+        ):
+            for prefix in ("/abs/", "/pdf/"):
+                if parsed.path.startswith(prefix):
+                    candidate = parsed.path.removeprefix(prefix).removesuffix(".pdf")
+
+    if _ARXIV_NEW_ID.fullmatch(candidate) or _ARXIV_OLD_ID.fullmatch(candidate):
+        return f"{_ARXIV_DOI_PREFIX}{candidate}"
+    return identifier
 
 
 def _extract_arxiv_id(doi: str) -> str | None:
@@ -160,6 +200,42 @@ def _extract_arxiv_id(doi: str) -> str | None:
     if _is_arxiv_doi(doi):
         return doi.replace("10.48550/arXiv.", "")
     return None
+
+
+def _is_transient_arxiv_status(status_code: int) -> bool:
+    return status_code in {406, 429} or 500 <= status_code < 600
+
+
+def _get_arxiv_pdf(url: str) -> tuple[Any, str]:
+    """Fetch an arXiv PDF, retrying transient failures before trying the export host."""
+    urls = [url]
+    parsed = urlparse(url)
+    if parsed.hostname and parsed.hostname.lower() in {"arxiv.org", "www.arxiv.org"}:
+        fallback_url = parsed._replace(netloc="export.arxiv.org").geturl()
+        if fallback_url != url:
+            urls.append(fallback_url)
+
+    last_failure: Any = None
+    for attempt_url in urls:
+        for attempt in range(_ARXIV_MAX_ATTEMPTS):
+            try:
+                response = httpx.get(attempt_url, follow_redirects=True, timeout=60.0)
+            except (httpx.NetworkError, httpx.ConnectTimeout, httpx.RemoteProtocolError) as exc:
+                last_failure = exc
+            else:
+                if not _is_transient_arxiv_status(response.status_code):
+                    response.raise_for_status()
+                    return response, attempt_url
+                last_failure = response
+
+            if attempt + 1 < _ARXIV_MAX_ATTEMPTS:
+                time.sleep(_ARXIV_RETRY_BACKOFF * 2**attempt)
+
+    if hasattr(last_failure, "raise_for_status"):
+        last_failure.raise_for_status()
+    if last_failure is not None:
+        raise last_failure
+    raise RuntimeError("arXiv PDF request failed without a response")
 
 
 def _download_arxiv_pdf(arxiv_id: str, doi: str, version: int | None = None) -> PaperDownloadResult:
@@ -182,8 +258,7 @@ def _download_arxiv_pdf(arxiv_id: str, doi: str, version: int | None = None) -> 
         url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
 
     try:
-        response = httpx.get(url, follow_redirects=True, timeout=60.0)
-        response.raise_for_status()
+        response, download_url = _get_arxiv_pdf(url)
 
         # Check if we got a PDF (arXiv returns application/pdf or application/octet-stream)
         content_type = response.headers.get("content-type", "")
@@ -208,7 +283,7 @@ def _download_arxiv_pdf(arxiv_id: str, doi: str, version: int | None = None) -> 
         return PaperDownloadResult(
             success=True,
             content=response.content,
-            url=url,
+            url=download_url,
             title=metadata.title,
             authors=metadata.authors,
         )
@@ -246,7 +321,10 @@ def _try_unpaywall(doi: str) -> PaperDownloadResult:
         if response.status_code == 404:
             return PaperDownloadResult(
                 success=False,
-                error="DOI not found in Unpaywall",
+                error=(
+                    "DOI not found in Unpaywall. Accepted identifiers include a DOI, "
+                    "arXiv:<id>, a bare arXiv ID, or https://arxiv.org/abs/<id>."
+                ),
             )
         response.raise_for_status()
 
@@ -341,13 +419,14 @@ def download_paper(doi: str, version: int | None = None) -> PaperDownloadResult:
     Metadata (title, authors) is fetched automatically via DOI content negotiation.
 
     Args:
-        doi: DOI of the paper.
+        doi: DOI, arXiv ID, ``arXiv:<id>``, or arXiv abs URL.
         version: Paper version (only used for arXiv papers).
 
     Returns:
         PaperDownloadResult with PDF content or error.
     """
     # Handle arXiv papers specially
+    doi = normalize_arxiv_identifier(doi)
     arxiv_id = _extract_arxiv_id(doi)
     if arxiv_id:
         return _download_arxiv_pdf(arxiv_id, doi, version)
@@ -375,6 +454,7 @@ def download_paper_to_cache(
     """
     from astra.papers.cache import PaperCache
 
+    doi = normalize_arxiv_identifier(doi)
     cache = PaperCache(cache_dir)
 
     # Check if already cached

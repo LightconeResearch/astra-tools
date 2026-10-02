@@ -37,7 +37,11 @@ from astra.validation.schema import (
     validate_analysis_data,
     validate_universe_data,
 )
-from astra.validation.semantic import validate_analysis, validate_universe_file
+from astra.validation.semantic import (
+    SemanticError,
+    validate_analysis,
+    validate_universe_file,
+)
 
 __all__ = ["create_boilerplate", "main"]
 
@@ -262,11 +266,12 @@ def validate(
 ) -> None:
     """Validate an ASTRA specification file, or the whole project.
 
-    FILE can be an analysis (astra.yaml) or universe file. With no FILE,
-    every root analysis spec (astra.yaml) and universe file (in a universes/
-    directory, or with "universe" in its name) under the current directory is
-    validated; hidden and vendored directories are skipped. An astra.yaml
-    referenced as an external ``path:`` sub-analysis is validated in context
+    FILE can be an analysis (astra.yaml) or universe file. A directory argument
+    validates the whole project rooted there; it must contain an astra.yaml.
+    With no FILE, every root analysis spec (astra.yaml) and universe file (in a
+    universes/ directory, or with "universe" in its name) under the current
+    directory is validated; hidden and vendored directories are skipped. An
+    astra.yaml referenced as an external ``path:`` sub-analysis is validated in context
     through its root spec, not standalone.
     For universe files, use --analysis to specify the analysis file.
 
@@ -284,6 +289,14 @@ def validate(
             if analysis is not None:
                 raise click.UsageError("--analysis requires a FILE argument.")
             _validate_project(verify_evidence, skip_evidence)
+        elif file.is_dir():
+            if analysis is not None:
+                raise click.UsageError("--analysis cannot be used with a project directory.")
+            project_root = file.resolve()
+            if not (project_root / "astra.yaml").is_file():
+                console.print(f"[red]Error:[/red] No astra.yaml found in {escape(str(file))}.")
+                raise SystemExit(1)
+            _validate_project(verify_evidence, skip_evidence, root=project_root)
         else:
             _validate_one(file, analysis, verify_evidence, skip_evidence)
 
@@ -311,9 +324,9 @@ def _json_string_output(enabled: bool) -> Iterator[None]:
         raise SystemExit(code)
 
 
-def _validate_project(verify_evidence: bool, skip_evidence: bool) -> None:
-    """Validate every discovered spec and universe file under cwd."""
-    root = Path.cwd()
+def _validate_project(verify_evidence: bool, skip_evidence: bool, root: Path | None = None) -> None:
+    """Validate every discovered spec and universe file under root or cwd."""
+    root = root or Path.cwd()
     targets = _discover_validation_targets(root)
     if not targets:
         console.print("[red]Error:[/red] No astra.yaml or universe files found here.")
@@ -324,7 +337,14 @@ def _validate_project(verify_evidence: bool, skip_evidence: bool) -> None:
             console.print()
         rel = target.relative_to(root)
         try:
-            _validate_one(rel, None, verify_evidence, skip_evidence, search_root=root)
+            _validate_one(
+                target,
+                None,
+                verify_evidence,
+                skip_evidence,
+                search_root=root,
+                display_path=rel,
+            )
         except SystemExit:
             failed.append(rel)
         except Exception as exc:
@@ -398,6 +418,7 @@ def _validate_one(
     verify_evidence: bool,
     skip_evidence: bool,
     search_root: Path | None = None,
+    display_path: Path | None = None,
 ) -> None:
     """Validate one file, printing as it goes; raises SystemExit(1) on failure.
 
@@ -415,7 +436,8 @@ def _validate_one(
             console.print("Use --analysis to specify the analysis file.")
             raise SystemExit(1)
 
-    console.print(f"Validating [cyan]{escape(str(file))}[/cyan]...")
+    label = display_path if display_path is not None else file
+    console.print(f"Validating [cyan]{escape(str(label))}[/cyan]...")
 
     # Load once — all downstream checks take data dicts.
     data = load_yaml(file)
@@ -431,6 +453,10 @@ def _validate_one(
         schema_errors = validate_universe_data(data)
     else:
         schema_errors = validate_analysis_data(data)
+        if not schema_errors:
+            resolved_data = resolve_analysis_tree(data, file.parent)
+            if resolved_data is not data:
+                schema_errors = validate_analysis_data(resolved_data)
 
     if schema_errors:
         console.print("\n[red]Schema validation errors:[/red]")
@@ -705,6 +731,10 @@ def _display_decisions(decisions: dict[str, Any], indent: str = "") -> None:
     """Display decisions as Rich trees."""
     for decision_id, decision in decisions.items():
         tree = Tree(f"{indent}[cyan]{decision_id}[/cyan]: {decision.get('label', '')}")
+        when = decision.get("when")
+        if when:
+            conditions = when if isinstance(when, list) else [when]
+            tree.add(f"[dim]When:[/dim] {' AND '.join(conditions)}")
         tags = decision.get("tags") or []
         if tags:
             tree.add(f"[dim]Tags:[/dim] {', '.join(tags)}")
@@ -719,7 +749,10 @@ def _display_decisions(decisions: dict[str, Any], indent: str = "") -> None:
             option_text = f"{option_id}: {option.get('label', '')}{default_marker}"
             if option.get("description"):
                 option_text += f" - [dim]{option['description']}[/dim]"
-            options_branch.add(option_text)
+            option_branch = options_branch.add(option_text)
+            incompatible_with = option.get("incompatible_with") or []
+            if incompatible_with:
+                option_branch.add(f"[dim]Incompatible with:[/dim] {', '.join(incompatible_with)}")
 
         console.print(tree)
         console.print()
@@ -824,10 +857,34 @@ def _print_universe_decisions(uni: dict[str, Any], indent: str = "  ") -> None:
     type=click.Path(exists=True, path_type=Path),
     help="Analysis file",
 )
-def check_universe(universe_file: Path, analysis: Path | None) -> None:
+@click.option("--json", "output_json", is_flag=True, help="Emit a machine-readable result")
+def check_universe(universe_file: Path, analysis: Path | None, output_json: bool) -> None:
     """Check a universe against its analysis constraints."""
     analysis_path = _require_analysis(analysis, universe_file.parent)
-    errors = validate_universe_file(universe_file, analysis_path)
+    schema_errors = validate_universe_data(load_yaml(universe_file))
+    errors = (
+        [SemanticError("SCHEMA", message) for message in schema_errors]
+        if schema_errors
+        else validate_universe_file(universe_file, analysis_path)
+    )
+
+    if output_json:
+        click.echo(
+            json.dumps(
+                {
+                    "universe_file": str(universe_file),
+                    "analysis_file": str(analysis_path),
+                    "valid": not errors,
+                    "errors": [
+                        {"code": error.code, "path": error.path, "message": error.message}
+                        for error in errors
+                    ],
+                }
+            )
+        )
+        if errors:
+            raise SystemExit(1)
+        return
 
     if errors:
         console.print("[red]Universe validation errors:[/red]")
@@ -1076,17 +1133,20 @@ def paper() -> None:
 def paper_add(doi: str, version: int | None, pdf: Path | None) -> None:
     """Add a paper to the cache by DOI.
 
-    DOI can be any valid DOI. For arXiv papers, use the format:
-    10.48550/arXiv.1706.03762
+    Use a DOI, ``arXiv:<id>``, a bare arXiv ID, or an arXiv abs URL.
+    New-style and old-style arXiv IDs are normalized to their DOI form.
 
     Examples:
+        astra paper add arXiv:1706.03762 --version 7
+        astra paper add https://arxiv.org/abs/hep-th/9901001
         astra paper add 10.48550/arXiv.1706.03762 --version 7
         astra paper add 10.1038/s41586-023-06221-2
         astra paper add 10.1234/example --pdf ./local_paper.pdf
     """
     from astra.papers.cache import PaperCache
-    from astra.papers.download import download_paper
+    from astra.papers.download import download_paper, normalize_arxiv_identifier
 
+    doi = normalize_arxiv_identifier(doi)
     cache = PaperCache()
 
     # Check if already cached
