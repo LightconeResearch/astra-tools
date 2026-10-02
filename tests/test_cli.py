@@ -238,6 +238,28 @@ class TestValidateProjectMode:
         assert result.exit_code == 2
         assert "--analysis requires a FILE argument" in result.output
 
+    def test_directory_argument_validates_the_project(self, runner: CliRunner, project: Path):
+        result = runner.invoke(main, ["validate", str(project)])
+        assert result.exit_code == 0
+        assert "All 3 file(s) passed validation." in result.output
+
+    def test_directory_argument_works_outside_current_directory(
+        self, runner: CliRunner, tmp_path: Path, minimal_analysis_path: Path
+    ):
+        shutil.copy(minimal_analysis_path, tmp_path / "astra.yaml")
+        result = runner.invoke(main, ["validate", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "All 1 file(s) passed validation." in result.output
+
+    def test_directory_without_analysis_reports_clean_error(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        result = runner.invoke(main, ["validate", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "No astra.yaml" in result.output
+        assert "Traceback" not in result.output
+        assert "IsADirectoryError" not in result.output
+
 
 class TestJsonOutput:
     """--json: the report as one JSON-encoded string, exit code unchanged."""

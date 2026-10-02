@@ -262,11 +262,12 @@ def validate(
 ) -> None:
     """Validate an ASTRA specification file, or the whole project.
 
-    FILE can be an analysis (astra.yaml) or universe file. With no FILE,
-    every root analysis spec (astra.yaml) and universe file (in a universes/
-    directory, or with "universe" in its name) under the current directory is
-    validated; hidden and vendored directories are skipped. An astra.yaml
-    referenced as an external ``path:`` sub-analysis is validated in context
+    FILE can be an analysis (astra.yaml) or universe file. A directory argument
+    validates the whole project rooted there; it must contain an astra.yaml.
+    With no FILE, every root analysis spec (astra.yaml) and universe file (in a
+    universes/ directory, or with "universe" in its name) under the current
+    directory is validated; hidden and vendored directories are skipped. An
+    astra.yaml referenced as an external ``path:`` sub-analysis is validated in context
     through its root spec, not standalone.
     For universe files, use --analysis to specify the analysis file.
 
@@ -284,6 +285,14 @@ def validate(
             if analysis is not None:
                 raise click.UsageError("--analysis requires a FILE argument.")
             _validate_project(verify_evidence, skip_evidence)
+        elif file.is_dir():
+            if analysis is not None:
+                raise click.UsageError("--analysis cannot be used with a project directory.")
+            project_root = file.resolve()
+            if not (project_root / "astra.yaml").is_file():
+                console.print(f"[red]Error:[/red] No astra.yaml found in {escape(str(file))}.")
+                raise SystemExit(1)
+            _validate_project(verify_evidence, skip_evidence, root=project_root)
         else:
             _validate_one(file, analysis, verify_evidence, skip_evidence)
 
@@ -311,9 +320,9 @@ def _json_string_output(enabled: bool) -> Iterator[None]:
         raise SystemExit(code)
 
 
-def _validate_project(verify_evidence: bool, skip_evidence: bool) -> None:
-    """Validate every discovered spec and universe file under cwd."""
-    root = Path.cwd()
+def _validate_project(verify_evidence: bool, skip_evidence: bool, root: Path | None = None) -> None:
+    """Validate every discovered spec and universe file under root or cwd."""
+    root = root or Path.cwd()
     targets = _discover_validation_targets(root)
     if not targets:
         console.print("[red]Error:[/red] No astra.yaml or universe files found here.")
@@ -324,7 +333,14 @@ def _validate_project(verify_evidence: bool, skip_evidence: bool) -> None:
             console.print()
         rel = target.relative_to(root)
         try:
-            _validate_one(rel, None, verify_evidence, skip_evidence, search_root=root)
+            _validate_one(
+                target,
+                None,
+                verify_evidence,
+                skip_evidence,
+                search_root=root,
+                display_path=rel,
+            )
         except SystemExit:
             failed.append(rel)
         except Exception as exc:
@@ -398,6 +414,7 @@ def _validate_one(
     verify_evidence: bool,
     skip_evidence: bool,
     search_root: Path | None = None,
+    display_path: Path | None = None,
 ) -> None:
     """Validate one file, printing as it goes; raises SystemExit(1) on failure.
 
@@ -415,7 +432,8 @@ def _validate_one(
             console.print("Use --analysis to specify the analysis file.")
             raise SystemExit(1)
 
-    console.print(f"Validating [cyan]{escape(str(file))}[/cyan]...")
+    label = display_path if display_path is not None else file
+    console.print(f"Validating [cyan]{escape(str(label))}[/cyan]...")
 
     # Load once — all downstream checks take data dicts.
     data = load_yaml(file)
