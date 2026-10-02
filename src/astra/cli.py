@@ -37,7 +37,11 @@ from astra.validation.schema import (
     validate_analysis_data,
     validate_universe_data,
 )
-from astra.validation.semantic import validate_analysis, validate_universe_file
+from astra.validation.semantic import (
+    SemanticError,
+    validate_analysis,
+    validate_universe_file,
+)
 
 __all__ = ["create_boilerplate", "main"]
 
@@ -860,7 +864,12 @@ def _print_universe_decisions(uni: dict[str, Any], indent: str = "  ") -> None:
 def check_universe(universe_file: Path, analysis: Path | None, output_json: bool) -> None:
     """Check a universe against its analysis constraints."""
     analysis_path = _require_analysis(analysis, universe_file.parent)
-    errors = validate_universe_file(universe_file, analysis_path)
+    schema_errors = validate_universe_data(load_yaml(universe_file))
+    errors = (
+        [SemanticError("SCHEMA", message) for message in schema_errors]
+        if schema_errors
+        else validate_universe_file(universe_file, analysis_path)
+    )
 
     if output_json:
         click.echo(

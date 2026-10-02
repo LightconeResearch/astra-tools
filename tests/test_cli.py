@@ -291,6 +291,39 @@ class TestValidateProjectMode:
         assert "analyses.child.decisions" in result.output
         assert "list' object has no attribute 'items" not in result.output
 
+    @pytest.mark.parametrize(
+        ("root_analyses", "child_spec", "expected"),
+        [
+            ([{"path": "child"}], None, "analyses: Input should be a valid dictionary"),
+            ({"child": {"path": "child"}}, {"analyses": [{"path": "x"}]}, "analyses.child"),
+            ({"child": {"path": "child"}}, ["not", "a", "mapping"], "analyses.child"),
+        ],
+        ids=["root-analyses-list", "child-analyses-list", "child-spec-list"],
+    )
+    def test_malformed_analyses_shape_is_a_schema_error_in_project_mode(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        minimal_analysis_path: Path,
+        monkeypatch,
+        root_analyses,
+        child_spec,
+        expected: str,
+    ):
+        root = load_yaml(minimal_analysis_path)
+        root["analyses"] = root_analyses
+        save_yaml(root, tmp_path / "astra.yaml")
+        if child_spec is not None:
+            (tmp_path / "child").mkdir()
+            save_yaml(child_spec, tmp_path / "child" / "astra.yaml")
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(main, ["validate"])
+        assert result.exit_code == 1
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        assert "Schema validation errors:" in result.output
+        assert expected in result.output
+
 
 class TestJsonOutput:
     """--json: the report as one JSON-encoded string, exit code unchanged."""
@@ -564,6 +597,18 @@ class TestUniverseCommands:
         assert report["universe_file"] == str(universe_file)
         assert report["errors"]
         assert any("INCOMPATIBLE_OPTIONS" in error for error in report["errors"])
+
+    def test_universe_check_malformed_universe_is_a_schema_error(
+        self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path
+    ):
+        universe_file = tmp_path / "universe_bad.yaml"
+        save_yaml({"id": "bad", "decisions": [{"preprocessing": "standard"}]}, universe_file)
+        result = runner.invoke(
+            main, ["universe", "check", str(universe_file), "-a", str(full_analysis_path)]
+        )
+        assert result.exit_code == 1
+        assert not isinstance(result.exception, AttributeError)
+        assert "decisions: Input should be a valid dictionary" in result.output
 
     def test_universe_check_invalid(
         self, runner: CliRunner, invalid_dir: Path, full_analysis_path: Path
