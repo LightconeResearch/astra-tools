@@ -878,7 +878,10 @@ def check_universe(universe_file: Path, analysis: Path | None, output_json: bool
                     "universe_file": str(universe_file),
                     "analysis_file": str(analysis_path),
                     "valid": not errors,
-                    "errors": [str(error) for error in errors],
+                    "errors": [
+                        {"code": error.code, "path": error.path, "message": error.message}
+                        for error in errors
+                    ],
                 }
             )
         )

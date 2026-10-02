@@ -596,7 +596,8 @@ class TestUniverseCommands:
         assert report["valid"] is False
         assert report["universe_file"] == str(universe_file)
         assert report["errors"]
-        assert any("INCOMPATIBLE_OPTIONS" in error for error in report["errors"])
+        assert {"INCOMPATIBLE_OPTIONS"} <= {error["code"] for error in report["errors"]}
+        assert all(set(error) == {"code", "path", "message"} for error in report["errors"])
 
     def test_universe_check_malformed_universe_is_a_schema_error(
         self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path
