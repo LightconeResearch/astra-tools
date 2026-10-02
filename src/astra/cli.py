@@ -1124,17 +1124,20 @@ def paper() -> None:
 def paper_add(doi: str, version: int | None, pdf: Path | None) -> None:
     """Add a paper to the cache by DOI.
 
-    DOI can be any valid DOI. For arXiv papers, use the format:
-    10.48550/arXiv.1706.03762
+    Use a DOI, ``arXiv:<id>``, a bare arXiv ID, or an arXiv abs URL.
+    New-style and old-style arXiv IDs are normalized to their DOI form.
 
     Examples:
+        astra paper add arXiv:1706.03762 --version 7
+        astra paper add https://arxiv.org/abs/hep-th/9901001
         astra paper add 10.48550/arXiv.1706.03762 --version 7
         astra paper add 10.1038/s41586-023-06221-2
         astra paper add 10.1234/example --pdf ./local_paper.pdf
     """
     from astra.papers.cache import PaperCache
-    from astra.papers.download import download_paper
+    from astra.papers.download import download_paper, normalize_arxiv_identifier
 
+    doi = normalize_arxiv_identifier(doi)
     cache = PaperCache()
 
     # Check if already cached

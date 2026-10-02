@@ -5,9 +5,11 @@ Downloads papers by DOI, with special handling for arXiv papers.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 # Optional dependency for HTTP requests, bound on first use by
 # `_require_httpx`. Importing it costs ~60 ms, which every reader of the
@@ -150,9 +152,37 @@ def is_valid_pdf(content: bytes) -> bool:
     return content[:4] == b"%PDF"
 
 
+_ARXIV_NEW_ID = re.compile(r"\d{4}\.\d{4,}(?:v\d+)?")
+_ARXIV_OLD_ID = re.compile(r"[a-z][a-z0-9-]*(?:\.[a-z]{2})?/\d{7}(?:v\d+)?", re.IGNORECASE)
+
+
 def _is_arxiv_doi(doi: str) -> bool:
     """Check if DOI is an arXiv DOI."""
     return doi.startswith("10.48550/arXiv.")
+
+
+def normalize_arxiv_identifier(identifier: str) -> str:
+    """Convert common arXiv identifier forms to their DOI representation."""
+    value = identifier.strip()
+    if _is_arxiv_doi(value):
+        return value
+
+    candidate = value
+    if value.lower().startswith("arxiv:"):
+        candidate = value[len("arxiv:") :].strip()
+    else:
+        parsed = urlparse(value)
+        if (
+            parsed.scheme.lower() in {"http", "https"}
+            and parsed.hostname
+            and parsed.hostname.lower() in {"arxiv.org", "www.arxiv.org"}
+            and parsed.path.startswith("/abs/")
+        ):
+            candidate = parsed.path.removeprefix("/abs/")
+
+    if _ARXIV_NEW_ID.fullmatch(candidate) or _ARXIV_OLD_ID.fullmatch(candidate):
+        return f"10.48550/arXiv.{candidate}"
+    return identifier
 
 
 def _extract_arxiv_id(doi: str) -> str | None:
@@ -246,7 +276,10 @@ def _try_unpaywall(doi: str) -> PaperDownloadResult:
         if response.status_code == 404:
             return PaperDownloadResult(
                 success=False,
-                error="DOI not found in Unpaywall",
+                error=(
+                    "DOI not found in Unpaywall. Accepted identifiers include a DOI, "
+                    "arXiv:<id>, a bare arXiv ID, or https://arxiv.org/abs/<id>."
+                ),
             )
         response.raise_for_status()
 
@@ -341,13 +374,14 @@ def download_paper(doi: str, version: int | None = None) -> PaperDownloadResult:
     Metadata (title, authors) is fetched automatically via DOI content negotiation.
 
     Args:
-        doi: DOI of the paper.
+        doi: DOI, arXiv ID, ``arXiv:<id>``, or arXiv abs URL.
         version: Paper version (only used for arXiv papers).
 
     Returns:
         PaperDownloadResult with PDF content or error.
     """
     # Handle arXiv papers specially
+    doi = normalize_arxiv_identifier(doi)
     arxiv_id = _extract_arxiv_id(doi)
     if arxiv_id:
         return _download_arxiv_pdf(arxiv_id, doi, version)
@@ -375,6 +409,7 @@ def download_paper_to_cache(
     """
     from astra.papers.cache import PaperCache
 
+    doi = normalize_arxiv_identifier(doi)
     cache = PaperCache(cache_dir)
 
     # Check if already cached
