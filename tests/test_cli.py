@@ -499,6 +499,41 @@ class TestUniverseCommands:
         assert result.exit_code == 0
         assert "Universe is valid" in result.output
 
+    def test_universe_check_json_valid(
+        self, runner: CliRunner, baseline_universe_path: Path, full_analysis_path: Path
+    ):
+        result = runner.invoke(
+            main,
+            [
+                "universe",
+                "check",
+                str(baseline_universe_path),
+                "-a",
+                str(full_analysis_path),
+                "--json",
+            ],
+        )
+        assert result.exit_code == 0
+        report = json.loads(result.output)
+        assert report["valid"] is True
+        assert report["errors"] == []
+        assert report["universe_file"] == str(baseline_universe_path)
+
+    def test_universe_check_json_invalid(
+        self, runner: CliRunner, invalid_dir: Path, full_analysis_path: Path
+    ):
+        universe_file = invalid_dir / "universe_incompatible.yaml"
+        result = runner.invoke(
+            main,
+            ["universe", "check", str(universe_file), "-a", str(full_analysis_path), "--json"],
+        )
+        assert result.exit_code == 1
+        report = json.loads(result.output)
+        assert report["valid"] is False
+        assert report["universe_file"] == str(universe_file)
+        assert report["errors"]
+        assert any("INCOMPATIBLE_OPTIONS" in error for error in report["errors"])
+
     def test_universe_check_invalid(
         self, runner: CliRunner, invalid_dir: Path, full_analysis_path: Path
     ):

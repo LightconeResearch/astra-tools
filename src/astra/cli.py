@@ -852,10 +852,26 @@ def _print_universe_decisions(uni: dict[str, Any], indent: str = "  ") -> None:
     type=click.Path(exists=True, path_type=Path),
     help="Analysis file",
 )
-def check_universe(universe_file: Path, analysis: Path | None) -> None:
+@click.option("--json", "output_json", is_flag=True, help="Emit a machine-readable result")
+def check_universe(universe_file: Path, analysis: Path | None, output_json: bool) -> None:
     """Check a universe against its analysis constraints."""
     analysis_path = _require_analysis(analysis, universe_file.parent)
     errors = validate_universe_file(universe_file, analysis_path)
+
+    if output_json:
+        click.echo(
+            json.dumps(
+                {
+                    "universe_file": str(universe_file),
+                    "analysis_file": str(analysis_path),
+                    "valid": not errors,
+                    "errors": [str(error) for error in errors],
+                }
+            )
+        )
+        if errors:
+            raise SystemExit(1)
+        return
 
     if errors:
         console.print("[red]Universe validation errors:[/red]")
