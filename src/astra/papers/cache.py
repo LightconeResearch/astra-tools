@@ -117,8 +117,10 @@ class PaperCache:
         self.cache_dir = cache_dir
 
     def _paper_dir(self, doi: str, version: int | None = None) -> Path:
-        """Get the cache directory for a paper."""
-        return self.cache_dir / _sanitize_doi(doi, version)
+        """Get the cache directory for a paper; arXiv identifiers key by their DOI."""
+        from astra.papers.download import normalize_arxiv_identifier
+
+        return self.cache_dir / _sanitize_doi(normalize_arxiv_identifier(doi), version)
 
     def has(self, doi: str, version: int | None = None) -> bool:
         """Check if a paper is in the cache.
@@ -182,8 +184,9 @@ class PaperCache:
         Returns:
             CachedPaper with paths and metadata.
         """
-        from astra.papers.download import is_valid_pdf
+        from astra.papers.download import is_valid_pdf, normalize_arxiv_identifier
 
+        doi = normalize_arxiv_identifier(doi)
         if not is_valid_pdf(pdf_content):
             raise ValueError(
                 "Content is not a valid PDF (magic bytes mismatch). "

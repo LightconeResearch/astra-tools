@@ -39,6 +39,9 @@ def mock_http_transport(monkeypatch: pytest.MonkeyPatch):
         ("hep-th/9901001", "hep-th/9901001"),
         ("arXiv:hep-th/9901001", "hep-th/9901001"),
         ("https://arxiv.org/abs/hep-th/9901001", "hep-th/9901001"),
+        ("https://arxiv.org/pdf/1105.3470v2.pdf", "1105.3470v2"),
+        ("https://arxiv.org/pdf/1105.3470", "1105.3470"),
+        ("10.48550/arxiv.1105.3470", "1105.3470"),
     ],
 )
 def test_download_paper_normalizes_arxiv_identifier_forms(
@@ -223,3 +226,20 @@ def test_doi_metadata_failure_warns_without_failing_pdf_download(
     assert result.success is True
     assert "metadata lookup failed" in caplog.text.lower()
     assert "503" in caplog.text
+
+
+def test_cache_keys_arxiv_identifier_forms_by_their_doi(tmp_path: Path) -> None:
+    cache = cache_module.PaperCache(tmp_path)
+    cache.add("arXiv:1105.3470", b"%PDF-1.4\n")
+
+    for identifier in ("10.48550/arXiv.1105.3470", "1105.3470", "https://arxiv.org/abs/1105.3470"):
+        cached = cache.get(identifier)
+        assert cached is not None
+        assert cached.metadata.doi == "10.48550/arXiv.1105.3470"
+    assert cache.remove("arXiv:1105.3470")
+    assert not cache.has("10.48550/arXiv.1105.3470")
+
+
+@pytest.mark.parametrize("doi", ["10.1038/s41586-023-06221-2", "10.1234/hep-th/9901001x"])
+def test_normalize_leaves_other_dois_alone(doi: str) -> None:
+    assert download_module.normalize_arxiv_identifier(doi) == doi

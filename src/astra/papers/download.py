@@ -160,11 +160,12 @@ def is_valid_pdf(content: bytes) -> bool:
 
 _ARXIV_NEW_ID = re.compile(r"\d{4}\.\d{4,}(?:v\d+)?")
 _ARXIV_OLD_ID = re.compile(r"[a-z][a-z0-9-]*(?:\.[a-z]{2})?/\d{7}(?:v\d+)?", re.IGNORECASE)
+_ARXIV_DOI_PREFIX = "10.48550/arXiv."
 
 
 def _is_arxiv_doi(doi: str) -> bool:
     """Check if DOI is an arXiv DOI."""
-    return doi.startswith("10.48550/arXiv.")
+    return doi.startswith(_ARXIV_DOI_PREFIX)
 
 
 def normalize_arxiv_identifier(identifier: str) -> str:
@@ -174,20 +175,23 @@ def normalize_arxiv_identifier(identifier: str) -> str:
         return value
 
     candidate = value
-    if value.lower().startswith("arxiv:"):
+    if value.lower().startswith(_ARXIV_DOI_PREFIX.lower()):
+        candidate = value[len(_ARXIV_DOI_PREFIX) :]
+    elif value.lower().startswith("arxiv:"):
         candidate = value[len("arxiv:") :].strip()
     else:
         parsed = urlparse(value)
         if (
             parsed.scheme.lower() in {"http", "https"}
             and parsed.hostname
-            and parsed.hostname.lower() in {"arxiv.org", "www.arxiv.org"}
-            and parsed.path.startswith("/abs/")
+            and parsed.hostname.lower() in {"arxiv.org", "www.arxiv.org", "export.arxiv.org"}
         ):
-            candidate = parsed.path.removeprefix("/abs/")
+            for prefix in ("/abs/", "/pdf/"):
+                if parsed.path.startswith(prefix):
+                    candidate = parsed.path.removeprefix(prefix).removesuffix(".pdf")
 
     if _ARXIV_NEW_ID.fullmatch(candidate) or _ARXIV_OLD_ID.fullmatch(candidate):
-        return f"10.48550/arXiv.{candidate}"
+        return f"{_ARXIV_DOI_PREFIX}{candidate}"
     return identifier
 
 
