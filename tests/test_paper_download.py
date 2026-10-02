@@ -4,13 +4,30 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 from click.testing import CliRunner
 
 from astra.cli import main
 from astra.papers import cache as cache_module
 from astra.papers import download as download_module
-from astra.papers.download import PaperDownloadResult
+from astra.papers.download import DOIMetadata, PaperDownloadResult
+
+
+@pytest.fixture
+def mock_http_transport(monkeypatch: pytest.MonkeyPatch):
+    clients: list[httpx.Client] = []
+
+    def install(handler):
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        monkeypatch.setattr(download_module, "httpx", httpx)
+        monkeypatch.setattr(httpx, "get", client.get)
+        clients.append(client)
+
+    yield install
+
+    for client in clients:
+        client.close()
 
 
 @pytest.mark.parametrize(
@@ -102,3 +119,107 @@ def test_unpaywall_not_found_explains_accepted_identifier_forms(
     assert "arXiv:<id>" in result.error
     assert "bare arXiv ID" in result.error
     assert "https://arxiv.org/abs/<id>" in result.error
+
+
+@pytest.mark.parametrize("status_code", [406, 429, 503])
+def test_arxiv_pdf_retries_transient_statuses(
+    monkeypatch: pytest.MonkeyPatch, mock_http_transport, status_code: int
+) -> None:
+    calls = 0
+    delays: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(status_code)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/pdf"},
+            content=b"%PDF-1.4\\n",
+        )
+
+    mock_http_transport(handler)
+    monkeypatch.setattr(download_module.time, "sleep", delays.append)
+    monkeypatch.setattr(download_module, "fetch_doi_metadata", lambda doi: DOIMetadata())
+
+    result = download_module._download_arxiv_pdf("1706.03762", "10.48550/arXiv.1706.03762")
+
+    assert result.success is True
+    assert calls == 2
+    assert delays == [download_module._ARXIV_RETRY_BACKOFF]
+
+
+def test_arxiv_pdf_retries_connection_errors(
+    monkeypatch: pytest.MonkeyPatch, mock_http_transport
+) -> None:
+    calls = 0
+    delays: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise httpx.ConnectError("connection refused", request=request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/pdf"},
+            content=b"%PDF-1.4\\n",
+        )
+
+    mock_http_transport(handler)
+    monkeypatch.setattr(download_module.time, "sleep", delays.append)
+    monkeypatch.setattr(download_module, "fetch_doi_metadata", lambda doi: DOIMetadata())
+
+    result = download_module._download_arxiv_pdf("1706.03762", "10.48550/arXiv.1706.03762")
+
+    assert result.success is True
+    assert calls == 2
+    assert delays == [download_module._ARXIV_RETRY_BACKOFF]
+
+
+def test_arxiv_pdf_falls_back_to_export_host(
+    monkeypatch: pytest.MonkeyPatch, mock_http_transport
+) -> None:
+    hosts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        hosts.append(request.url.host)
+        if request.url.host == "arxiv.org":
+            return httpx.Response(406)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/pdf"},
+            content=b"%PDF-1.4\\n",
+        )
+
+    mock_http_transport(handler)
+    monkeypatch.setattr(download_module.time, "sleep", lambda delay: None)
+    monkeypatch.setattr(download_module, "fetch_doi_metadata", lambda doi: DOIMetadata())
+
+    result = download_module._download_arxiv_pdf("1706.03762", "10.48550/arXiv.1706.03762")
+
+    assert result.success is True
+    assert result.url == "https://export.arxiv.org/pdf/1706.03762.pdf"
+    assert hosts == ["arxiv.org"] * download_module._ARXIV_MAX_ATTEMPTS + ["export.arxiv.org"]
+
+
+def test_doi_metadata_failure_warns_without_failing_pdf_download(
+    caplog, mock_http_transport
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "doi.org":
+            return httpx.Response(503)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/pdf"},
+            content=b"%PDF-1.4\\n",
+        )
+
+    mock_http_transport(handler)
+
+    result = download_module._download_arxiv_pdf("1706.03762", "10.48550/arXiv.1706.03762")
+
+    assert result.success is True
+    assert "metadata lookup failed" in caplog.text.lower()
+    assert "503" in caplog.text

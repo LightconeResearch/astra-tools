@@ -5,7 +5,9 @@ Downloads papers by DOI, with special handling for arXiv papers.
 
 from __future__ import annotations
 
+import logging
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,6 +17,10 @@ from urllib.parse import urlparse
 # `_require_httpx`. Importing it costs ~60 ms, which every reader of the
 # paper cache would otherwise pay to reach a class that only touches disk.
 httpx: Any = None
+logger = logging.getLogger(__name__)
+
+_ARXIV_MAX_ATTEMPTS = 3
+_ARXIV_RETRY_BACKOFF = 0.5
 
 
 def _require_httpx() -> None:
@@ -111,11 +117,11 @@ def fetch_doi_metadata(doi: str) -> DOIMetadata:
             container_title=container_title,
         )
 
-    except (httpx.HTTPStatusError, httpx.RequestError):
-        # Return empty metadata on error - don't fail the download
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        logger.warning("DOI metadata lookup failed for %s: %s", doi, exc)
         return DOIMetadata()
-    except (KeyError, ValueError):
-        # JSON parsing issues
+    except (KeyError, ValueError) as exc:
+        logger.warning("Could not parse DOI metadata for %s: %s", doi, exc)
         return DOIMetadata()
 
 
@@ -192,6 +198,42 @@ def _extract_arxiv_id(doi: str) -> str | None:
     return None
 
 
+def _is_transient_arxiv_status(status_code: int) -> bool:
+    return status_code in {406, 429} or 500 <= status_code < 600
+
+
+def _get_arxiv_pdf(url: str) -> tuple[Any, str]:
+    """Fetch an arXiv PDF, retrying transient failures before trying the export host."""
+    urls = [url]
+    parsed = urlparse(url)
+    if parsed.hostname and parsed.hostname.lower() in {"arxiv.org", "www.arxiv.org"}:
+        fallback_url = parsed._replace(netloc="export.arxiv.org").geturl()
+        if fallback_url != url:
+            urls.append(fallback_url)
+
+    last_failure: Any = None
+    for attempt_url in urls:
+        for attempt in range(_ARXIV_MAX_ATTEMPTS):
+            try:
+                response = httpx.get(attempt_url, follow_redirects=True, timeout=60.0)
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                last_failure = exc
+            else:
+                if not _is_transient_arxiv_status(response.status_code):
+                    response.raise_for_status()
+                    return response, attempt_url
+                last_failure = response
+
+            if attempt + 1 < _ARXIV_MAX_ATTEMPTS:
+                time.sleep(_ARXIV_RETRY_BACKOFF * 2**attempt)
+
+    if hasattr(last_failure, "raise_for_status"):
+        last_failure.raise_for_status()
+    if last_failure is not None:
+        raise last_failure
+    raise RuntimeError("arXiv PDF request failed without a response")
+
+
 def _download_arxiv_pdf(arxiv_id: str, doi: str, version: int | None = None) -> PaperDownloadResult:
     """Download PDF from arXiv.
 
@@ -212,8 +254,7 @@ def _download_arxiv_pdf(arxiv_id: str, doi: str, version: int | None = None) -> 
         url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
 
     try:
-        response = httpx.get(url, follow_redirects=True, timeout=60.0)
-        response.raise_for_status()
+        response, download_url = _get_arxiv_pdf(url)
 
         # Check if we got a PDF (arXiv returns application/pdf or application/octet-stream)
         content_type = response.headers.get("content-type", "")
@@ -238,7 +279,7 @@ def _download_arxiv_pdf(arxiv_id: str, doi: str, version: int | None = None) -> 
         return PaperDownloadResult(
             success=True,
             content=response.content,
-            url=url,
+            url=download_url,
             title=metadata.title,
             authors=metadata.authors,
         )
