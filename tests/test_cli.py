@@ -260,6 +260,37 @@ class TestValidateProjectMode:
         assert "Traceback" not in result.output
         assert "IsADirectoryError" not in result.output
 
+    def test_external_subanalysis_mapping_shape_is_a_schema_error(
+        self, runner: CliRunner, tmp_path: Path, minimal_analysis_path: Path, monkeypatch
+    ):
+        root = load_yaml(minimal_analysis_path)
+        root["analyses"] = {"child": {"path": "child"}}
+        save_yaml(root, tmp_path / "astra.yaml")
+        (tmp_path / "child").mkdir()
+        save_yaml(
+            {
+                "inputs": [{"id": "raw", "type": "data", "source": "data/raw.csv"}],
+                "outputs": [
+                    {
+                        "id": "result",
+                        "type": "metric",
+                        "description": "Child output",
+                        "inputs": ["raw"],
+                        "recipe": {"command": "python run.py"},
+                    }
+                ],
+                "decisions": [{"label": "Malformed"}],
+            },
+            tmp_path / "child" / "astra.yaml",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(main, ["validate", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "Schema validation errors:" in result.output
+        assert "analyses.child.decisions" in result.output
+        assert "list' object has no attribute 'items" not in result.output
+
 
 class TestJsonOutput:
     """--json: the report as one JSON-encoded string, exit code unchanged."""

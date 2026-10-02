@@ -449,6 +449,10 @@ def _validate_one(
         schema_errors = validate_universe_data(data)
     else:
         schema_errors = validate_analysis_data(data)
+        if not schema_errors:
+            resolved_data = resolve_analysis_tree(data, file.parent)
+            if resolved_data is not data:
+                schema_errors = validate_analysis_data(resolved_data)
 
     if schema_errors:
         console.print("\n[red]Schema validation errors:[/red]")
