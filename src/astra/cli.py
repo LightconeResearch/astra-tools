@@ -723,6 +723,13 @@ def _display_decisions(decisions: dict[str, Any], indent: str = "") -> None:
     """Display decisions as Rich trees."""
     for decision_id, decision in decisions.items():
         tree = Tree(f"{indent}[cyan]{decision_id}[/cyan]: {decision.get('label', '')}")
+        when = decision.get("when")
+        if when:
+            conditions = when if isinstance(when, list) else [when]
+            tree.add(f"[dim]When:[/dim] {' AND '.join(conditions)}")
+        incompatible_with = decision.get("incompatible_with") or []
+        if incompatible_with:
+            tree.add(f"[dim]Incompatible with:[/dim] {', '.join(incompatible_with)}")
         tags = decision.get("tags") or []
         if tags:
             tree.add(f"[dim]Tags:[/dim] {', '.join(tags)}")
@@ -737,7 +744,10 @@ def _display_decisions(decisions: dict[str, Any], indent: str = "") -> None:
             option_text = f"{option_id}: {option.get('label', '')}{default_marker}"
             if option.get("description"):
                 option_text += f" - [dim]{option['description']}[/dim]"
-            options_branch.add(option_text)
+            option_branch = options_branch.add(option_text)
+            incompatible_with = option.get("incompatible_with") or []
+            if incompatible_with:
+                option_branch.add(f"[dim]Incompatible with: {', '.join(incompatible_with)}[/dim]")
 
         console.print(tree)
         console.print()

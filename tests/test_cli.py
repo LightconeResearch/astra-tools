@@ -339,6 +339,25 @@ class TestInfoCommand:
         assert "Decisions:" in result.output
         assert "preprocessing" in result.output
 
+    def test_info_shows_conditional_decisions_and_incompatibilities(
+        self, runner: CliRunner, valid_dir: Path
+    ):
+        spec = valid_dir / "info_conditions.yaml"
+        result = runner.invoke(main, ["info", "-f", str(spec)])
+        assert result.exit_code == 0
+        assert "When: mode.advanced" in result.output
+        assert "Incompatible with: accelerator.gpu" in result.output
+
+    def test_info_json_shows_conditional_decisions_and_incompatibilities(
+        self, runner: CliRunner, valid_dir: Path
+    ):
+        spec = valid_dir / "info_conditions.yaml"
+        result = runner.invoke(main, ["info", "-f", str(spec), "--json"])
+        assert result.exit_code == 0
+        report = json.loads(result.output)
+        assert "When: mode.advanced" in report
+        assert "Incompatible with: accelerator.gpu" in report
+
     def test_info_inputs_only(self, runner: CliRunner, full_analysis_path: Path):
         result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--inputs"])
         assert result.exit_code == 0
