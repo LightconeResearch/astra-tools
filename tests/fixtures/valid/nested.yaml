@@ -81,3 +81,16 @@ analyses:
     outputs:
       - id: validation_report
         type: report
+
+universes:
+  - id: baseline
+    description: "Standard pipeline configuration"
+    decisions:
+      cosmology_model: flat_lcdm
+    analyses:
+      build_mocks:
+        decisions:
+          noise_model: heteroscedastic
+      train_network:
+        decisions:
+          architecture: maf

@@ -33,24 +33,21 @@ be the same duplication this module exists to remove.
 
 from __future__ import annotations
 
-import logging
 import string
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from astra.helpers import (
     Scope,
     ancestor_at,
-    external_spec_path,
     get_input,
     get_output_ids,
     is_condition_met,
     iter_analysis_nodes,
-    load_yaml,
     parse_from_path,
 )
+from astra.universes import effective_universe
 
 __all__ = [
     "ResolvedInput",
@@ -61,8 +58,6 @@ __all__ = [
     "resolve_outputs",
     "resolve_universe",
 ]
-
-logger = logging.getLogger(__name__)
 
 _FORMATTER = string.Formatter()
 
@@ -88,77 +83,51 @@ def qualify(scope: Scope, local_id: str) -> str:
 def resolve_universe(
     data: Mapping[str, Any],
     universe: Mapping[str, Any],
-    base_path: Path | None = None,
 ) -> dict[str, str]:
     """Resolve a universe into every decision it settles, by qualified id.
 
-    Three things are applied that a universe file does not state outright.
+    Three things are applied that a universe does not state outright.
     A decision declared ``from: ../id`` takes the ancestor's chosen option,
     so an inherited decision has a value in the scope that uses it. A
     decision carrying ``when:`` is included only where its condition holds
     against the decisions already settled above it. And a sub-analysis's
     decisions come from the ``analyses.<id>.decisions`` block of the same
-    universe file, nested to whatever depth the tree has.
+    universe, nested to whatever depth the tree has.
 
-    A sub-analysis node may also say ``universe: <name>`` instead of
-    listing decisions inline, naming one of the universes in that
-    sub-analysis's own ``universes/`` directory. Loading it needs
-    *base_path*; without one the reference is skipped, since there is
-    nothing to resolve it against.
+    A sub-analysis entry may also say ``universe: <id>`` instead of listing
+    decisions, naming one of the universes that sub-analysis declares in
+    its own ``universes`` list.
 
     Args:
         data: The analysis, with external sub-analyses already resolved.
-        universe: The universe, as loaded from ``universes/<id>.yaml``.
-        base_path: The directory the analysis was loaded from, needed only
-            to follow a sub-analysis's ``universe:`` reference.
+        universe: The universe's effective selection (see
+            ``astra.universes.effective_universe``).
 
     Returns:
         Qualified decision id → chosen option id. Root decisions are
         unqualified; a sub-analysis's are ``"<scope>.<decision_id>"``.
     """
     settled: dict[str, str] = {}
-    _settle(data, universe, (), [], settled, base_path)
+    _settle(data, universe, (), [], settled)
     return settled
 
 
 def _selected_universe(
     node: Mapping[str, Any],
     universe_node: Mapping[str, Any],
-    base_path: Path | None,
-    where: str,
 ) -> Mapping[str, Any]:
-    """Follow a ``universe:`` reference to the file it names.
+    """Follow a ``universe:`` entry to the universe it names.
 
-    Only an external (``path:``) sub-analysis has a ``universes/``
-    directory of its own, so only one can be referred to this way.
-    Anything unresolvable leaves the node as it stands — a missing file is
-    the validator's to report, not this module's to raise on — but it is
-    logged, because ``semantic.py`` validates nothing about ``universe:``
-    and silence here would leave a whole subtree unsettled with no
-    diagnostic from either layer.
+    The id names one of the universes the sub-analysis declares, and its
+    effective selection stands in for the entry. An id that isn't declared
+    leaves the entry as it is - ``UNKNOWN_SUB_UNIVERSE`` is the validator's
+    to report.
     """
     name = universe_node.get("universe")
     if not name:
         return universe_node
-    sub_path = node.get("path")
-    if not sub_path:
-        logger.warning(
-            "universe '%s' selected for '%s', which is an inline sub-analysis "
-            "and has no universes/ directory to name it in",
-            name,
-            where,
-        )
-        return universe_node
-    if base_path is None:
-        return universe_node
-    path = external_spec_path(base_path, str(sub_path)).parent / "universes" / f"{name}.yaml"
-    if not path.is_file():
-        logger.warning("universe '%s' selected for '%s' but %s does not exist", name, where, path)
-        return universe_node
-    loaded = load_yaml(path)
-    # An empty or comment-only file parses to `None`; that is the
-    # validator's to report, and this module promises not to raise on it.
-    return loaded if isinstance(loaded, Mapping) else universe_node
+    effective = effective_universe(node, str(name))
+    return effective.selection if effective is not None else universe_node
 
 
 def _settle(
@@ -167,7 +136,6 @@ def _settle(
     scope: Scope,
     chain: list[dict[str, str]],
     settled: dict[str, str],
-    base_path: Path | None,
 ) -> None:
     """Settle one node's decisions, then recurse into its sub-analyses.
 
@@ -216,11 +184,8 @@ def _settle(
         if not isinstance(sub, dict):
             continue
         sub_universe = (universe_node.get("analyses") or {}).get(str(sub_id)) or {}
-        sub_universe = _selected_universe(sub, sub_universe, base_path, qualify(scope, str(sub_id)))
-        sub_base = base_path
-        if base_path is not None and sub.get("path"):
-            sub_base = external_spec_path(base_path, str(sub["path"])).parent
-        _settle(sub, sub_universe, (*scope, str(sub_id)), [*chain, here], settled, sub_base)
+        sub_universe = _selected_universe(sub, sub_universe)
+        _settle(sub, sub_universe, (*scope, str(sub_id)), [*chain, here], settled)
 
 
 # =============================================================================
@@ -276,7 +241,6 @@ class ResolvedOutput:
 def resolve_outputs(
     data: Mapping[str, Any],
     universe: Mapping[str, Any],
-    base_path: Path | None = None,
 ) -> list[ResolvedOutput]:
     """Resolve every output this universe produces, anywhere in the tree.
 
@@ -287,14 +251,13 @@ def resolve_outputs(
 
     Args:
         data: The analysis, with external sub-analyses already resolved.
-        universe: The universe, as loaded from ``universes/<id>.yaml``.
-        base_path: The directory the analysis was loaded from, needed only
-            to follow a sub-analysis's ``universe:`` reference.
+        universe: The universe's effective selection (see
+            ``astra.universes.effective_universe``).
 
     Returns:
         Every active output, root scope first, in declaration order.
     """
-    tree = _index(data, resolve_universe(data, universe, base_path))
+    tree = _index(data, resolve_universe(data, universe))
     declared_here: list[tuple[str, Scope, dict[str, Any], dict[str, str]]] = []
     reexports: dict[str, str] = {}
 

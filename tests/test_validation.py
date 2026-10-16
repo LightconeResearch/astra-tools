@@ -8,16 +8,13 @@ from astra.helpers import load_yaml
 from astra.validation.schema import (
     collect_recommendations,
     is_valid_analysis,
-    is_valid_universe,
     validate_analysis_schema,
-    validate_universe_schema,
 )
 from astra.validation.semantic import (
     SemanticError,
     validate_analysis,
     validate_analysis_file,
     validate_universe,
-    validate_universe_file,
 )
 
 
@@ -30,13 +27,9 @@ class TestSchemaValidation:
         assert is_valid_analysis(minimal_analysis_path)
 
     def test_valid_full_analysis(self, full_analysis_path: Path):
+        """``full.yaml`` declares its universes, one derived from the other."""
         errors = validate_analysis_schema(full_analysis_path)
         assert errors == []
-
-    def test_valid_universe(self, baseline_universe_path: Path):
-        errors = validate_universe_schema(baseline_universe_path)
-        assert errors == []
-        assert is_valid_universe(baseline_universe_path)
 
     def test_missing_version(self, invalid_dir: Path):
         errors = validate_analysis_file(invalid_dir / "missing_version.yaml")
@@ -197,43 +190,49 @@ class TestSemanticValidation:
 
 
 class TestUniverseValidation:
-    """Tests for universe validation."""
+    """Tests for validating the universes an analysis declares."""
 
-    def test_valid_universe(self, full_analysis_path: Path, baseline_universe_path: Path):
-        errors = validate_universe_file(baseline_universe_path, full_analysis_path)
+    def test_valid_universes(self, full_analysis_path: Path):
+        """``baseline`` in full, and ``svm-config`` derived from it - SVM
+        requires standard preprocessing, which it inherits."""
+        errors = validate_analysis_file(full_analysis_path)
         assert errors == []
 
-    def test_valid_svm_universe(self, full_analysis_path: Path, svm_universe_path: Path):
-        # SVM requires standard preprocessing, which is set
-        errors = validate_universe_file(svm_universe_path, full_analysis_path)
-        assert errors == []
-
-    def test_missing_decision(self, full_analysis_path: Path, invalid_dir: Path):
-        errors = validate_universe_file(
-            invalid_dir / "universe_missing_decision.yaml",
-            full_analysis_path,
+    def test_missing_decision(
+        self, full_analysis_path: Path, invalid_dir: Path, with_universe_entry
+    ):
+        data = with_universe_entry(
+            full_analysis_path, invalid_dir / "universe_entry_missing_decision.yaml"
         )
-        assert any(e.code == "MISSING_DECISION" for e in errors)
-
-    def test_invalid_option(self, full_analysis_path: Path, invalid_dir: Path):
-        errors = validate_universe_file(
-            invalid_dir / "universe_invalid_option.yaml",
-            full_analysis_path,
+        errors = validate_analysis(data)
+        assert any(
+            e.code == "MISSING_DECISION" and e.path == "universes.incomplete.decisions.model"
+            for e in errors
         )
+
+    def test_invalid_option(self, full_analysis_path: Path, invalid_dir: Path, with_universe_entry):
+        data = with_universe_entry(
+            full_analysis_path, invalid_dir / "universe_entry_invalid_option.yaml"
+        )
+        errors = validate_analysis(data)
         assert any(e.code == "UNKNOWN_OPTION" for e in errors)
 
-    def test_incompatible_options(self, full_analysis_path: Path, invalid_dir: Path):
-        errors = validate_universe_file(
-            invalid_dir / "universe_incompatible.yaml",
-            full_analysis_path,
+    def test_incompatible_options(
+        self, full_analysis_path: Path, invalid_dir: Path, with_universe_entry
+    ):
+        data = with_universe_entry(
+            full_analysis_path, invalid_dir / "universe_entry_incompatible.yaml"
         )
+        errors = validate_analysis(data)
         assert any(e.code == "INCOMPATIBLE_OPTIONS" for e in errors)
 
-    def test_missing_required_option(self, full_analysis_path: Path, invalid_dir: Path):
-        errors = validate_universe_file(
-            invalid_dir / "universe_missing_required.yaml",
-            full_analysis_path,
+    def test_missing_required_option(
+        self, full_analysis_path: Path, invalid_dir: Path, with_universe_entry
+    ):
+        data = with_universe_entry(
+            full_analysis_path, invalid_dir / "universe_entry_missing_required.yaml"
         )
+        errors = validate_analysis(data)
         assert any(e.code == "MISSING_REQUIRED_OPTION" for e in errors)
 
 
@@ -241,19 +240,17 @@ class TestNestedAnalysisValidation:
     """Tests for nested analysis semantic validation."""
 
     def test_valid_nested_analysis(self, valid_dir: Path):
+        """Including its universe, which selects inside each sub-analysis."""
         errors = validate_analysis_file(valid_dir / "nested.yaml")
         assert errors == []
 
-    def test_valid_nested_universe(self, valid_dir: Path):
-        analysis_data = load_yaml(valid_dir / "nested.yaml")
-        universe_data = load_yaml(valid_dir / "nested_universe.yaml")
-        errors = validate_universe(universe_data, analysis_data)
-        assert errors == []
-
-    def test_missing_analysis_decision_in_universe(self, valid_dir: Path, invalid_dir: Path):
-        analysis_data = load_yaml(valid_dir / "nested.yaml")
-        universe_data = load_yaml(invalid_dir / "universe_missing_analysis_decision.yaml")
-        errors = validate_universe(universe_data, analysis_data)
+    def test_missing_analysis_decision_in_universe(
+        self, valid_dir: Path, invalid_dir: Path, with_universe_entry
+    ):
+        data = with_universe_entry(
+            valid_dir / "nested.yaml", invalid_dir / "universe_entry_missing_analysis_decision.yaml"
+        )
+        errors = validate_analysis(data)
         assert any(e.code == "MISSING_DECISION" for e in errors)
 
 
@@ -274,11 +271,14 @@ class TestSubAnalysisRequirements:
         errors = validate_analysis_file(valid_dir / "nested.yaml")
         assert errors == []
 
-    def test_cross_level_incompatible_universe(self, valid_dir: Path, invalid_dir: Path):
+    def test_cross_level_incompatible_universe(
+        self, valid_dir: Path, invalid_dir: Path, with_universe_entry
+    ):
         """Universe violates cross-level incompatible_with constraint."""
-        analysis_data = load_yaml(valid_dir / "nested.yaml")
-        universe_data = load_yaml(invalid_dir / "universe_cross_level_incompatible.yaml")
-        errors = validate_universe(universe_data, analysis_data)
+        data = with_universe_entry(
+            valid_dir / "nested.yaml", invalid_dir / "universe_entry_cross_level_incompatible.yaml"
+        )
+        errors = validate_analysis(data)
         assert any(e.code == "INCOMPATIBLE_OPTIONS" for e in errors)
 
 
@@ -624,10 +624,13 @@ class TestExcludedOptionValidation:
 class TestUniverseNewFeaturesValidation:
     """Tests for universe validation with conditional decisions and excluded options."""
 
-    def test_excluded_option_in_universe(self, invalid_dir: Path, valid_dir: Path):
-        analysis_data = load_yaml(valid_dir / "full_v2.yaml")
-        universe_data = load_yaml(invalid_dir / "universe_excluded_option.yaml")
-        errors = validate_universe(universe_data, analysis_data)
+    def test_excluded_option_in_universe(
+        self, invalid_dir: Path, valid_dir: Path, with_universe_entry
+    ):
+        data = with_universe_entry(
+            valid_dir / "full_v2.yaml", invalid_dir / "universe_entry_excluded_option.yaml"
+        )
+        errors = validate_analysis(data)
         assert any(e.code == "EXCLUDED_OPTION_SELECTED" for e in errors)
 
 
@@ -782,38 +785,156 @@ class TestConditionalOutputsUniverse:
 
     def test_valid_universe_with_conditional_outputs(self, valid_dir: Path):
         """Universe should validate against analysis with conditional outputs."""
-        analysis_data = load_yaml(valid_dir / "conditional_outputs.yaml")
-        universe_data = load_yaml(valid_dir / "conditional_outputs_universe.yaml")
-        errors = validate_universe(universe_data, analysis_data)
+        errors = validate_analysis_file(valid_dir / "conditional_outputs.yaml")
         assert errors == []
 
     def test_decision_list_when_active(self, valid_dir: Path):
         """Universe where list when condition IS met should include the decision."""
-        analysis_data = load_yaml(valid_dir / "decision_list_when.yaml")
-        universe_data = load_yaml(valid_dir / "decision_list_when_universe.yaml")
-        errors = validate_universe(universe_data, analysis_data)
-        assert errors == []
+        errors = validate_analysis_file(valid_dir / "decision_list_when.yaml")
+        assert not [e for e in errors if (e.path or "").startswith("universes.gpu_advanced")]
 
     def test_decision_list_when_inactive(self, valid_dir: Path):
         """Universe where list when condition is NOT met should skip the decision."""
-        analysis_data = load_yaml(valid_dir / "decision_list_when.yaml")
-        universe_data = load_yaml(valid_dir / "decision_list_when_universe_inactive.yaml")
-        errors = validate_universe(universe_data, analysis_data)
-        assert errors == []
+        errors = validate_analysis_file(valid_dir / "decision_list_when.yaml")
+        assert not [e for e in errors if (e.path or "").startswith("universes.cpu_basic")]
 
     def test_decision_list_when_inactive_with_selection_is_error(self, valid_dir: Path):
         """Selecting an inactive decision (list when not met) should be an error."""
-        analysis_data = load_yaml(valid_dir / "decision_list_when.yaml")
-        universe_data = {
-            "id": "bad",
-            "decisions": {
-                "mode": "basic",
-                "backend": "cpu",
-                "gpu_optimization": "tensor_cores",
+        data = load_yaml(valid_dir / "decision_list_when.yaml")
+        data["universes"].append(
+            {
+                "id": "bad",
+                "decisions": {
+                    "mode": "basic",
+                    "backend": "cpu",
+                    "gpu_optimization": "tensor_cores",
+                },
+            }
+        )
+        errors = validate_analysis(data)
+        assert any(
+            e.code == "INACTIVE_DECISION" and e.path == "universes.bad.decisions.gpu_optimization"
+            for e in errors
+        )
+
+    def test_an_inherited_inactive_selection_is_dropped(self, valid_dir: Path):
+        """Switching ``gpu_optimization`` off in a diff drops the selection it
+        inherited - it isn't the diff's to report."""
+        data = load_yaml(valid_dir / "decision_list_when.yaml")
+        data["universes"].append(
+            {
+                "id": "cpu_from_gpu",
+                "derived_from": "gpu_advanced",
+                "decisions": {"mode": "basic", "backend": "cpu"},
+            }
+        )
+        errors = validate_analysis(data)
+        assert errors == []
+
+
+class TestDeclaredUniverses:
+    """Tests for the rules on the universes an analysis declares."""
+
+    FLAT = {
+        "version": "1.0",
+        "name": "Declared universes",
+        "inputs": [{"id": "raw", "type": "data", "source": "raw.csv"}],
+        "outputs": [{"id": "out", "type": "data", "decisions": ["method"]}],
+        "decisions": {
+            "method": {
+                "label": "Method",
+                "options": {"pca": {"label": "PCA"}, "mlp": {"label": "MLP"}},
             },
-        }
-        errors = validate_universe(universe_data, analysis_data)
-        assert any(e.code == "INACTIVE_DECISION" for e in errors)
+        },
+    }
+
+    NESTED = {
+        "version": "1.0",
+        "name": "Sub-analysis presets",
+        "inputs": [{"id": "raw", "type": "data", "source": "raw.csv"}],
+        "outputs": [{"id": "out", "type": "data"}],
+        "analyses": {
+            "stage": {
+                "inputs": [{"id": "x", "from": "../raw"}],
+                "outputs": [{"id": "y", "type": "data", "decisions": ["method"]}],
+                "decisions": {
+                    "method": {
+                        "label": "Method",
+                        "options": {"pca": {"label": "PCA"}, "mlp": {"label": "MLP"}},
+                    },
+                },
+                "universes": [{"id": "fast", "decisions": {"method": "pca"}}],
+            }
+        },
+    }
+
+    @staticmethod
+    def codes(spec: dict, *universes: dict) -> list[tuple[str, str | None]]:
+        return [(e.code, e.path) for e in validate_analysis({**spec, "universes": list(universes)})]
+
+    def test_duplicate_universe(self):
+        found = self.codes(
+            self.FLAT,
+            {"id": "a", "decisions": {"method": "pca"}},
+            {"id": "a", "decisions": {"method": "mlp"}},
+        )
+        assert ("DUPLICATE_UNIVERSE", "universes.a") in found
+
+    def test_unknown_derived_from(self):
+        found = self.codes(self.FLAT, {"id": "b", "derived_from": "nope", "decisions": {}})
+        assert ("UNKNOWN_DERIVED_FROM", "universes.b.derived_from") in found
+
+    def test_derived_from_cycle(self):
+        found = self.codes(
+            self.FLAT,
+            {"id": "a", "derived_from": "b", "decisions": {}},
+            {"id": "b", "derived_from": "a", "decisions": {}},
+            {"id": "c", "derived_from": "a", "decisions": {}},
+        )
+        cycles = sorted(path or "" for code, path in found if code == "DERIVED_FROM_CYCLE")
+        assert cycles == ["universes.a.derived_from", "universes.b.derived_from"]
+
+    def test_a_diff_is_checked_on_its_effective_selection(self):
+        found = self.codes(
+            self.FLAT,
+            {"id": "a", "decisions": {"method": "pca"}},
+            {"id": "b", "derived_from": "a", "decisions": {}},
+        )
+        assert found == []
+
+    def test_a_sub_analysis_universe_can_be_picked_by_id(self):
+        found = self.codes(self.NESTED, {"id": "u", "analyses": {"stage": {"universe": "fast"}}})
+        assert found == []
+
+    def test_picking_a_universe_and_listing_decisions_is_a_conflict(self):
+        found = self.codes(
+            self.NESTED,
+            {
+                "id": "u",
+                "analyses": {"stage": {"universe": "fast", "decisions": {"method": "mlp"}}},
+            },
+        )
+        assert ("UNIVERSE_NODE_CONFLICT", "universes.u.analyses.stage") in found
+
+    def test_unknown_sub_universe(self):
+        found = self.codes(self.NESTED, {"id": "u", "analyses": {"stage": {"universe": "deep"}}})
+        assert ("UNKNOWN_SUB_UNIVERSE", "universes.u.analyses.stage.universe") in found
+
+    def test_a_sub_analysis_universes_are_validated_too(self):
+        stage = {**self.NESTED["analyses"]["stage"]}
+        stage["universes"] = [{"id": "bad", "decisions": {"method": "nope"}}]
+        spec = {**self.NESTED, "analyses": {"stage": stage}}
+        found = self.codes(spec)
+        assert ("UNKNOWN_OPTION", "analyses.stage.universes.bad.decisions.method") in found
+
+    def test_a_diff_inherits_sub_analysis_selections(self):
+        found = self.codes(
+            self.NESTED,
+            {"id": "a", "analyses": {"stage": {"decisions": {"method": "pca"}}}},
+            {"id": "b", "derived_from": "a"},
+            {"id": "c", "derived_from": "a", "analyses": {"stage": {"universe": "fast"}}},
+        )
+        assert found == []
 
 
 class TestIsConditionMet:

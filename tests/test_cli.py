@@ -31,35 +31,42 @@ class TestValidateCommand:
         assert result.exit_code == 0
         assert "Validation successful" in result.output
 
-    def test_validate_valid_universe(
-        self,
-        runner: CliRunner,
-        baseline_universe_path: Path,
-        full_analysis_path: Path,
-    ):
-        result = runner.invoke(
-            main,
-            ["validate", str(baseline_universe_path), "-a", str(full_analysis_path)],
-        )
-        assert result.exit_code == 0
-        assert "Validation successful" in result.output
-
     def test_validate_invalid_analysis(self, runner: CliRunner, invalid_dir: Path):
         result = runner.invoke(main, ["validate", str(invalid_dir / "missing_version.yaml")])
         assert result.exit_code == 1
         assert "validation errors" in result.output
 
-    def test_validate_universe_without_analysis(
-        self, runner: CliRunner, baseline_universe_path: Path, tmp_path: Path
-    ):
-        # Copy universe to temp dir where there's no astra.yaml
-        temp_universe = tmp_path / "universes" / "test.yaml"
-        temp_universe.parent.mkdir(parents=True)
-        shutil.copy(baseline_universe_path, temp_universe)
-
-        result = runner.invoke(main, ["validate", str(temp_universe)])
+    def test_an_old_universe_file_fails_with_a_hint(self, runner: CliRunner, tmp_path: Path):
+        """It's validated as what was asked for - an analysis - and the hint
+        says why it fails."""
+        old = tmp_path / "baseline.yaml"
+        old.write_text("id: baseline\ndecisions:\n  method: a\n")
+        result = runner.invoke(main, ["validate", str(old)])
         assert result.exit_code == 1
-        assert "requires an analysis file" in result.output
+        assert "looks like a universe file" in result.output
+
+    def test_old_universe_files_next_to_the_analysis_are_warned_about(
+        self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path
+    ):
+        shutil.copy(full_analysis_path, tmp_path / "astra.yaml")
+        (tmp_path / "universes").mkdir()
+        (tmp_path / "universes" / "baseline.yaml").write_text(
+            "id: baseline\ndecisions:\n  model: rf\n"
+        )
+        result = runner.invoke(main, ["validate", str(tmp_path / "astra.yaml")])
+        assert result.exit_code == 0
+        assert "baseline.yaml looks like a universe file" in result.output
+
+    def test_other_files_in_a_universes_folder_are_left_alone(
+        self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path
+    ):
+        """A folder called ``universes`` may hold anything - inputs, say."""
+        shutil.copy(full_analysis_path, tmp_path / "astra.yaml")
+        (tmp_path / "universes").mkdir()
+        (tmp_path / "universes" / "catalogue.yaml").write_text("stars: [vega, deneb]\n")
+        result = runner.invoke(main, ["validate", str(tmp_path / "astra.yaml")])
+        assert result.exit_code == 0
+        assert "looks like a universe file" not in result.output
 
     def test_validate_nonexistent_file(self, runner: CliRunner):
         result = runner.invoke(main, ["validate", "nonexistent.yaml"])
@@ -103,19 +110,17 @@ class TestValidateProjectMode:
 
     @pytest.fixture
     def project(self, tmp_path: Path, valid_dir: Path, monkeypatch) -> Path:
-        """A project: root spec, one standalone sub-project, one universe file."""
+        """A project: root spec (with its universes) and one standalone sub-project."""
         shutil.copy(valid_dir / "full.yaml", tmp_path / "astra.yaml")
-        (tmp_path / "universes").mkdir()
-        shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universes" / "baseline.yaml")
         (tmp_path / "mocks").mkdir()
         shutil.copy(valid_dir / "minimal.yaml", tmp_path / "mocks" / "astra.yaml")
         monkeypatch.chdir(tmp_path)
         return tmp_path
 
-    def test_validates_every_spec_and_universe(self, runner: CliRunner, project: Path):
+    def test_validates_every_spec(self, runner: CliRunner, project: Path):
         result = runner.invoke(main, ["validate"])
         assert result.exit_code == 0
-        assert "All 3 file(s) passed validation." in result.output
+        assert "All 2 file(s) passed validation." in result.output
 
     @pytest.mark.parametrize(
         "corrupt",
@@ -138,16 +143,16 @@ class TestValidateProjectMode:
         corrupt(project / "mocks" / "astra.yaml", invalid_dir)
         result = runner.invoke(main, ["validate"])
         assert result.exit_code == 1
-        assert "1/3 file(s) failed validation" in result.output
+        assert "1/2 file(s) failed validation" in result.output
         assert "mocks/astra.yaml" in result.output
-        # The other files were still validated.
-        assert "universes/baseline.yaml" in result.output
+        # The other file was still validated.
+        assert "Validating astra.yaml" in result.output
 
     def test_empty_directory_errors(self, runner: CliRunner, tmp_path: Path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(main, ["validate"])
         assert result.exit_code == 1
-        assert "No astra.yaml or universe files found" in result.output
+        assert "No astra.yaml found here" in result.output
 
     def test_external_path_sub_analysis_validates_via_its_root(
         self, runner: CliRunner, tmp_path: Path, valid_dir: Path, monkeypatch
@@ -168,33 +173,6 @@ class TestValidateProjectMode:
         assert "All 1 file(s) passed validation." in result.output
         assert "build_mocks/astra.yaml" not in result.output
 
-    def test_empty_universe_file_fails_without_aborting_the_sweep(
-        self, runner: CliRunner, project: Path
-    ):
-        (project / "universes" / "empty.yaml").write_text("")
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 1
-        assert "1/4 file(s) failed validation" in result.output
-        assert "universes/empty.yaml" in result.output
-
-    def test_universe_named_astra_yaml_is_counted_once(
-        self, runner: CliRunner, project: Path, valid_dir: Path
-    ):
-        shutil.copy(valid_dir / "universe_baseline.yaml", project / "universes" / "astra.yaml")
-        result = runner.invoke(main, ["validate"])
-        assert result.output.count("Validating universes/astra.yaml") == 1
-
-    def test_universe_files_outside_universes_dir_are_discovered(
-        self, runner: CliRunner, tmp_path: Path, valid_dir: Path, monkeypatch
-    ):
-        shutil.copy(valid_dir / "full.yaml", tmp_path / "astra.yaml")
-        shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universe_baseline.yaml")
-        monkeypatch.chdir(tmp_path)
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 0
-        assert "Validating universe_baseline.yaml" in result.output
-        assert "All 2 file(s) passed validation." in result.output
-
     def test_hidden_and_vendored_dirs_are_skipped(
         self, runner: CliRunner, project: Path, invalid_dir: Path
     ):
@@ -205,23 +183,7 @@ class TestValidateProjectMode:
             )
         result = runner.invoke(main, ["validate"])
         assert result.exit_code == 0
-        assert "All 3 file(s) passed validation." in result.output
-
-    def test_universe_analysis_search_does_not_climb_past_cwd(
-        self, runner: CliRunner, tmp_path: Path, valid_dir: Path, monkeypatch
-    ):
-        # An astra.yaml above cwd must not be picked up as the universe's analysis.
-        shutil.copy(valid_dir / "full.yaml", tmp_path / "astra.yaml")
-        subproject = tmp_path / "project"
-        (subproject / "universes").mkdir(parents=True)
-        shutil.copy(
-            valid_dir / "universe_baseline.yaml", subproject / "universes" / "baseline.yaml"
-        )
-        monkeypatch.chdir(subproject)
-
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 1
-        assert "requires an analysis file" in result.output
+        assert "All 2 file(s) passed validation." in result.output
 
     def test_bracketed_path_segments_render_literally(
         self, runner: CliRunner, project: Path, invalid_dir: Path
@@ -232,11 +194,6 @@ class TestValidateProjectMode:
         result = runner.invoke(main, ["validate"])
         assert result.exit_code == 1
         assert "sensitivity[alpha]/astra.yaml" in result.output
-
-    def test_analysis_flag_requires_file_argument(self, runner: CliRunner, project: Path):
-        result = runner.invoke(main, ["validate", "--analysis", "astra.yaml"])
-        assert result.exit_code == 2
-        assert "--analysis requires a FILE argument" in result.output
 
 
 class TestJsonOutput:
@@ -333,15 +290,13 @@ class TestInfoCommand:
         data = load_yaml(valid_dir / "full.yaml")
         data["analyses"] = {"mocks": {"path": "mocks"}}
         save_yaml(data, tmp_path / "astra.yaml")
-        (tmp_path / "universes").mkdir()
-        shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universes" / "baseline.yaml")
         # An astra.yaml on disk the spec does not declare is not a sub-analysis.
         (tmp_path / "scratch").mkdir()
         shutil.copy(valid_dir / "minimal.yaml", tmp_path / "scratch" / "astra.yaml")
 
         result = runner.invoke(main, ["info", "-f", str(tmp_path / "astra.yaml")])
         assert result.exit_code == 0
-        assert "Layout: 1 sub-analysis in ./mocks/, 1 universe in ./universes/" in result.output
+        assert "Layout: 1 sub-analysis in ./mocks/, 2 universes" in result.output
         assert "scratch" not in result.output
 
     def test_info_layout_counts_inline_sub_analyses(self, runner: CliRunner, valid_dir: Path):
@@ -349,8 +304,9 @@ class TestInfoCommand:
         assert result.exit_code == 0
         assert "Layout: 3 sub-analyses" in result.output
 
-    def test_info_no_layout_line_when_flat(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path)])
+    def test_info_no_layout_line_when_flat(self, runner: CliRunner, minimal_analysis_path: Path):
+        """No sub-analyses and no universes - nothing to report."""
+        result = runner.invoke(main, ["info", "-f", str(minimal_analysis_path)])
         assert result.exit_code == 0
         assert "Layout:" not in result.output
 
@@ -364,34 +320,50 @@ class TestInfoCommand:
 class TestUniverseCommands:
     """Tests for universe subcommands."""
 
-    def test_universe_check_valid(
-        self,
-        runner: CliRunner,
-        baseline_universe_path: Path,
-        full_analysis_path: Path,
-    ):
+    def test_universe_check_valid(self, runner: CliRunner, full_analysis_path: Path):
+        """``svm-config`` is a diff of ``baseline``, so most of what it selects
+        is marked as inherited."""
         result = runner.invoke(
-            main,
-            ["universe", "check", str(baseline_universe_path), "-a", str(full_analysis_path)],
+            main, ["universe", "check", "svm-config", "-a", str(full_analysis_path)]
         )
         assert result.exit_code == 0
-        assert "Universe is valid" in result.output
+        assert "Universe svm-config is valid" in result.output
+        assert "model: svm\n" in result.output
+        assert "preprocessing: standard (inherited)" in result.output
 
     def test_universe_check_invalid(
-        self, runner: CliRunner, invalid_dir: Path, full_analysis_path: Path
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        invalid_dir: Path,
+        full_analysis_path: Path,
+        with_universe_entry,
     ):
+        data = with_universe_entry(
+            full_analysis_path, invalid_dir / "universe_entry_incompatible.yaml"
+        )
+        save_yaml(data, tmp_path / "astra.yaml")
         result = runner.invoke(
-            main,
-            [
-                "universe",
-                "check",
-                str(invalid_dir / "universe_incompatible.yaml"),
-                "-a",
-                str(full_analysis_path),
-            ],
+            main, ["universe", "check", "incompatible", "-a", str(tmp_path / "astra.yaml")]
         )
         assert result.exit_code == 1
         assert "validation errors" in result.output
+
+    def test_universe_check_unknown_id(self, runner: CliRunner, full_analysis_path: Path):
+        result = runner.invoke(main, ["universe", "check", "nope", "-a", str(full_analysis_path)])
+        assert result.exit_code == 1
+        assert "declares no universe 'nope'" in result.output
+
+    def test_another_universe_errors_do_not_fail_the_check(
+        self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path
+    ):
+        data = load_yaml(full_analysis_path)
+        data["universes"].append({"id": "broken", "decisions": {"model": "nonexistent"}})
+        save_yaml(data, tmp_path / "astra.yaml")
+        result = runner.invoke(
+            main, ["universe", "check", "baseline", "-a", str(tmp_path / "astra.yaml")]
+        )
+        assert result.exit_code == 0
 
 
 class TestVizCommand:
@@ -481,8 +453,6 @@ class TestInitCommand:
         # Check directory structure (minimal scaffold)
         assert (project_dir / "astra.yaml").exists()
         assert (project_dir / ".gitignore").exists()
-        assert (project_dir / "universes").is_dir()
-        assert (project_dir / "universes" / "baseline.yaml").exists()
 
         # User-owned layout NOT created (init produces only the minimal spec
         # scaffold; where code lives is the user's choice — recipes name
@@ -566,11 +536,7 @@ class TestInitCommand:
         assert report["created"] == []
         assert {p: p.read_text() for p in project_dir.rglob("*") if p.is_file()} == before
 
-    def test_init_does_not_scaffold_baseline_next_to_user_spec(
-        self, runner: CliRunner, tmp_path: Path
-    ):
-        """astra.yaml + baseline are one unit: a user-authored spec must not
-        get the scaffold's baseline next to it."""
+    def test_init_leaves_a_user_spec_untouched(self, runner: CliRunner, tmp_path: Path):
         project_dir = tmp_path / "user-spec"
         project_dir.mkdir()
         (project_dir / "astra.yaml").write_text("# user spec\n")
@@ -581,9 +547,6 @@ class TestInitCommand:
         )
         assert result.exit_code == 0
         assert (project_dir / "astra.yaml").read_text() == "# user spec\n"
-        assert not (project_dir / "universes" / "baseline.yaml").exists()
-        # The bare universes/ directory is still converged.
-        assert (project_dir / "universes").is_dir()
 
     def test_init_check_reports_drift_without_writing(self, runner: CliRunner, tmp_path: Path):
         """--check exits 1 on drift and writes nothing, --json is parseable."""
@@ -644,19 +607,6 @@ class TestInitCommand:
         assert result.exit_code == 0
         assert "Validation successful" in result.output
 
-        # Validate the generated baseline.yaml
-        result = runner.invoke(
-            main,
-            [
-                "validate",
-                str(project_dir / "universes" / "baseline.yaml"),
-                "-a",
-                str(project_dir / "astra.yaml"),
-            ],
-        )
-        assert result.exit_code == 0
-        assert "Validation successful" in result.output
-
     def test_init_with_git(self, runner: CliRunner, tmp_path: Path):
         """Test that git is initialized by default (when --no-git not passed)."""
         project_dir = tmp_path / "git-test"
@@ -694,13 +644,12 @@ class TestCreateBoilerplate:
         assert from_cli is from_scaffold
 
     def test_writes_spec_scaffold(self, tmp_path: Path):
-        """Creates universes/, astra.yaml, and baseline.yaml."""
+        """Creates astra.yaml."""
         from astra.scaffold import create_boilerplate
 
         project_dir = tmp_path / "proj"
         create_boilerplate(project_dir)
         assert (project_dir / "astra.yaml").exists()
-        assert (project_dir / "universes" / "baseline.yaml").exists()
         # No side effects beyond the spec scaffold.
         assert not (project_dir / "src").exists()
         assert not (project_dir / ".gitignore").exists()

@@ -35,3 +35,17 @@ decisions:
         label: "Tensor Cores"
       standard:
         label: "Standard"
+
+universes:
+  - id: gpu_advanced
+    description: "Advanced mode with GPU"
+    decisions:
+      mode: advanced
+      backend: gpu
+      gpu_optimization: tensor_cores
+
+  - id: cpu_basic
+    description: "Basic mode with CPU - gpu_optimization is inactive"
+    decisions:
+      mode: basic
+      backend: cpu

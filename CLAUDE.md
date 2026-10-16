@@ -107,12 +107,21 @@ decision = get_decision(data, "preprocessing")
 ```
 
 ### 3. Universe Format
-Universe decisions use a compact dict (decision ID → option ID):
+Universes are declared in `astra.yaml` under `universes` - in full or as a diff of
+another (`derived_from`). Decisions use a compact dict (decision ID → option ID):
 ```yaml
-decisions:
-  scaling: standard
-  model: random_forest
+universes:
+  - id: baseline
+    decisions:
+      scaling: standard
+      model: random_forest
+  - id: svm_focused
+    derived_from: baseline
+    decisions:
+      model: svm
 ```
+`astra.universes.effective_universe` gives what a universe selects once its
+`derived_from` chain is followed.
 
 ### 4. Namespace Package
 Both `astra-spec` and this package contribute to the `astra` namespace:

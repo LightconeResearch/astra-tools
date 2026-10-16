@@ -6,7 +6,6 @@ appears together — an inherited decision, an input reaching sideways into
 a sibling sub-analysis, and a root output re-exporting a grandchild's.
 """
 
-import logging
 from pathlib import Path
 
 import pytest
@@ -18,6 +17,7 @@ from astra.resolve import (
     resolve_outputs,
     resolve_universe,
 )
+from astra.universes import effective_universe
 
 EXAMPLES = Path(__file__).parent.parent / "examples"
 
@@ -28,7 +28,10 @@ def pipeline() -> dict:
 
 
 def universe(name: str) -> dict:
-    return load_yaml(EXAMPLES / "iris_pipeline" / "universes" / f"{name}.yaml")
+    """The effective selection of one of ``iris_pipeline``'s universes."""
+    effective = effective_universe(load_yaml(EXAMPLES / "iris_pipeline" / "astra.yaml"), name)
+    assert effective is not None
+    return effective.selection
 
 
 def by_id(outputs):
@@ -258,9 +261,10 @@ class TestResolveOutputs:
         }
 
     def test_the_flat_example_resolves_too(self):
-        root = EXAMPLES / "iris"
-        data = load_yaml(root / "astra.yaml")
-        found = by_id(resolve_outputs(data, load_yaml(root / "universes" / "baseline.yaml")))
+        data = load_yaml(EXAMPLES / "iris" / "astra.yaml")
+        baseline = effective_universe(data, "baseline")
+        assert baseline is not None
+        found = by_id(resolve_outputs(data, baseline.selection))
         assert found["trained_output"].command
         assert all(o.scope == () for o in found.values())
 
@@ -412,71 +416,60 @@ class TestRenderCommand:
 
 
 class TestSelectedUniverse:
-    """A sub-analysis node may name one of its *own* universes instead of
-    listing decisions inline. Loading that file is what `semantic.py` says
-    is "done by the caller/resolver"."""
+    """A universe's entry for a sub-analysis may name one of the universes
+    that sub-analysis declares instead of listing decisions."""
 
-    def _project(self, tmp_path: Path) -> tuple[dict, Path]:
-        sub = tmp_path / "stage"
-        (sub / "universes").mkdir(parents=True)
-        (sub / "astra.yaml").write_text(
-            "id: stage\nversion: '1.0'\nname: Stage\n"
-            "decisions:\n  method:\n    options:\n      pca: {}\n      mlp: {}\n"
-            "outputs:\n  - id: features\n    type: data\n    decisions: [method]\n"
-            "    recipe:\n      command: run --method {decisions.method}\n"
-        )
-        (sub / "universes" / "fast.yaml").write_text("id: fast\ndecisions:\n  method: pca\n")
-        (sub / "universes" / "deep.yaml").write_text("id: deep\ndecisions:\n  method: mlp\n")
-        data = {"analyses": {"stage": {"path": "stage", **load_yaml(sub / "astra.yaml")}}}
-        return data, tmp_path
+    SPEC = {
+        "analyses": {
+            "stage": {
+                "decisions": {
+                    "method": {"options": {"pca": {}, "mlp": {}}},
+                    "depth": {"options": {"shallow": {}, "deep": {}}},
+                },
+                "outputs": [
+                    {
+                        "id": "features",
+                        "type": "data",
+                        "decisions": ["method"],
+                        "recipe": {"command": "run --method {decisions.method}"},
+                    }
+                ],
+                "universes": [
+                    {"id": "fast", "decisions": {"method": "pca", "depth": "shallow"}},
+                    {"id": "slow", "derived_from": "fast", "decisions": {"method": "mlp"}},
+                ],
+            }
+        }
+    }
 
-    def test_the_named_universe_supplies_the_decisions(self, tmp_path: Path):
-        data, base = self._project(tmp_path)
-        chosen = {"analyses": {"stage": {"universe": "deep"}}}
-        assert resolve_universe(data, chosen, base) == {"stage.method": "mlp"}
-
-    def test_a_different_name_selects_differently(self, tmp_path: Path):
-        data, base = self._project(tmp_path)
+    def test_the_named_universe_supplies_the_decisions(self):
         chosen = {"analyses": {"stage": {"universe": "fast"}}}
-        assert resolve_universe(data, chosen, base) == {"stage.method": "pca"}
-        outputs = by_id(resolve_outputs(data, chosen, base))
-        assert outputs["stage.features"].decisions == {"method": "pca"}
+        assert resolve_universe(self.SPEC, chosen) == {
+            "stage.method": "pca",
+            "stage.depth": "shallow",
+        }
 
-    def test_without_a_base_path_the_reference_is_skipped(self, tmp_path: Path):
-        """There is nothing to resolve it against, and inventing a root
-        would be worse than leaving the decision unsettled."""
-        data, _ = self._project(tmp_path)
-        assert resolve_universe(data, {"analyses": {"stage": {"universe": "deep"}}}) == {}
+    def test_a_different_name_selects_differently(self):
+        chosen = {"analyses": {"stage": {"universe": "slow"}}}
+        outputs = by_id(resolve_outputs(self.SPEC, chosen))
+        assert outputs["stage.features"].decisions == {"method": "mlp"}
 
-    def test_an_empty_universe_file_leaves_the_node_as_it_stands(self, tmp_path: Path):
-        """A file that parses to `None` is the validator's to report; this
-        module promises not to raise on anything unresolvable."""
-        data, base = self._project(tmp_path)
-        (base / "stage" / "universes" / "blank.yaml").write_text("# nothing here\n")
-        chosen = {"analyses": {"stage": {"universe": "blank"}}}
-        assert resolve_universe(data, chosen, base) == {}
+    def test_a_named_diff_resolves_through_its_chain(self):
+        chosen = {"analyses": {"stage": {"universe": "slow"}}}
+        assert resolve_universe(self.SPEC, chosen) == {
+            "stage.method": "mlp",
+            "stage.depth": "shallow",
+        }
 
-    def test_an_inline_sub_analysis_cannot_name_one_and_says_so(self, caplog):
-        """Only an external sub-analysis has a `universes/` directory.
-        `semantic.py` validates nothing about `universe:`, so without this
-        line the whole subtree resolves to no decisions and neither layer
-        says why."""
-        spec = {"analyses": {"stage": {"decisions": {"m": {"options": {"a": {}, "b": {}}}}}}}
-        chosen = {"analyses": {"stage": {"universe": "fast"}}}
-        with caplog.at_level(logging.WARNING, logger="astra.resolve"):
-            assert resolve_universe(spec, chosen, Path(".")) == {}
-        assert "inline sub-analysis" in caplog.text
-        assert "stage" in caplog.text
-
-    def test_a_missing_file_names_the_scope_it_was_selected_for(self, tmp_path: Path, caplog):
-        data, base = self._project(tmp_path)
+    def test_an_unknown_name_leaves_the_sub_analysis_unsettled(self):
+        """``UNKNOWN_SUB_UNIVERSE`` is the validator's to report - this module
+        doesn't raise on anything it can't resolve."""
         chosen = {"analyses": {"stage": {"universe": "nope"}}}
-        with caplog.at_level(logging.WARNING, logger="astra.resolve"):
-            assert resolve_universe(data, chosen, base) == {}
-        assert "does not exist" in caplog.text
-        assert "stage" in caplog.text
+        assert resolve_universe(self.SPEC, chosen) == {}
 
-    def test_inline_decisions_still_work_beside_it(self, tmp_path: Path):
-        data, base = self._project(tmp_path)
-        chosen = {"analyses": {"stage": {"decisions": {"method": "pca"}}}}
-        assert resolve_universe(data, chosen, base) == {"stage.method": "pca"}
+    def test_inline_decisions_still_work_beside_it(self):
+        chosen = {"analyses": {"stage": {"decisions": {"method": "pca", "depth": "deep"}}}}
+        assert resolve_universe(self.SPEC, chosen) == {
+            "stage.method": "pca",
+            "stage.depth": "deep",
+        }

@@ -5,7 +5,6 @@ from unittest.mock import patch
 from astra.validation.schema import (
     check_spec_version,
     validate_analysis_data,
-    validate_universe_data,
 )
 
 
@@ -53,20 +52,45 @@ class TestAnalysisValidation:
 
 
 class TestUniverseValidation:
-    """Tests that universe data validates correctly via Pydantic models."""
+    """Tests that universes declared in an analysis validate via Pydantic models."""
 
-    def test_valid_universe_passes(self):
-        data = {
-            "id": "baseline",
-            "decisions": {"method": "a"},
+    @staticmethod
+    def analysis(*universes: dict) -> dict:
+        return {
+            "version": "0.0.10",
+            "name": "test",
+            "inputs": [{"id": "data", "type": "data"}],
+            "outputs": [{"id": "result", "type": "metric"}],
+            "universes": list(universes),
         }
-        errors = validate_universe_data(data)
+
+    def test_valid_universes_pass(self):
+        """Including a diff, and an ``analyses`` entry written without an id."""
+        data = self.analysis(
+            {"id": "baseline", "decisions": {"method": "a"}},
+            {
+                "id": "variant",
+                "derived_from": "baseline",
+                "analyses": {"stage": {"decisions": {"step": "b"}}},
+            },
+        )
+        errors = validate_analysis_data(data)
         assert errors == []
 
     def test_missing_id_caught(self):
-        data = {"decisions": {"method": "a"}}
-        errors = validate_universe_data(data)
+        errors = validate_analysis_data(self.analysis({"decisions": {"method": "a"}}))
         assert any("id" in e for e in errors)
+
+    def test_malformed_derived_from_caught(self):
+        data = self.analysis({"id": "variant", "derived_from": "Not An Id"})
+        errors = validate_analysis_data(data)
+        assert any("derived_from" in e for e in errors)
+
+    def test_universes_as_a_map_rejected(self):
+        data = self.analysis()
+        data["universes"] = {"baseline": {"decisions": {"method": "a"}}}
+        errors = validate_analysis_data(data)
+        assert any("universes" in e for e in errors)
 
 
 class TestCheckSpecVersion:

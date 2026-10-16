@@ -33,8 +33,12 @@ from astra.spec_version import installed_spec_version
 def _inject_ids_inplace(data: dict[str, Any]) -> None:
     """Prepare a raw YAML dict for Pydantic validation.
 
-    Injects dict keys as ``id`` fields (ASTRA YAML uses keyed dicts).
+    Injects dict keys as ``id`` fields (ASTRA YAML uses keyed dicts). That
+    includes the ``analyses`` maps inside each declared universe.
     """
+    for universe in data.get("universes") or []:
+        if isinstance(universe, dict):
+            _inject_universe_ids_inplace(universe)
     for field in ("decisions", "analyses", "prior_insights", "findings"):
         mapping = data.get(field)
         if not isinstance(mapping, dict):
@@ -154,15 +158,6 @@ def collect_recommendations(data: dict[str, Any]) -> list[str]:
     ]
 
 
-def validate_universe_schema(path: str | Path) -> list[str]:
-    """Validate a universe YAML file against the schema.
-
-    Returns a list of error messages (empty if valid).
-    """
-    data = load_yaml(path)
-    return validate_universe_data(data)
-
-
 def _inject_universe_ids_inplace(node: dict[str, Any]) -> None:
     """Inject dict keys as ``id`` fields on universe sub-analysis nodes."""
     analyses = node.get("analyses")
@@ -172,23 +167,6 @@ def _inject_universe_ids_inplace(node: dict[str, Any]) -> None:
         if isinstance(value, dict):
             value.setdefault("id", key)
             _inject_universe_ids_inplace(value)
-
-
-def validate_universe_data(data: dict[str, Any]) -> list[str]:
-    """Validate universe data dict against the schema.
-
-    Returns a list of error messages (empty if valid).
-    """
-    from astra.datamodel.astra_pydantic import Universe
-    from pydantic import ValidationError as PydanticValidationError
-
-    preprocessed = copy.deepcopy(data)
-    _inject_universe_ids_inplace(preprocessed)
-    try:
-        Universe.model_validate(preprocessed)
-        return []
-    except PydanticValidationError as exc:
-        return _format_pydantic_errors(exc)
 
 
 def _normalize_version(v: str) -> tuple[int, ...] | None:
@@ -232,8 +210,3 @@ def check_spec_version(data: dict[str, Any]) -> str | None:
 def is_valid_analysis(path: str | Path) -> bool:
     """Check if an analysis file is valid."""
     return not validate_analysis_schema(path)
-
-
-def is_valid_universe(path: str | Path) -> bool:
-    """Check if a universe file is valid."""
-    return not validate_universe_schema(path)

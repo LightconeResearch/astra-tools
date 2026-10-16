@@ -21,6 +21,7 @@ from astra.helpers import (
     parse_option_ref,
     resolve_analysis_tree,
 )
+from astra.universes import declared_universes, derived_from_chain, effective_universe
 
 _FORMATTER = string.Formatter()
 
@@ -191,6 +192,7 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
 
     # Validate output when conditions
     errors.extend(_validate_output_when(outputs, root_decisions, ""))
+    errors.extend(_validate_declared_universes(data, ""))
     for analysis_id, analysis_node in (data.get("analyses") or {}).items():
         errors.extend(
             _validate_analysis_node(
@@ -341,6 +343,7 @@ def _validate_analysis_node(
         )
     )
     errors.extend(_validate_output_when(node_outputs, constraint_scope, node_path))
+    errors.extend(_validate_declared_universes(node, node_path))
 
     for sub_id, sub_node in sub_analyses.items():
         errors.extend(
@@ -1029,6 +1032,78 @@ def _validate_constraint_ref(
     return []
 
 
+def _validate_declared_universes(node: dict[str, Any], path_prefix: str) -> list[SemanticError]:
+    """Validate the universes *node* declares in its ``universes`` list.
+
+    Ids must be unique within the analysis and every ``derived_from`` chain
+    must reach declared universes without looping. Each universe's effective
+    selection is then checked against the analysis like any other universe.
+    A universe whose chain runs into a broken link elsewhere isn't checked -
+    the broken link is reported where it is.
+    """
+    errors: list[SemanticError] = []
+    universes_prefix = f"{path_prefix}.universes" if path_prefix else "universes"
+
+    seen: set[str] = set()
+    for universe in node.get("universes") or []:
+        universe_id = universe.get("id") if isinstance(universe, dict) else None
+        if not isinstance(universe_id, str):
+            continue
+        if universe_id in seen:
+            errors.append(
+                SemanticError(
+                    "DUPLICATE_UNIVERSE",
+                    f"Duplicate universe ID: {universe_id}",
+                    f"{universes_prefix}.{universe_id}",
+                )
+            )
+        seen.add(universe_id)
+
+    universes = declared_universes(node)
+    for universe_id, universe in universes.items():
+        universe_path = f"{universes_prefix}.{universe_id}"
+        base = universe.get("derived_from")
+        if base and str(base) not in universes:
+            errors.append(
+                SemanticError(
+                    "UNKNOWN_DERIVED_FROM",
+                    f"Universe '{universe_id}' is derived from undeclared universe '{base}'",
+                    f"{universe_path}.derived_from",
+                )
+            )
+            continue
+        if derived_from_chain(universes, universe_id) is None:
+            if _in_derived_from_cycle(universes, universe_id):
+                errors.append(
+                    SemanticError(
+                        "DERIVED_FROM_CYCLE",
+                        f"Universe '{universe_id}' is part of a derived_from cycle",
+                        f"{universe_path}.derived_from",
+                    )
+                )
+            continue
+        effective = effective_universe(node, universe_id)
+        if effective is not None:
+            errors.extend(
+                _validate_universe_node(
+                    effective.selection, node, universe_path, ancestor_universe_chain=[]
+                )
+            )
+    return errors
+
+
+def _in_derived_from_cycle(universes: dict[str, dict[str, Any]], universe_id: str) -> bool:
+    """Whether following ``derived_from`` from *universe_id* leads back to it."""
+    seen: set[str] = set()
+    current = universes[universe_id].get("derived_from")
+    while current and str(current) in universes and str(current) not in seen:
+        if str(current) == universe_id:
+            return True
+        seen.add(str(current))
+        current = universes[str(current)].get("derived_from")
+    return False
+
+
 def validate_universe(
     universe_data: dict[str, Any],
     analysis_data: dict[str, Any],
@@ -1043,7 +1118,9 @@ def validate_universe(
     - No constraint violations (requires, incompatible_with)
 
     Args:
-        universe_data: The universe data as a dict.
+        universe_data: The universe's effective selection - its
+            ``derived_from`` chain already followed (see
+            ``astra.universes.effective_universe``).
         analysis_data: The analysis data as a dict.
 
     Returns:
@@ -1218,10 +1295,30 @@ def _validate_universe_node(
 
     for analysis_id, sub_analysis_node in analysis_sub.items():
         sub_universe = universe_sub.get(analysis_id, {})
+        sub_path = f"{analyses_prefix}.{analysis_id}"
 
-        # Handle universe: reference on universe nodes
-        # (The actual loading of external universe files is done by the caller/resolver;
-        # here we just validate the structure we have)
+        preset = sub_universe.get("universe") if isinstance(sub_universe, dict) else None
+        if preset:
+            if sub_universe.get("decisions"):
+                errors.append(
+                    SemanticError(
+                        "UNIVERSE_NODE_CONFLICT",
+                        f"Entry for '{analysis_id}' sets both 'decisions' and 'universe'",
+                        sub_path,
+                    )
+                )
+                continue
+            effective = effective_universe(sub_analysis_node, str(preset))
+            if effective is None:
+                errors.append(
+                    SemanticError(
+                        "UNKNOWN_SUB_UNIVERSE",
+                        f"Sub-analysis '{analysis_id}' declares no universe '{preset}'",
+                        f"{sub_path}.universe",
+                    )
+                )
+                continue
+            sub_universe = effective.selection
 
         errors.extend(
             _validate_universe_node(
@@ -1287,13 +1384,3 @@ def validate_analysis_file(path: str | Path) -> list[SemanticError]:
     path = Path(path)
     data = load_yaml(path)
     return validate_analysis(data, base_path=path.parent)
-
-
-def validate_universe_file(
-    universe_path: str | Path,
-    analysis_path: str | Path,
-) -> list[SemanticError]:
-    """Load and validate a universe file against an analysis."""
-    analysis_data = load_yaml(analysis_path)
-    universe_data = load_yaml(universe_path)
-    return validate_universe(universe_data, analysis_data)

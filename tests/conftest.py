@@ -1,9 +1,12 @@
 """Pytest configuration and fixtures."""
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from astra.helpers import load_yaml
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -62,15 +65,20 @@ def full_analysis_path() -> Path:
 
 
 @pytest.fixture
-def baseline_universe_path() -> Path:
-    """Return path to baseline universe."""
-    return VALID_DIR / "universe_baseline.yaml"
+def with_universe_entry() -> Callable[[Path, Path], dict[str, Any]]:
+    """Return a function that declares one universe entry in an analysis.
 
+    It loads the analysis at the first path and makes the entry at the second
+    its only universe - so the entry is validated through the analysis's
+    ``universes`` list, as it would be in an ``astra.yaml``.
+    """
 
-@pytest.fixture
-def svm_universe_path() -> Path:
-    """Return path to SVM universe."""
-    return VALID_DIR / "universe_svm.yaml"
+    def build(analysis: Path, entry: Path) -> dict[str, Any]:
+        data = load_yaml(analysis)
+        data["universes"] = [load_yaml(entry)]
+        return data
+
+    return build
 
 
 @pytest.fixture
@@ -87,14 +95,4 @@ def minimal_analysis_data() -> dict[str, Any]:
                 "options": {"a": {"label": "A"}, "b": {"label": "B"}},
             }
         },
-    }
-
-
-@pytest.fixture
-def baseline_universe_data() -> dict[str, Any]:
-    """Return baseline universe data as dict."""
-    return {
-        "id": "baseline",
-        "description": "Test baseline",
-        "decisions": {"method": "a"},
     }

@@ -55,3 +55,10 @@ decisions:
         label: "SVM"
       rf:
         label: "Random Forest"
+
+universes:
+  - id: baseline
+    description: "Baseline universe with combined sample and RF"
+    decisions:
+      training_sample: combined
+      model: rf

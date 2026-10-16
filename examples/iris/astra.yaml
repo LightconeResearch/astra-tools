@@ -149,3 +149,18 @@ decisions:
         label: "42"
       seed_123:
         label: "123"
+
+universes:
+  - id: baseline
+    description: "Default configuration using standard practices"
+    decisions:
+      scaling: standard
+      model: random_forest
+      test_size: small
+      random_seed: seed_42
+
+  - id: svm_focused
+    description: "Configuration optimized for SVM (requires standard scaling)"
+    derived_from: baseline
+    decisions:
+      model: svm
