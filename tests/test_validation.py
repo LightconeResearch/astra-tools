@@ -1033,6 +1033,33 @@ class TestDeclaredUniverses:
         )
         assert found == []
 
+    def test_a_universe_selecting_an_unknown_decision(self):
+        found = self.codes(self.FLAT, {"id": "a", "decisions": {"method": "pca", "nope": "x"}})
+        assert ("UNKNOWN_DECISION", "universes.a.decisions.nope") in found
+
+    def test_a_universe_selecting_for_an_unknown_sub_analysis(self):
+        found = self.codes(self.NESTED, {"id": "u", "analyses": {"nope": {"decisions": {}}}})
+        assert ("UNKNOWN_ANALYSIS", "universes.u.analyses.nope") in found
+
+    def test_a_universe_setting_a_from_alias(self):
+        """``m`` takes the parent's ``method`` - a universe can't set it."""
+        stage = {**self.NESTED["analyses"]["stage"]}
+        stage["decisions"] = {**stage["decisions"], "m": {"from": "../method"}}
+        spec = {
+            **self.NESTED,
+            "decisions": self.FLAT["decisions"],
+            "analyses": {"stage": stage},
+        }
+        found = self.codes(
+            spec,
+            {
+                "id": "u",
+                "decisions": {"method": "pca"},
+                "analyses": {"stage": {"decisions": {"method": "pca", "m": "mlp"}}},
+            },
+        )
+        assert ("FROM_DECISION_IN_UNIVERSE", "universes.u.analyses.stage.decisions.m") in found
+
 
 class TestIsConditionMet:
     """Tests for the is_condition_met helper function."""
