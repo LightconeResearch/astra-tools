@@ -1,5 +1,6 @@
 """Pytest configuration and fixtures."""
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,20 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         for item in items:
             if "network" in item.keywords:
                 item.add_marker(skip_network)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Run the tests as if in a terminal 1000 columns wide.
+
+    The CLI tests check phrases in what the CLI prints. Rich and
+    ``astra spec`` otherwise size that output from the terminal pytest runs
+    in and wrap long lines - so a phrase could be split and a test pass in
+    one terminal and fail in another. Both take ``COLUMNS`` over the real
+    terminal. It's set here because Rich fixes a console's width from
+    ``COLUMNS`` when the console is created - and this runs before any test
+    module imports ``astra.cli``.
+    """
+    os.environ["COLUMNS"] = "1000"
 
 
 # Fixture directories
