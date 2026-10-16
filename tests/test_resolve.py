@@ -12,8 +12,10 @@ import pytest
 
 from astra.helpers import iter_sub_analyses, load_yaml, parse_from_path
 from astra.resolve import (
+    PlannedOutput,
     References,
     iter_analysis_nodes,
+    plan,
     render_command,
     resolve_outputs,
     resolve_universe,
@@ -540,3 +542,62 @@ class TestReferences:
         assert refs.per_universe("f1_score")
         assert refs.per_universe("conclusion")
         assert not refs.per_universe("model_comparison")
+
+
+class TestResolvedPins:
+    def test_a_pinned_input_keeps_its_pin_and_resolves(self):
+        data = load_yaml(EXAMPLES / "iris" / "astra.yaml")
+        baseline = effective_universe(data, "baseline")
+        assert baseline is not None
+        comparison = by_id(resolve_outputs(data, baseline.selection))["model_comparison"]
+        assert [(i.id, i.produced_by, i.pin) for i in comparison.inputs] == [
+            ("accuracy#baseline", "accuracy", "baseline"),
+            ("accuracy#svm_focused", "accuracy", "svm_focused"),
+        ]
+        assert not comparison.per_universe
+
+
+class TestPlan:
+    """Every output to build, where it goes and what it reads."""
+
+    @staticmethod
+    def planned(example: str) -> dict[tuple[str | None, str], PlannedOutput]:
+        entries = plan(load_yaml(EXAMPLES / example / "astra.yaml"))
+        return {(p.universe, p.output.id): p for p in entries}
+
+    def test_an_output_built_once_is_planned_once_and_reads_both_universes(self):
+        found = self.planned("iris")
+        comparison = found[(None, "model_comparison")]
+        assert comparison.path == "results/model_comparison.csv"
+        assert comparison.reads == {
+            "accuracy#baseline": "results/baseline/accuracy.json",
+            "accuracy#svm_focused": "results/svm_focused/accuracy.json",
+        }
+        assert [key for key in found if key[1] == "model_comparison"] == [
+            (None, "model_comparison")
+        ]
+
+    def test_an_output_built_per_universe_is_planned_in_each(self):
+        found = self.planned("iris")
+        for universe in ("baseline", "svm_focused"):
+            f1 = found[(universe, "f1_score")]
+            assert f1.path == f"results/{universe}/f1_score.json"
+            assert f1.reads == {"trained_output": f"results/{universe}/trained_output.pkl"}
+        assert len(found) == 1 + 5 * 2
+
+    def test_sub_analysis_results_use_qualified_ids(self):
+        found = self.planned("iris_pipeline")
+        predictions = found[("mlp_svm", "classification.predictions")]
+        assert predictions.path == "results/mlp_svm/classification.predictions.csv"
+        assert predictions.reads == {"features": "results/mlp_svm/feature_extraction.features.npy"}
+        features = found[("baseline", "feature_extraction.features")]
+        assert features.reads == {"raw_features": "sklearn.datasets.load_iris"}
+
+    def test_re_exports_make_no_file_of_their_own(self):
+        found = self.planned("iris_pipeline")
+        assert not [key for key in found if key[1] in ("accuracy", "feature_plot")]
+
+    def test_without_universes_only_outputs_built_once_are_planned(self):
+        data = load_yaml(EXAMPLES / "iris" / "astra.yaml")
+        data["universes"] = []
+        assert [p.output.id for p in plan(data)] == ["model_comparison"]

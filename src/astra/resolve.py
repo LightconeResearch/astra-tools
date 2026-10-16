@@ -29,6 +29,15 @@ re-report validation errors: an input that nothing supplies resolves to a
 ``ResolvedInput`` with neither ``produced_by`` nor ``source``, rather than
 raising. Diagnosis belongs to the validator, and duplicating it here would
 be the same duplication this module exists to remove.
+
+Across universes
+----------------
+
+Some outputs don't depend on a universe at all - one with no decisions and
+no ``when`` whose inputs are all pinned (``artifact#universe``) or external.
+``References`` works out which outputs are built per universe and which are
+built once. ``plan`` lists every output to build across the declared
+universes with where each result goes and what it reads.
 """
 
 from __future__ import annotations
@@ -47,14 +56,16 @@ from astra.helpers import (
     iter_analysis_nodes,
     parse_from_path,
 )
-from astra.universes import effective_universe
+from astra.universes import declared_universes, effective_universe
 
 __all__ = [
+    "PlannedOutput",
     "References",
     "ResolvedInput",
     "ResolvedOutput",
     "iter_analysis_nodes",
     "parse_from_path",
+    "plan",
     "render_command",
     "resolve_outputs",
     "resolve_universe",
@@ -211,6 +222,8 @@ class ResolvedInput:
     produced_by: str | None
     #: The external source, for an input the analysis does not compute.
     source: str | None
+    #: The universe the entry is pinned to (``artifact#universe``) if any.
+    pin: str | None = None
 
 
 @dataclass(frozen=True)
@@ -238,6 +251,8 @@ class ResolvedOutput:
     inputs: tuple[ResolvedInput, ...]
     #: For a re-export, the qualified id it stands for; ``None`` otherwise.
     reexports: str | None
+    #: Whether it's built once per universe - ``False`` for an output built once.
+    per_universe: bool = True
 
 
 def resolve_outputs(
@@ -277,6 +292,7 @@ def resolve_outputs(
             declared_here.append((qualified, scope, declared, local))
 
     live = _live_ids({entry[0] for entry in declared_here}, reexports)
+    refs = References(data)
     resolved = [
         ResolvedOutput(
             id=qualified,
@@ -287,10 +303,12 @@ def resolve_outputs(
                 name: local[name] for name in declared.get("decisions") or [] if name in local
             },
             inputs=tuple(
-                _resolve_input(tree, scope, str(name)) for name in declared.get("inputs") or []
+                _resolve_pinned_input(tree, scope, str(name))
+                for name in declared.get("inputs") or []
             ),
             reexports=reexports.get(qualified),
             format=None,  # filled in by _follow, which knows the terminal output
+            per_universe=refs.per_universe(qualified),
         )
         for qualified, scope, declared, local in declared_here
         if qualified in live
@@ -368,6 +386,13 @@ def _reexport_target(scope: Scope, ref: str) -> str | None:
     return qualify(*_descent_target(scope, segments))
 
 
+def _resolve_pinned_input(tree: _Index, scope: Scope, entry: str) -> ResolvedInput:
+    """What an ``inputs`` entry reads, its pin set aside and kept on the result."""
+    artifact, pin = split_pin(entry)
+    found = _resolve_input(tree, scope, artifact)
+    return ResolvedInput(id=entry, produced_by=found.produced_by, source=found.source, pin=pin)
+
+
 def _resolve_input(tree: _Index, scope: Scope, name: str) -> ResolvedInput:
     """What supplies *name* for an output declared at *scope*.
 
@@ -435,7 +460,12 @@ def _follow(
     source = definitions.get(terminal, out.definition) if terminal else out.definition
     declared_format = source.get("format")
     inputs = tuple(
-        ResolvedInput(id=i.id, produced_by=_terminal(i.produced_by, reexports), source=i.source)
+        ResolvedInput(
+            id=i.id,
+            produced_by=_terminal(i.produced_by, reexports),
+            source=i.source,
+            pin=i.pin,
+        )
         for i in out.inputs
     )
     return ResolvedOutput(
@@ -447,6 +477,7 @@ def _follow(
         inputs=inputs,
         reexports=terminal,
         format=str(declared_format) if declared_format else None,
+        per_universe=out.per_universe,
     )
 
 
@@ -509,15 +540,16 @@ class References:
     def resolve(self, scope: Scope, entry: str) -> ResolvedInput:
         """What an ``inputs`` entry declared at *scope* reads.
 
-        The pin is set aside and re-exports are followed to the output that
-        carries the recipe.
+        The pin is set aside (and kept on the result) and re-exports are
+        followed to the output that carries the recipe.
         """
-        artifact, _ = split_pin(entry)
+        artifact, pin = split_pin(entry)
         found = _resolve_input(self._tree, scope, artifact)
         return ResolvedInput(
             id=entry,
             produced_by=_terminal(found.produced_by, self._reexports),
             source=found.source,
+            pin=pin,
         )
 
     def is_external(self, scope: Scope, entry: str) -> bool:
@@ -554,6 +586,93 @@ class References:
             if produced_by is not None and self.per_universe(produced_by):
                 return True
         return False
+
+
+# =============================================================================
+# Plan
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class PlannedOutput:
+    """One output to build - in one universe or once for all of them.
+
+    ``analysis`` is the id of the analysis being planned (``None`` if it
+    declares none) and ``universe`` the universe the output is built in -
+    ``None`` for an output built once. ``path`` is where its result goes and
+    ``reads`` maps each of its ``inputs`` entries, as written, to the path it
+    reads: a result path for an output and the declared ``source`` for an
+    external input. ``output`` is the output resolved in that universe, whose
+    ``command`` and ``decisions`` a runner passes to ``render_command``.
+    """
+
+    analysis: str | None
+    universe: str | None
+    path: str
+    reads: dict[str, str]
+    output: ResolvedOutput
+
+
+def plan(data: Mapping[str, Any]) -> list[PlannedOutput]:
+    """Every output to build, with where it goes and what it reads.
+
+    An output built per universe is planned once for each universe the
+    analysis declares where it's active. An output built once is planned once
+    with no universe. Re-exports are left out as they make no file of their
+    own.
+
+    Results go in ``results/{universe}/{id}.{format}`` and outputs built once
+    in ``results/{id}.{format}`` where ``id`` is the qualified id (e.g.
+    ``classification.accuracy``). The layout is provisional - the layout RFC
+    decides it.
+
+    Args:
+        data: The analysis, with external sub-analyses already resolved.
+
+    Returns:
+        The outputs built once first and then each universe's in the order
+        the universes are declared.
+    """
+    refs = References(data)
+    formats = {qualified: declared.get("format") for qualified, _, declared in refs.outputs()}
+    analysis = str(data["id"]) if data.get("id") else None
+
+    def result_path(qualified: str, universe: str | None) -> str:
+        fmt = formats.get(qualified)
+        name = f"{qualified}.{fmt}" if fmt else qualified
+        return f"results/{universe}/{name}" if universe else f"results/{name}"
+
+    def planned(out: ResolvedOutput, universe: str | None) -> PlannedOutput:
+        reads: dict[str, str] = {}
+        for i in out.inputs:
+            if i.produced_by is not None:
+                built_in = (i.pin or universe) if refs.per_universe(i.produced_by) else None
+                reads[i.id] = result_path(i.produced_by, built_in)
+            elif i.source is not None:
+                reads[i.id] = i.source
+        return PlannedOutput(
+            analysis=analysis,
+            universe=universe,
+            path=result_path(out.id, universe),
+            reads=reads,
+            output=out,
+        )
+
+    entries = [
+        planned(out, None)
+        for out in resolve_outputs(data, {})
+        if not out.reexports and not out.per_universe
+    ]
+    for universe_id in declared_universes(data):
+        effective = effective_universe(data, universe_id)
+        if effective is None:
+            continue
+        entries.extend(
+            planned(out, universe_id)
+            for out in resolve_outputs(data, effective.selection)
+            if not out.reexports and out.per_universe
+        )
+    return entries
 
 
 # =============================================================================
