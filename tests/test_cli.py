@@ -44,6 +44,7 @@ class TestValidateCommand:
         result = runner.invoke(main, ["validate", str(old)])
         assert result.exit_code == 1
         assert "looks like a universe file" in result.output
+        assert "ignored" not in result.output
 
     def test_old_universe_files_next_to_the_analysis_are_warned_about(
         self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path
@@ -353,6 +354,20 @@ class TestUniverseCommands:
         result = runner.invoke(main, ["universe", "check", "nope", "-a", str(full_analysis_path)])
         assert result.exit_code == 1
         assert "declares no universe 'nope'" in result.output
+
+    def test_universe_check_reports_a_broken_chain(
+        self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path
+    ):
+        """``b`` itself is fine, but its base derives from an undeclared universe."""
+        data = load_yaml(full_analysis_path)
+        data["universes"] = [
+            {"id": "a", "derived_from": "nope", "decisions": {"model": "rf"}},
+            {"id": "b", "derived_from": "a", "decisions": {"model": "svm"}},
+        ]
+        save_yaml(data, tmp_path / "astra.yaml")
+        result = runner.invoke(main, ["universe", "check", "b", "-a", str(tmp_path / "astra.yaml")])
+        assert result.exit_code == 1
+        assert "can't be followed" in result.output
 
     def test_another_universe_errors_do_not_fail_the_check(
         self, runner: CliRunner, tmp_path: Path, full_analysis_path: Path

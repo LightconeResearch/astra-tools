@@ -27,7 +27,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from astra.helpers import Scope, _collect_node_decisions, is_condition_met
+from astra.helpers import (
+    Scope,
+    _collect_node_decisions,
+    ancestor_at,
+    is_condition_met,
+    parse_from_path,
+    parse_option_ref,
+)
 
 __all__ = [
     "EffectiveUniverse",
@@ -108,7 +115,7 @@ def effective_universe(node: Mapping[str, Any], universe_id: str) -> EffectiveUn
         merged = _merge(merged, universes[link])
 
     own = _qualified_decisions(universes[universe_id], ())
-    selection = _drop_inactive_inherited(node, merged, own, (), {})
+    selection = _drop_inactive_inherited(node, merged, own, (), [])
     selection["id"] = universe_id
     return EffectiveUniverse(
         id=universe_id,
@@ -160,15 +167,22 @@ def _drop_inactive_inherited(
     universe: Mapping[str, Any],
     own: set[str],
     scope: Scope,
-    above: Mapping[str, str],
+    chain: list[dict[str, str]],
 ) -> dict[str, Any]:
     """Drops inherited selections whose decision's ``when`` no longer holds.
 
-    *above* holds the selections made above *node* (flattened) - that's what
-    the validator evaluates a ``when`` against. Dropping one selection can
-    switch off another decision so this repeats until nothing changes.
+    *chain* holds what each level above *node* selects, root first, with the
+    values of its ``from`` aliases - the view the validator and the resolver
+    evaluate a ``when`` against. A condition is only judged when every
+    decision it names is known here. Otherwise the selection is kept and is
+    judged where the universe is used - that's the case for a sub-analysis's
+    own universe, whose conditions can name its parent's decisions. Dropping
+    one selection can switch off another decision so this repeats until
+    nothing changes.
     """
     declared = _collect_node_decisions(dict(node))
+    aliases = _alias_values(node.get("decisions") or {}, chain)
+    above = {k: v for level in chain for k, v in level.items()}
     decisions = {str(k): str(v) for k, v in (universe.get("decisions") or {}).items()}
     changed = True
     while changed:
@@ -177,7 +191,13 @@ def _drop_inactive_inherited(
             if ".".join((*scope, decision_id)) in own:
                 continue
             when = (declared.get(decision_id) or {}).get("when")
-            if when and not is_condition_met(when, {**above, **decisions}):
+            if not when:
+                continue
+            in_scope = {**above, **aliases, **decisions}
+            named = _named_decisions(when)
+            if named is None or not named <= in_scope.keys() | declared.keys():
+                continue
+            if not is_condition_met(when, in_scope):
                 del decisions[decision_id]
                 changed = True
 
@@ -188,10 +208,35 @@ def _drop_inactive_inherited(
         sub_node = sub_nodes.get(sub_id)
         if isinstance(sub, Mapping) and not sub.get("universe") and isinstance(sub_node, Mapping):
             analyses[sub_id] = _drop_inactive_inherited(
-                sub_node, sub, own, (*scope, str(sub_id)), {**above, **decisions}
+                sub_node, sub, own, (*scope, str(sub_id)), [*chain, {**decisions, **aliases}]
             )
         else:
             analyses[sub_id] = sub
     if analyses:
         result["analyses"] = analyses
     return result
+
+
+def _alias_values(declared: Mapping[str, Any], chain: list[dict[str, str]]) -> dict[str, str]:
+    """The values of *declared*'s ``from: ../id`` aliases, read from *chain*."""
+    values: dict[str, str] = {}
+    for decision_id, decision in declared.items():
+        ref = decision.get("from") if isinstance(decision, Mapping) else None
+        parsed = parse_from_path(str(ref)) if ref else None
+        if parsed is None or parsed[0] <= 0 or len(parsed[1]) != 1:
+            continue
+        level = ancestor_at(chain, parsed[0])
+        if level is not None and parsed[1][0] in level:
+            values[str(decision_id)] = level[parsed[1][0]]
+    return values
+
+
+def _named_decisions(when: Any) -> set[str] | None:
+    """The decisions a ``when`` names - or ``None`` if a condition is malformed."""
+    names: set[str] = set()
+    for condition in [when] if isinstance(when, str) else when:
+        parsed = parse_option_ref(str(condition).lstrip("~"))
+        if parsed is None:
+            return None
+        names.add(parsed[0])
+    return names

@@ -343,7 +343,7 @@ def _validate_analysis_node(
         )
     )
     errors.extend(_validate_output_when(node_outputs, constraint_scope, node_path))
-    errors.extend(_validate_declared_universes(node, node_path))
+    errors.extend(_validate_declared_universes(node, node_path, check_selections=False))
 
     for sub_id, sub_node in sub_analyses.items():
         errors.extend(
@@ -1032,7 +1032,9 @@ def _validate_constraint_ref(
     return []
 
 
-def _validate_declared_universes(node: dict[str, Any], path_prefix: str) -> list[SemanticError]:
+def _validate_declared_universes(
+    node: dict[str, Any], path_prefix: str, *, check_selections: bool = True
+) -> list[SemanticError]:
     """Validate the universes *node* declares in its ``universes`` list.
 
     Ids must be unique within the analysis and every ``derived_from`` chain
@@ -1040,6 +1042,11 @@ def _validate_declared_universes(node: dict[str, Any], path_prefix: str) -> list
     selection is then checked against the analysis like any other universe.
     A universe whose chain runs into a broken link elsewhere isn't checked -
     the broken link is reported where it is.
+
+    A sub-analysis's universes are passed ``check_selections=False``. Its
+    decisions can depend on its parent's (a ``when`` or a ``requires`` on a
+    ``from`` alias) so its universes can only be judged where a universe of
+    the root picks one - and they are, in ``_validate_universe_node``.
     """
     errors: list[SemanticError] = []
     universes_prefix = f"{path_prefix}.universes" if path_prefix else "universes"
@@ -1082,7 +1089,7 @@ def _validate_declared_universes(node: dict[str, Any], path_prefix: str) -> list
                     )
                 )
             continue
-        effective = effective_universe(node, universe_id)
+        effective = effective_universe(node, universe_id) if check_selections else None
         if effective is not None:
             errors.extend(
                 _validate_universe_node(
@@ -1145,6 +1152,10 @@ def _validate_universe_node(
     Validates decisions at this level, checks for unknown/missing analyses,
     then recurses into sub-analyses. Decisions with ``from`` references are
     skipped (they inherit their value from the parent universe).
+
+    A ``when`` may name a ``from`` alias, so conditions are evaluated with
+    the aliases' values included - as ``astra.resolve`` does when it settles
+    the same universe.
     """
     errors: list[SemanticError] = []
 
@@ -1208,11 +1219,30 @@ def _validate_universe_node(
                     )
                 )
 
+    # Build effective decisions: local selections + `from` resolved from
+    # the appropriate ancestor in the chain (multi-level via `../../`).
+    effective_decisions = dict(universe_decisions)
+    for decision_id in from_decision_ids:
+        ref = all_analysis_decisions[decision_id].get("from", "")
+        parsed = parse_from_path(ref)
+        if parsed is None:
+            continue
+        up, segments = parsed
+        if up <= 0 or len(segments) != 1:
+            continue
+        # The ancestor universe is `up` levels above us in the universe chain.
+        target_universe = ancestor_at(ancestor_universe_chain, up)
+        if target_universe is None:
+            continue
+        target_decision_id = segments[0]
+        if target_decision_id in target_universe:
+            effective_decisions[decision_id] = target_universe[target_decision_id]
+
     # Merge current and ancestor universe decisions for condition evaluation
     all_universe_decisions: dict[str, str] = {}
     for ancestor_universe in ancestor_universe_chain:
         all_universe_decisions.update(ancestor_universe)
-    all_universe_decisions.update(universe_decisions)
+    all_universe_decisions.update(effective_decisions)
 
     # Check all locally-defined analysis decisions are covered
     # (skip `from` references -- they get their value from the parent universe)
@@ -1248,25 +1278,6 @@ def _validate_universe_node(
             )
 
     # Check constraints
-    # Build effective decisions: local selections + `from` resolved from
-    # the appropriate ancestor in the chain (multi-level via `../../`).
-    effective_decisions = dict(universe_decisions)
-    for decision_id in from_decision_ids:
-        ref = all_analysis_decisions[decision_id].get("from", "")
-        parsed = parse_from_path(ref)
-        if parsed is None:
-            continue
-        up, segments = parsed
-        if up <= 0 or len(segments) != 1:
-            continue
-        # The ancestor universe is `up` levels above us in the universe chain.
-        target_universe = ancestor_at(ancestor_universe_chain, up)
-        if target_universe is None:
-            continue
-        target_decision_id = segments[0]
-        if target_decision_id in target_universe:
-            effective_decisions[decision_id] = target_universe[target_decision_id]
-
     # Build effective analysis decisions for constraint checking (include resolved `from`)
     effective_analysis_decisions = dict(analysis_decisions)
 
@@ -1325,7 +1336,7 @@ def _validate_universe_node(
                 sub_universe,
                 sub_analysis_node,
                 path_prefix=f"{analyses_prefix}.{analysis_id}",
-                ancestor_universe_chain=ancestor_universe_chain + [universe_decisions],
+                ancestor_universe_chain=ancestor_universe_chain + [effective_decisions],
             )
         )
 

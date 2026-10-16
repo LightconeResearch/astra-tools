@@ -29,7 +29,7 @@ from astra.helpers import (
     resolve_analysis_tree,
 )
 from astra.scaffold import create_boilerplate
-from astra.universes import declared_universes, effective_universe
+from astra.universes import declared_universes, derived_from_chain, effective_universe
 from astra.validation.schema import (
     check_spec_version,
     collect_recommendations,
@@ -385,10 +385,16 @@ def _old_universe_files(directory: Path) -> list[Path]:
     return found
 
 
-def _old_universe_hint(path: Path) -> str:
+def _old_universe_hint(path: Path, *, found_beside: bool) -> str:
+    """The hint for an old universe file.
+
+    One found beside an astra.yaml is ignored; one validated by name is
+    validated as an analysis, which it isn't.
+    """
+    where = "It is ignored - declare it" if found_beside else "Declare it"
     return (
         f"{path} looks like a universe file from before universes moved into "
-        "astra.yaml. It is ignored - declare it under 'universes' in astra.yaml."
+        f"astra.yaml. {where} under 'universes' in astra.yaml."
     )
 
 
@@ -404,7 +410,8 @@ def _validate_one(
     data = load_yaml(file)
 
     for old in _old_universe_files(file.parent):
-        console.print(f"[yellow]⚠[/yellow]  [yellow]{escape(_old_universe_hint(old))}[/yellow]")
+        hint = _old_universe_hint(old, found_beside=True)
+        console.print(f"[yellow]⚠[/yellow]  [yellow]{escape(hint)}[/yellow]")
 
     # Spec-version compatibility (non-fatal)
     version_warning = check_spec_version(data)
@@ -419,7 +426,7 @@ def _validate_one(
         for schema_err in schema_errors:
             console.print(f"  • {schema_err}")
         if _looks_like_old_universe(data):
-            console.print(f"\n{escape(_old_universe_hint(file))}")
+            console.print(f"\n{escape(_old_universe_hint(file, found_beside=False))}")
         raise SystemExit(1)
 
     console.print("[green]✓[/green] Schema validation passed")
@@ -753,8 +760,15 @@ def check_universe(universe_id: str, analysis: Path | None) -> None:
     """
     analysis_path = _require_analysis(analysis)
     data = load_yaml(analysis_path)
-    if universe_id not in declared_universes(data):
+    universes = declared_universes(data)
+    if universe_id not in universes:
         console.print(f"[red]Error:[/red] astra.yaml declares no universe '{escape(universe_id)}'.")
+        raise SystemExit(1)
+    if derived_from_chain(universes, universe_id) is None:
+        console.print(
+            f"[red]Error:[/red] the derived_from chain of '{escape(universe_id)}' can't be "
+            "followed - it names an undeclared universe or loops. Run 'astra validate' for details."
+        )
         raise SystemExit(1)
 
     prefix = f"universes.{universe_id}"

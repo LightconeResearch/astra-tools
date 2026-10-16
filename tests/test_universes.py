@@ -90,6 +90,50 @@ class TestEffectiveSelection:
         assert effective is not None
         assert effective.selection["decisions"] == {"mode": "advanced", "backend": "cpu"}
 
+    def test_a_condition_on_the_parent_is_left_for_later(self):
+        """On its own a sub-analysis can't tell what ``m`` (its parent's
+        ``mode``) is, so the inherited ``depth`` is kept."""
+        stage = {
+            "decisions": {
+                "m": {"from": "../mode"},
+                "depth": {"when": ["m.full"], "options": {"a": {}, "b": {}}},
+                "tol": {"options": {"lo": {}, "hi": {}}},
+            },
+            "universes": [
+                {"id": "deep", "decisions": {"depth": "a", "tol": "lo"}},
+                {"id": "lax", "derived_from": "deep", "decisions": {"tol": "hi"}},
+            ],
+        }
+        effective = effective_universe(stage, "lax")
+        assert effective is not None
+        assert effective.selection["decisions"] == {"depth": "a", "tol": "hi"}
+
+    def test_a_condition_on_the_parent_is_judged_in_context(self):
+        """In a root universe ``m`` has its parent's value - switching
+        ``mode`` to ``fast`` drops the ``depth`` the diff inherited."""
+        root = {
+            "decisions": {"mode": {"options": {"fast": {}, "full": {}}}},
+            "analyses": {
+                "stage": {
+                    "decisions": {
+                        "m": {"from": "../mode"},
+                        "depth": {"when": ["m.full"], "options": {"a": {}, "b": {}}},
+                    }
+                }
+            },
+            "universes": [
+                {
+                    "id": "full",
+                    "decisions": {"mode": "full"},
+                    "analyses": {"stage": {"decisions": {"depth": "a"}}},
+                },
+                {"id": "fast", "derived_from": "full", "decisions": {"mode": "fast"}},
+            ],
+        }
+        effective = effective_universe(root, "fast")
+        assert effective is not None
+        assert effective.selection["analyses"]["stage"]["decisions"] == {}
+
     def test_a_selection_the_universe_makes_itself_is_kept(self):
         """So that the validator can report it as inactive."""
         node = analysis(

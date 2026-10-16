@@ -831,6 +831,35 @@ class TestConditionalOutputsUniverse:
         errors = validate_analysis(data)
         assert errors == []
 
+    def test_a_when_on_a_from_alias_uses_the_alias_value(self):
+        """``m`` is the parent's ``mode`` - the validator reads its value as
+        the resolver does, so ``depth`` is active when ``mode`` is ``full``."""
+        spec = {
+            "version": "1.0",
+            "name": "Alias condition",
+            "inputs": [{"id": "raw", "type": "data", "source": "raw.csv"}],
+            "outputs": [{"id": "out", "type": "data"}],
+            "decisions": {"mode": {"label": "Mode", "options": {"fast": {}, "full": {}}}},
+            "analyses": {
+                "stage": {
+                    "inputs": [{"id": "x", "from": "../raw"}],
+                    "outputs": [{"id": "y", "type": "data", "decisions": ["depth"]}],
+                    "decisions": {
+                        "m": {"from": "../mode"},
+                        "depth": {"label": "Depth", "when": ["m.full"], "options": {"a": {}}},
+                    },
+                }
+            },
+            "universes": [
+                {
+                    "id": "u",
+                    "decisions": {"mode": "full"},
+                    "analyses": {"stage": {"decisions": {"depth": "a"}}},
+                }
+            ],
+        }
+        assert validate_analysis(spec) == []
+
 
 class TestDeclaredUniverses:
     """Tests for the rules on the universes an analysis declares."""
@@ -920,12 +949,62 @@ class TestDeclaredUniverses:
         found = self.codes(self.NESTED, {"id": "u", "analyses": {"stage": {"universe": "deep"}}})
         assert ("UNKNOWN_SUB_UNIVERSE", "universes.u.analyses.stage.universe") in found
 
-    def test_a_sub_analysis_universes_are_validated_too(self):
+    def test_a_sub_analysis_universes_get_structural_checks(self):
+        stage = {**self.NESTED["analyses"]["stage"]}
+        stage["universes"] = [{"id": "x", "derived_from": "nope"}]
+        spec = {**self.NESTED, "analyses": {"stage": stage}}
+        found = self.codes(spec)
+        assert ("UNKNOWN_DERIVED_FROM", "analyses.stage.universes.x.derived_from") in found
+
+    def test_a_sub_analysis_universe_is_judged_where_it_is_picked(self):
         stage = {**self.NESTED["analyses"]["stage"]}
         stage["universes"] = [{"id": "bad", "decisions": {"method": "nope"}}]
         spec = {**self.NESTED, "analyses": {"stage": stage}}
-        found = self.codes(spec)
-        assert ("UNKNOWN_OPTION", "analyses.stage.universes.bad.decisions.method") in found
+        assert self.codes(spec) == []
+        found = self.codes(spec, {"id": "u", "analyses": {"stage": {"universe": "bad"}}})
+        assert ("UNKNOWN_OPTION", "universes.u.analyses.stage.decisions.method") in found
+
+    def test_a_universe_that_depends_on_its_parent_is_not_judged_on_its_own(self):
+        """``depth`` only exists when the parent's ``mode`` is ``full`` and
+        ``tol.lo`` requires it - on its own the stage can't tell."""
+        stage = {
+            "inputs": [{"id": "x", "from": "../raw"}],
+            "outputs": [{"id": "y", "type": "data", "decisions": ["depth"]}],
+            "decisions": {
+                "m": {"from": "../mode"},
+                "depth": {
+                    "label": "Depth",
+                    "when": ["m.full"],
+                    "options": {"a": {"label": "A"}, "b": {"label": "B"}},
+                },
+                "tol": {
+                    "label": "Tolerance",
+                    "options": {
+                        "lo": {"label": "Lo", "requires": ["m.full"]},
+                        "hi": {"label": "Hi"},
+                    },
+                },
+            },
+            "universes": [
+                {"id": "deep", "decisions": {"depth": "a", "tol": "lo"}},
+                {"id": "deeper", "derived_from": "deep", "decisions": {"depth": "b"}},
+            ],
+        }
+        spec = {
+            **self.FLAT,
+            "decisions": {"mode": {"label": "Mode", "options": {"fast": {}, "full": {}}}},
+            "outputs": [{"id": "out", "type": "data"}],
+            "analyses": {"stage": stage},
+        }
+        found = self.codes(
+            spec,
+            {
+                "id": "u",
+                "decisions": {"mode": "full"},
+                "analyses": {"stage": {"universe": "deeper"}},
+            },
+        )
+        assert found == []
 
     def test_a_diff_inherits_sub_analysis_selections(self):
         found = self.codes(
