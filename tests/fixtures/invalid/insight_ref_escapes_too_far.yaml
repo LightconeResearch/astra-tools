@@ -10,6 +10,7 @@ inputs:
 outputs:
   - id: result
     type: metric
+    format: json
 
 prior_insights:
   root_insight:

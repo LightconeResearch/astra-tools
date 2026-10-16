@@ -50,6 +50,7 @@ from astra.helpers import (
 from astra.universes import effective_universe
 
 __all__ = [
+    "References",
     "ResolvedInput",
     "ResolvedOutput",
     "iter_analysis_nodes",
@@ -57,6 +58,7 @@ __all__ = [
     "render_command",
     "resolve_outputs",
     "resolve_universe",
+    "split_pin",
 ]
 
 _FORMATTER = string.Formatter()
@@ -455,6 +457,103 @@ def _terminal(qualified: str | None, reexports: Mapping[str, str]) -> str | None
         seen.add(qualified)
         qualified = reexports[qualified]
     return qualified
+
+
+# =============================================================================
+# References and scoping
+# =============================================================================
+
+
+def split_pin(entry: str) -> tuple[str, str | None]:
+    """Splits ``artifact#universe`` into the artifact and its pin.
+
+    The pin is ``None`` for an entry without one.
+    """
+    artifact, hash_, pin = entry.partition("#")
+    return artifact, (pin if hash_ else None)
+
+
+class References:
+    """What the references in an analysis point at, and which of its outputs
+    are built per universe.
+
+    Both depend on the analysis's shape rather than on any one universe, so
+    they're worked out once for all of them. An output is built per universe
+    if it declares ``decisions``, has a ``when`` or reads an unpinned entry
+    that resolves to an output built per universe. A re-export is whatever it
+    stands for (unless its own ``when`` makes it per universe). Pins and
+    external inputs never make an output per universe. A dependency cycle -
+    an error the validator reports - counts as built once rather than
+    recursing forever.
+    """
+
+    def __init__(self, data: Mapping[str, Any]) -> None:
+        self._tree = _index(data, {})
+        self._outputs: dict[str, tuple[Scope, dict[str, Any]]] = {}
+        self._reexports: dict[str, str] = {}
+        for scope, node in self._tree.nodes.items():
+            for declared in node.get("outputs") or []:
+                if not isinstance(declared, dict) or not declared.get("id"):
+                    continue
+                qualified = qualify(scope, str(declared["id"]))
+                self._outputs[qualified] = (scope, declared)
+                target = _reexport_target(scope, str(declared.get("from") or ""))
+                if target:
+                    self._reexports[qualified] = target
+        self._per_universe: dict[str, bool] = {}
+
+    def outputs(self) -> list[tuple[str, Scope, dict[str, Any]]]:
+        """Every output in the tree as (qualified id, scope, definition)."""
+        return [(q, scope, declared) for q, (scope, declared) in self._outputs.items()]
+
+    def resolve(self, scope: Scope, entry: str) -> ResolvedInput:
+        """What an ``inputs`` entry declared at *scope* reads.
+
+        The pin is set aside and re-exports are followed to the output that
+        carries the recipe.
+        """
+        artifact, _ = split_pin(entry)
+        found = _resolve_input(self._tree, scope, artifact)
+        return ResolvedInput(
+            id=entry,
+            produced_by=_terminal(found.produced_by, self._reexports),
+            source=found.source,
+        )
+
+    def is_external(self, scope: Scope, entry: str) -> bool:
+        """Whether an entry reads an input the analysis doesn't compute.
+
+        That includes an input aliased with ``from:`` to an ancestor's
+        external input, and one declared without a ``source``.
+        """
+        artifact, _ = split_pin(entry)
+        if "." in artifact or self.resolve(scope, entry).produced_by is not None:
+            return False
+        return get_input(self._tree.nodes.get(scope) or {}, artifact) is not None
+
+    def per_universe(self, qualified: str) -> bool:
+        """Whether the output *qualified* is built once per universe."""
+        if qualified not in self._per_universe:
+            self._per_universe[qualified] = False
+            self._per_universe[qualified] = self._depends_on_a_universe(qualified)
+        return self._per_universe[qualified]
+
+    def _depends_on_a_universe(self, qualified: str) -> bool:
+        scope, declared = self._outputs.get(qualified, ((), {}))
+        if declared.get("when"):
+            return True
+        if qualified in self._reexports:
+            target = _terminal(qualified, self._reexports)
+            return target is not None and target != qualified and self.per_universe(target)
+        if declared.get("decisions"):
+            return True
+        for entry in declared.get("inputs") or []:
+            if split_pin(str(entry))[1] is not None:
+                continue
+            produced_by = self.resolve(scope, str(entry)).produced_by
+            if produced_by is not None and self.per_universe(produced_by):
+                return True
+        return False
 
 
 # =============================================================================

@@ -7,6 +7,7 @@ inputs:
 outputs:
   - id: result
     type: metric
+    format: json
 
 analyses:
   sub:
@@ -16,6 +17,7 @@ analyses:
     outputs:
       - id: sub_result
         type: metric
+        format: json
     decisions:
       bad_ref:
         from: ../nonexistent_decision

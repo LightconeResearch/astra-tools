@@ -12,6 +12,7 @@ from astra.validation.schema import (
 )
 from astra.validation.semantic import (
     SemanticError,
+    collect_semantic_warnings,
     validate_analysis,
     validate_analysis_file,
     validate_universe,
@@ -356,10 +357,16 @@ class TestOutputDependencyValidation:
             "name": "test",
             "inputs": [],
             "outputs": [
-                {"id": "cleaned", "type": "data", "recipe": {"command": "python clean.py"}},
+                {
+                    "id": "cleaned",
+                    "type": "data",
+                    "format": "parquet",
+                    "recipe": {"command": "python clean.py"},
+                },
                 {
                     "id": "result",
                     "type": "metric",
+                    "format": "json",
                     "inputs": ["cleaned"],
                     "recipe": {"command": "python analyze.py {inputs.cleaned}"},
                 },
@@ -378,6 +385,7 @@ class TestOutputDependencyValidation:
                 {
                     "id": "cleaned",
                     "type": "data",
+                    "format": "parquet",
                     "inputs": ["raw"],
                     "recipe": {"command": "python clean.py {inputs.raw}"},
                 },
@@ -396,6 +404,7 @@ class TestOutputDependencyValidation:
                 {
                     "id": "result",
                     "type": "metric",
+                    "format": "json",
                     "recipe": {"command": "python run.py"},
                 },
             ],
@@ -454,6 +463,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "inputs": ["raw"],
             "decisions": ["m"],
             "recipe": {
@@ -470,6 +480,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "recipe": {"command": "python run.py {inputs.missing}"},
         }
         errors = validate_analysis(self._make(out))
@@ -480,6 +491,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "recipe": {"command": "python run.py --m {decisions.missing}"},
         }
         errors = validate_analysis(self._make(out))
@@ -494,6 +506,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "inputs": ["raw"],
             "recipe": {"command": "python run.py"},
         }
@@ -505,6 +518,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "decisions": ["m"],
             "recipe": {"command": "python run.py"},
         }
@@ -518,6 +532,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "inputs": ["raw"],
             "recipe": {"command": "python run.py {inputs}"},
         }
@@ -528,6 +543,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "recipe": {"command": "echo '{{not a placeholder}}'"},
         }
         errors = validate_analysis(self._make(out))
@@ -537,6 +553,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "recipe": {"command": "python run.py {bogus}"},
         }
         errors = validate_analysis(self._make(out))
@@ -547,6 +564,7 @@ class TestCommandTemplateValidation:
         out = {
             "id": "r",
             "type": "metric",
+            "format": "json",
             "recipe": {"command": "python run.py {output"},
         }
         errors = validate_analysis(self._make(out))
@@ -664,7 +682,7 @@ class TestConditionalOutputs:
             "name": "test",
             "inputs": [],
             "outputs": [
-                {"id": "base", "type": "data"},
+                {"id": "base", "type": "data", "format": "parquet"},
                 {
                     "id": "faint_only",
                     "type": "metric",
@@ -691,7 +709,7 @@ class TestConditionalOutputs:
             "name": "test",
             "inputs": [],
             "outputs": [
-                {"id": "base", "type": "data"},
+                {"id": "base", "type": "data", "format": "parquet"},
                 {
                     "id": "combined_report",
                     "type": "report",
@@ -757,7 +775,7 @@ class TestConditionalOutputs:
             "version": "0.0.10",
             "name": "test",
             "inputs": [],
-            "outputs": [{"id": "result", "type": "metric"}],
+            "outputs": [{"id": "result", "type": "metric", "format": "json"}],
             "decisions": {
                 "mode": {
                     "label": "Mode",
@@ -838,7 +856,7 @@ class TestConditionalOutputsUniverse:
             "version": "1.0",
             "name": "Alias condition",
             "inputs": [{"id": "raw", "type": "data", "source": "raw.csv"}],
-            "outputs": [{"id": "out", "type": "data"}],
+            "outputs": [{"id": "out", "type": "data", "format": "parquet"}],
             "decisions": {"mode": {"label": "Mode", "options": {"fast": {}, "full": {}}}},
             "analyses": {
                 "stage": {
@@ -881,7 +899,7 @@ class TestDeclaredUniverses:
         "version": "1.0",
         "name": "Sub-analysis presets",
         "inputs": [{"id": "raw", "type": "data", "source": "raw.csv"}],
-        "outputs": [{"id": "out", "type": "data"}],
+        "outputs": [{"id": "out", "type": "data", "format": "parquet"}],
         "analyses": {
             "stage": {
                 "inputs": [{"id": "x", "from": "../raw"}],
@@ -993,7 +1011,7 @@ class TestDeclaredUniverses:
         spec = {
             **self.FLAT,
             "decisions": {"mode": {"label": "Mode", "options": {"fast": {}, "full": {}}}},
-            "outputs": [{"id": "out", "type": "data"}],
+            "outputs": [{"id": "out", "type": "data", "format": "parquet"}],
             "analyses": {"stage": stage},
         }
         found = self.codes(
@@ -1125,3 +1143,156 @@ class TestMalformedWhenIsReportedNotRaised:
         }
         codes = {e.code for e in validate_analysis(spec)}
         assert "INVALID_WHEN_REF" in codes
+
+
+PINS_SPEC = {
+    "version": "1.0",
+    "name": "Pins",
+    "inputs": [{"id": "raw", "type": "data", "source": "raw.csv"}],
+    "outputs": [
+        {
+            "id": "score",
+            "type": "metric",
+            "format": "json",
+            "inputs": ["raw"],
+            "decisions": ["model"],
+        },
+        {
+            "id": "svm_margin",
+            "type": "metric",
+            "format": "json",
+            "inputs": ["raw"],
+            "decisions": ["model"],
+            "when": ["model.svm"],
+        },
+        {"id": "summary", "type": "table", "format": "csv", "inputs": ["raw"]},
+    ],
+    "decisions": {
+        "model": {"label": "Model", "options": {"rf": {"label": "RF"}, "svm": {"label": "SVM"}}},
+    },
+    "universes": [
+        {"id": "rf", "decisions": {"model": "rf"}},
+        {"id": "svm", "derived_from": "rf", "decisions": {"model": "svm"}},
+    ],
+}
+
+
+def with_pins(*outputs: dict, **extra: object) -> dict:
+    """``PINS_SPEC`` with *outputs* added, and any other top-level fields."""
+    return {**PINS_SPEC, "outputs": [*PINS_SPEC["outputs"], *outputs], **extra}
+
+
+def finding(artifact: str) -> dict:
+    return {
+        "f": {
+            "claim": "A claim.",
+            "created_at": "2026-10-16T00:00:00Z",
+            "evidence": [{"id": "e", "artifact": artifact}],
+        }
+    }
+
+
+class TestPins:
+    """Pins (``artifact#universe``), and the ``format`` of outputs built once."""
+
+    @staticmethod
+    def found(data: dict) -> set[tuple[str, str | None]]:
+        return {(e.code, e.path) for e in validate_analysis(data)}
+
+    def test_a_comparison_of_two_universes_is_valid(self):
+        comparison = {
+            "id": "comparison",
+            "type": "table",
+            "format": "csv",
+            "inputs": ["score#rf", "score#svm"],
+            "recipe": {
+                "command": "python c.py {inputs.score#rf} {inputs.score#svm} --out {output}"
+            },
+        }
+        assert validate_analysis(with_pins(comparison)) == []
+
+    def test_pinning_an_external_input(self):
+        out = {"id": "bad", "type": "table", "format": "csv", "inputs": ["raw#rf"]}
+        assert ("PIN_ON_EXTERNAL_INPUT", "outputs.bad.inputs") in self.found(with_pins(out))
+
+    def test_pinning_an_undeclared_universe(self):
+        out = {"id": "bad", "type": "table", "format": "csv", "inputs": ["score#nope"]}
+        assert ("UNKNOWN_PIN_UNIVERSE", "outputs.bad.inputs") in self.found(with_pins(out))
+
+    def test_pinning_a_universe_where_the_output_is_not_built(self):
+        inactive = {"id": "bad", "type": "table", "format": "csv", "inputs": ["svm_margin#rf"]}
+        active = {"id": "good", "type": "table", "format": "csv", "inputs": ["svm_margin#svm"]}
+        found = self.found(with_pins(inactive, active))
+        assert ("PIN_INACTIVE", "outputs.bad.inputs") in found
+        assert ("PIN_INACTIVE", "outputs.good.inputs") not in found
+
+    def test_an_output_built_once_must_declare_a_format(self):
+        out = {"id": "bare", "type": "table", "inputs": ["score#rf"]}
+        assert ("MISSING_FORMAT_ON_UNSCOPED_OUTPUT", "outputs.bare") in self.found(with_pins(out))
+
+    def test_an_output_built_per_universe_needs_no_format_yet(self):
+        """Through a decision, a ``when`` or an unpinned per-universe input."""
+        outputs = (
+            {"id": "a", "type": "table", "inputs": ["raw"], "decisions": ["model"]},
+            {"id": "b", "type": "report", "when": ["model.svm"]},
+            {"id": "c", "type": "table", "inputs": ["score"]},
+        )
+        assert validate_analysis(with_pins(*outputs)) == []
+
+    def test_a_placeholder_names_the_entry_as_written(self):
+        stage = {
+            "inputs": [{"id": "x", "from": "../raw"}],
+            "outputs": [{"id": "y", "type": "data", "format": "csv", "inputs": ["x"]}],
+        }
+        total = {
+            "id": "total",
+            "type": "metric",
+            "format": "json",
+            "inputs": ["stage.y", "score#rf"],
+            "recipe": {"command": "run {inputs.stage.y} {inputs.score#rf} --out {output}"},
+        }
+        assert validate_analysis(with_pins(total, analyses={"stage": stage})) == []
+
+    def test_a_placeholder_for_another_pin_is_undeclared(self):
+        out = {
+            "id": "bad",
+            "type": "table",
+            "format": "csv",
+            "inputs": ["score#rf"],
+            "recipe": {"command": "run {inputs.score#svm}"},
+        }
+        codes = {code for code, _ in self.found(with_pins(out))}
+        assert "UNDECLARED_TEMPLATE_REF" in codes
+
+    def test_evidence_may_pin_a_declared_universe(self):
+        assert validate_analysis(with_pins(findings=finding("score#rf"))) == []
+
+    def test_evidence_pinning_an_undeclared_universe(self):
+        found = self.found(with_pins(findings=finding("score#nope")))
+        assert ("UNKNOWN_PIN_UNIVERSE", "findings.f.evidence[0].artifact") in found
+
+    def test_evidence_citing_an_unknown_artifact_is_still_reported(self):
+        found = self.found(with_pins(findings=finding("nope#rf")))
+        assert ("INVALID_ARTIFACT_REF", "findings.f.evidence[0].artifact") in found
+
+
+class TestSemanticWarnings:
+    """What is allowed but probably not meant - warnings."""
+
+    @staticmethod
+    def codes(data: dict) -> list[str]:
+        return [w.code for w in collect_semantic_warnings(data)]
+
+    def test_nothing_to_say(self):
+        assert self.codes(PINS_SPEC) == []
+
+    def test_a_pin_on_an_output_built_once(self):
+        out = {"id": "again", "type": "table", "format": "csv", "inputs": ["summary#rf"]}
+        assert self.codes(with_pins(out)) == ["REDUNDANT_PIN"]
+        assert self.codes(with_pins(findings=finding("summary#rf"))) == ["REDUNDANT_PIN"]
+
+    def test_evidence_without_a_pin_on_an_output_built_per_universe(self):
+        assert self.codes(with_pins(findings=finding("score"))) == ["UNPINNED_EVIDENCE"]
+
+    def test_decisions_but_no_universes(self):
+        assert self.codes({**PINS_SPEC, "universes": []}) == ["NO_UNIVERSES"]

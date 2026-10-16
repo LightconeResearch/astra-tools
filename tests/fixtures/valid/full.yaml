@@ -17,12 +17,14 @@ inputs:
 outputs:
   - id: trained_output
     type: data
+    format: pkl
     description: "Trained model artifact"
     recipe:
       command: python src/preprocess.py
 
   - id: accuracy
     type: metric
+    format: json
     description: "Model accuracy"
     inputs: [trained_output]
     recipe:
@@ -30,6 +32,7 @@ outputs:
 
   - id: f1_score
     type: metric
+    format: json
     description: "F1 score"
     inputs: [trained_output]
     recipe:
@@ -37,6 +40,7 @@ outputs:
 
   - id: plot
     type: figure
+    format: png
     description: "Results plot"
     inputs: [trained_output]
     recipe:
@@ -44,6 +48,7 @@ outputs:
 
   - id: summary
     type: table
+    format: csv
     description: "Results summary"
     inputs: [trained_output]
     recipe:
@@ -51,6 +56,7 @@ outputs:
 
   - id: conclusion
     type: report
+    format: md
     description: "Analysis conclusion"
     inputs: [trained_output]
     recipe:

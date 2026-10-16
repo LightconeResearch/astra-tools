@@ -16,5 +16,6 @@ analyses:
     outputs:
       - id: metric
         type: metric
+        format: json
         recipe:
           command: python src/run.py

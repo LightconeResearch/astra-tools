@@ -36,6 +36,7 @@ analyses:
         outputs:
           - id: deep_metric
             type: metric
+            format: json
             inputs: [b_data]
             decisions: [seed]
             recipe:

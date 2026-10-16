@@ -16,11 +16,13 @@ from astra.helpers import (
     get_input_ids,
     get_output_ids,
     is_condition_met,
+    iter_analysis_nodes,
     load_yaml,
     parse_from_path,
     parse_option_ref,
     resolve_analysis_tree,
 )
+from astra.resolve import References, resolve_outputs, split_pin
 from astra.universes import declared_universes, derived_from_chain, effective_universe
 
 _FORMATTER = string.Formatter()
@@ -193,6 +195,7 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
     # Validate output when conditions
     errors.extend(_validate_output_when(outputs, root_decisions, ""))
     errors.extend(_validate_declared_universes(data, ""))
+    errors.extend(_validate_pins_and_formats(data))
     for analysis_id, analysis_node in (data.get("analyses") or {}).items():
         errors.extend(
             _validate_analysis_node(
@@ -404,7 +407,8 @@ def _validate_insight_artifacts(
     """Validate that insight evidence artifacts reference valid output IDs.
 
     Each evidence item with an ``artifact`` field must reference a declared output ID.
-    Applied to both ``prior_insights`` and ``findings``.
+    Applied to both ``prior_insights`` and ``findings``. A pin (``#universe``)
+    is set aside here and checked in ``_validate_pins_and_formats``.
     """
     errors: list[SemanticError] = []
     if not insights:
@@ -415,7 +419,7 @@ def _validate_insight_artifacts(
         insight_path = f"{insights_prefix}.{insight_id}"
         for i, ev in enumerate(insight.get("evidence") or []):
             artifact_ref = ev.get("artifact")
-            if artifact_ref is not None and artifact_ref not in output_ids:
+            if artifact_ref is not None and split_pin(str(artifact_ref))[0] not in output_ids:
                 errors.append(
                     SemanticError(
                         "INVALID_ARTIFACT_REF",
@@ -620,7 +624,9 @@ def _validate_output_dependencies(
     Checks:
     - Each ``Output.inputs`` ID resolves to an analysis-level input,
       a sibling output, or a qualified sub-analysis output
-      (``sub.output_id``, supplied via ``extra_valid_ids``).
+      (``sub.output_id``, supplied via ``extra_valid_ids``). A pin
+      (``#universe``) is set aside here - pins are checked once for the
+      whole tree, in ``_validate_pins_and_formats``.
     - Each ``Output.decisions`` ID resolves to a decision in scope.
     - Recipe.command template placeholders only reference items declared
       in ``Output.inputs`` / ``Output.decisions``.
@@ -648,12 +654,13 @@ def _validate_output_dependencies(
             continue
 
         declared_inputs = out.get("inputs") or []
+        artifacts = [split_pin(str(i))[0] for i in declared_inputs]
         # Cycle graph only edges to sibling outputs (analysis-level inputs
         # are leaves and can't participate in a cycle).
-        dep_graph[out_id] = [i for i in declared_inputs if i in sibling_or_extra]
+        dep_graph[out_id] = [a for a in artifacts if a in sibling_or_extra]
 
-        for inp_id in declared_inputs:
-            if inp_id not in valid_input_ids:
+        for inp_id, artifact in zip(declared_inputs, artifacts, strict=True):
+            if artifact not in valid_input_ids:
                 errors.append(
                     SemanticError(
                         "INVALID_OUTPUT_INPUT",
@@ -708,8 +715,10 @@ def _validate_command_template(
 
     Recognized placeholders: ``{inputs}``, ``{inputs.<id>}``,
     ``{decisions.<id>}``, ``{output}``. ``{{`` and ``}}`` are literal braces.
-    Each ``{inputs.<id>}`` / ``{decisions.<id>}`` must reference an item
-    declared on the surrounding Output.
+    Each ``{inputs.<entry>}`` must name one of the surrounding Output's
+    ``inputs`` entries exactly as written - dots and pin included, e.g.
+    ``{inputs.sub.out}`` or ``{inputs.f1_score#baseline}``. Each
+    ``{decisions.<id>}`` must name one of its ``decisions``.
 
     We deliberately don't lint "declared but unreferenced" — the spec
     grants the runner free choice of delivery mechanism (flags, env vars,
@@ -738,7 +747,7 @@ def _validate_command_template(
         if field_name in ("output", "inputs"):
             continue
         head, dot, tail = field_name.partition(".")
-        if dot and "." not in tail and head in declared:
+        if dot and head in declared and (head == "inputs" or "." not in tail):
             if tail not in declared[head]:
                 errors.append(
                     SemanticError(
@@ -753,7 +762,7 @@ def _validate_command_template(
             SemanticError(
                 "INVALID_COMMAND_TEMPLATE",
                 f"Unknown command placeholder '{{{field_name}}}' (use "
-                "{inputs}, {inputs.<id>}, {decisions.<id>}, or {output})",
+                "{inputs}, {inputs.<entry>}, {decisions.<id>}, or {output})",
                 path,
             )
         )
@@ -1111,6 +1120,101 @@ def _in_derived_from_cycle(universes: dict[str, dict[str, Any]], universe_id: st
     return False
 
 
+def _scope_prefix(scope: tuple[str, ...]) -> str:
+    """The error-path prefix for a scope: ``analyses.a.analyses.b.``, or nothing at the root."""
+    return "".join(f"analyses.{sub_id}." for sub_id in scope)
+
+
+def _validate_pins_and_formats(data: dict[str, Any]) -> list[SemanticError]:
+    """Validate pins and the ``format`` of outputs built once, across the whole tree.
+
+    A pin names one of the root analysis's universes - in a sub-analysis too.
+    In an ``inputs`` entry it must pin an output (an external input is the
+    same in every universe), name a declared universe and name one where the
+    output is built. On evidence it must name a declared universe.
+
+    An output built once (see ``astra.resolve.References``) must declare its
+    ``format`` so that its file is told apart from the per-universe results.
+    A re-export inherits its format and is left out.
+    """
+    errors: list[SemanticError] = []
+    refs = References(data)
+    universes = declared_universes(data)
+    built_in: dict[str, set[str] | None] = {}
+
+    def outputs_built_in(universe_id: str) -> set[str] | None:
+        if universe_id not in built_in:
+            effective = effective_universe(data, universe_id)
+            built_in[universe_id] = (
+                {o.id for o in resolve_outputs(data, effective.selection)} if effective else None
+            )
+        return built_in[universe_id]
+
+    for qualified, scope, declared in refs.outputs():
+        path = f"{_scope_prefix(scope)}outputs.{declared['id']}"
+        if not declared.get("from") and not declared.get("format"):
+            if not refs.per_universe(qualified):
+                errors.append(
+                    SemanticError(
+                        "MISSING_FORMAT_ON_UNSCOPED_OUTPUT",
+                        f"Output '{qualified}' is built once, so it must declare a 'format'",
+                        path,
+                    )
+                )
+        for entry in declared.get("inputs") or []:
+            artifact, pin = split_pin(str(entry))
+            if pin is None:
+                continue
+            if refs.is_external(scope, str(entry)):
+                errors.append(
+                    SemanticError(
+                        "PIN_ON_EXTERNAL_INPUT",
+                        f"'{entry}' pins an external input, which is the same in every universe",
+                        f"{path}.inputs",
+                    )
+                )
+                continue
+            produced_by = refs.resolve(scope, str(entry)).produced_by
+            if produced_by is None:
+                continue
+            if pin not in universes:
+                errors.append(
+                    SemanticError(
+                        "UNKNOWN_PIN_UNIVERSE",
+                        f"'{entry}' pins undeclared universe '{pin}'",
+                        f"{path}.inputs",
+                    )
+                )
+                continue
+            built = outputs_built_in(pin)
+            if built is not None and produced_by not in built:
+                errors.append(
+                    SemanticError(
+                        "PIN_INACTIVE",
+                        f"'{entry}': '{artifact}' isn't built in universe '{pin}'",
+                        f"{path}.inputs",
+                    )
+                )
+
+    for scope, node in iter_analysis_nodes(data):
+        for section in ("prior_insights", "findings"):
+            for insight_id, insight in (node.get(section) or {}).items():
+                evidence = insight.get("evidence") if isinstance(insight, dict) else None
+                for i, ev in enumerate(evidence or []):
+                    ref = ev.get("artifact") if isinstance(ev, dict) else None
+                    pin = split_pin(str(ref))[1] if ref else None
+                    if pin is not None and pin not in universes:
+                        errors.append(
+                            SemanticError(
+                                "UNKNOWN_PIN_UNIVERSE",
+                                f"Evidence artifact '{ref}' pins undeclared universe '{pin}'",
+                                f"{_scope_prefix(scope)}{section}.{insight_id}"
+                                f".evidence[{i}].artifact",
+                            )
+                        )
+    return errors
+
+
 def validate_universe(
     universe_data: dict[str, Any],
     analysis_data: dict[str, Any],
@@ -1395,3 +1499,82 @@ def validate_analysis_file(path: str | Path) -> list[SemanticError]:
     path = Path(path)
     data = load_yaml(path)
     return validate_analysis(data, base_path=path.parent)
+
+
+def collect_semantic_warnings(data: dict[str, Any]) -> list[SemanticError]:
+    """Report what is allowed but probably not meant.
+
+    These are warnings - they never make an analysis invalid:
+
+    - ``REDUNDANT_PIN``: a pin on an output that is built once anyway, in an
+      ``inputs`` entry or on evidence;
+    - ``UNPINNED_EVIDENCE``: evidence citing an output built per universe
+      without saying which universe the claim rests on;
+    - ``NO_UNIVERSES``: decisions are declared but no universe is, so nothing
+      that depends on them can be built.
+
+    *data* should have its external (``path:``) sub-analyses already resolved,
+    as for ``collect_recommendations``.
+    """
+    warnings: list[SemanticError] = []
+    refs = References(data)
+    known = {qualified for qualified, _, _ in refs.outputs()}
+
+    for qualified, scope, declared in refs.outputs():
+        for entry in declared.get("inputs") or []:
+            if split_pin(str(entry))[1] is None:
+                continue
+            produced_by = refs.resolve(scope, str(entry)).produced_by
+            if produced_by is not None and not refs.per_universe(produced_by):
+                warnings.append(
+                    SemanticError(
+                        "REDUNDANT_PIN",
+                        f"'{entry}' pins an output that is built once anyway",
+                        f"{_scope_prefix(scope)}outputs.{declared['id']}.inputs",
+                    )
+                )
+
+    for scope, node in iter_analysis_nodes(data):
+        for section in ("prior_insights", "findings"):
+            for insight_id, insight in (node.get(section) or {}).items():
+                evidence = insight.get("evidence") if isinstance(insight, dict) else None
+                for i, ev in enumerate(evidence or []):
+                    ref = ev.get("artifact") if isinstance(ev, dict) else None
+                    if not ref:
+                        continue
+                    artifact, pin = split_pin(str(ref))
+                    qualified = ".".join((*scope, artifact))
+                    if qualified not in known:
+                        continue
+                    path = f"{_scope_prefix(scope)}{section}.{insight_id}.evidence[{i}].artifact"
+                    if pin is None and refs.per_universe(qualified):
+                        warnings.append(
+                            SemanticError(
+                                "UNPINNED_EVIDENCE",
+                                f"Evidence cites '{artifact}', which is built per universe - "
+                                f"pin it ('{artifact}#<universe>') to say which one the claim "
+                                "rests on",
+                                path,
+                            )
+                        )
+                    elif pin is not None and not refs.per_universe(qualified):
+                        warnings.append(
+                            SemanticError(
+                                "REDUNDANT_PIN",
+                                f"Evidence artifact '{ref}' pins an output that is built once "
+                                "anyway",
+                                path,
+                            )
+                        )
+
+    has_decisions = any(_collect_node_decisions(node) for _, node in iter_analysis_nodes(data))
+    if has_decisions and not declared_universes(data):
+        warnings.append(
+            SemanticError(
+                "NO_UNIVERSES",
+                "Decisions are declared but no universes are, so nothing that depends on "
+                "them can be built",
+                "universes",
+            )
+        )
+    return warnings

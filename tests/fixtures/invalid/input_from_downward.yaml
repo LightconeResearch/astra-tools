@@ -16,5 +16,6 @@ analyses:
     outputs:
       - id: relayed
         type: data
+        format: parquet
         recipe:
           command: python src/relay.py

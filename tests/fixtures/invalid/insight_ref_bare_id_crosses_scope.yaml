@@ -29,6 +29,7 @@ analyses:
     outputs:
       - id: sub_out
         type: data
+        format: parquet
         inputs: [x]
         recipe:
           command: python src/run.py {inputs.x}

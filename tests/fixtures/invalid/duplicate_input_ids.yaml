@@ -9,3 +9,4 @@ inputs:
 outputs:
   - id: result
     type: metric
+    format: json

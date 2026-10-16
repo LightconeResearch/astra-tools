@@ -10,8 +10,10 @@ inputs:
 outputs:
   - id: posterior_contours
     type: figure
+    format: png
   - id: parameter_constraints
     type: table
+    format: csv
 
 decisions:
   cosmology_model:
@@ -30,11 +32,13 @@ analyses:
     outputs:
       - id: mock_catalog
         type: data
+        format: parquet
         inputs: [survey_data]
         recipe:
           command: python src/generate_mocks.py {inputs.survey_data}
       - id: mock_sample_plot
         type: figure
+        format: png
         description: "Sample mock catalog visualization"
         inputs: [mock_catalog]
         recipe:
@@ -58,6 +62,7 @@ analyses:
     outputs:
       - id: trained_model
         type: data
+        format: pkl
         inputs: [training_data]
         recipe:
           command: python src/train.py {inputs.training_data}
@@ -81,6 +86,7 @@ analyses:
     outputs:
       - id: validation_report
         type: report
+        format: md
 
 universes:
   - id: baseline

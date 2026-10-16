@@ -9,6 +9,7 @@ inputs:
 outputs:
   - id: trained_model
     type: data
+    format: pkl
     inputs: [training_data]
     recipe:
       command: python scripts/train.py {inputs.training_data}
@@ -16,6 +17,7 @@ outputs:
   # Only produced when training_sample is not bright_only
   - id: faint_metrics
     type: metric
+    format: json
     when: "~training_sample.bright_only"
     inputs: [trained_model]
     recipe:
@@ -24,6 +26,7 @@ outputs:
   # Only produced when model is svm
   - id: svm_report
     type: report
+    format: md
     when: model.svm
     inputs: [trained_model]
     recipe:
@@ -32,6 +35,7 @@ outputs:
   # Only produced when multiple conditions met (AND)
   - id: combined_report
     type: report
+    format: md
     when:
       - "~training_sample.bright_only"
       - model.svm

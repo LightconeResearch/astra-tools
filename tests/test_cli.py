@@ -31,6 +31,14 @@ class TestValidateCommand:
         assert result.exit_code == 0
         assert "Validation successful" in result.output
 
+    def test_semantic_warnings_are_printed_and_do_not_fail(
+        self, runner: CliRunner, minimal_analysis_path: Path
+    ):
+        """``minimal.yaml`` declares a decision but no universes."""
+        result = runner.invoke(main, ["validate", str(minimal_analysis_path)])
+        assert result.exit_code == 0
+        assert "NO_UNIVERSES" in result.output
+
     def test_validate_invalid_analysis(self, runner: CliRunner, invalid_dir: Path):
         result = runner.invoke(main, ["validate", str(invalid_dir / "missing_version.yaml")])
         assert result.exit_code == 1
@@ -90,9 +98,11 @@ class TestValidateCommand:
                         "type": "metric",
                         "description": "No format declared",
                         "inputs": ["raw"],
+                        "decisions": ["method"],
                         "recipe": {"command": "python c.py --out {output}"},
                     }
                 ],
+                "decisions": {"method": {"from": "../method"}},
             },
             child / "astra.yaml",
         )

@@ -35,7 +35,7 @@ from astra.validation.schema import (
     collect_recommendations,
     validate_analysis_data,
 )
-from astra.validation.semantic import validate_analysis
+from astra.validation.semantic import collect_semantic_warnings, validate_analysis
 
 __all__ = ["create_boilerplate", "main"]
 
@@ -449,8 +449,11 @@ def _validate_one(
     # Walked over the *resolved* tree, as semantic validation is: an external
     # `path:` sub-analysis is a bare stub here otherwise, and it is skipped as
     # a standalone target too, so its outputs would be checked nowhere at all.
-    for recommendation in collect_recommendations(resolve_analysis_tree(data, file.parent)):
+    resolved = resolve_analysis_tree(data, file.parent)
+    for recommendation in collect_recommendations(resolved):
         console.print(f"[yellow]⚠[/yellow]  [yellow]{escape(recommendation)}[/yellow]")
+    for warning in collect_semantic_warnings(resolved):
+        console.print(f"[yellow]⚠[/yellow]  [yellow]{escape(str(warning))}[/yellow]")
 
     # Evidence verification (for analyses with prior insights and/or findings)
     if not skip_evidence:

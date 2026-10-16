@@ -10,6 +10,7 @@ from astra.validation.schema import (
 )
 from astra.validation.semantic import (
     SemanticError,
+    collect_semantic_warnings,
     validate_analysis,
     validate_analysis_file,
     validate_universe,
@@ -19,6 +20,7 @@ __all__ = [
     "SemanticError",
     "check_spec_version",
     "collect_recommendations",
+    "collect_semantic_warnings",
     "installed_spec_version",
     "is_valid_analysis",
     "validate_analysis",

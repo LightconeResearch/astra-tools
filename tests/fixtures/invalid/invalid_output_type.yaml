@@ -7,3 +7,4 @@ inputs:
 outputs:
   - id: result
     type: invalid_type
+    format: json

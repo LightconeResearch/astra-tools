@@ -12,10 +12,12 @@ import pytest
 
 from astra.helpers import iter_sub_analyses, load_yaml, parse_from_path
 from astra.resolve import (
+    References,
     iter_analysis_nodes,
     render_command,
     resolve_outputs,
     resolve_universe,
+    split_pin,
 )
 from astra.universes import effective_universe
 
@@ -473,3 +475,68 @@ class TestSelectedUniverse:
             "stage.method": "pca",
             "stage.depth": "deep",
         }
+
+
+class TestReferences:
+    """What references point at, and which outputs are built per universe."""
+
+    SPEC = {
+        "inputs": [{"id": "raw", "type": "data", "source": "raw.csv"}],
+        "decisions": {"model": {"options": {"rf": {}, "svm": {}}}},
+        "outputs": [
+            {"id": "score", "inputs": ["raw"], "decisions": ["model"]},
+            {"id": "report", "inputs": ["score"]},
+            {"id": "comparison", "inputs": ["score#rf", "score#svm"]},
+            {"id": "summary", "inputs": ["raw"]},
+            {"id": "note", "inputs": ["raw"], "when": ["model.svm"]},
+            {"id": "relayed", "from": "stage.fit"},
+        ],
+        "analyses": {
+            "maker": {
+                "decisions": {"k": {"options": {"a": {}, "b": {}}}},
+                "outputs": [{"id": "made", "decisions": ["k"]}],
+            },
+            "stage": {
+                "inputs": [{"id": "x", "from": "../raw"}, {"id": "s", "from": "../maker.made"}],
+                "outputs": [{"id": "fit", "inputs": ["s"]}, {"id": "plain", "inputs": ["x"]}],
+            },
+        },
+    }
+
+    def test_split_pin(self):
+        assert split_pin("score#rf") == ("score", "rf")
+        assert split_pin("stage.fit") == ("stage.fit", None)
+
+    def test_what_makes_an_output_per_universe(self):
+        refs = References(self.SPEC)
+        assert refs.per_universe("score")
+        assert refs.per_universe("report")
+        assert refs.per_universe("note")
+
+    def test_pins_and_external_inputs_never_do(self):
+        refs = References(self.SPEC)
+        assert not refs.per_universe("comparison")
+        assert not refs.per_universe("summary")
+
+    def test_aliases_and_re_exports_are_what_they_point_at(self):
+        """``stage.fit`` reads its sibling's ``maker.made`` through an input
+        alias and ``relayed`` re-exports it. ``stage.plain`` reads the root's
+        external input."""
+        refs = References(self.SPEC)
+        assert refs.per_universe("stage.fit")
+        assert refs.per_universe("relayed")
+        assert not refs.per_universe("stage.plain")
+
+    def test_resolving_an_entry_sets_the_pin_aside(self):
+        refs = References(self.SPEC)
+        assert refs.resolve((), "score#rf").produced_by == "score"
+        assert refs.resolve((), "relayed").produced_by == "stage.fit"
+        assert refs.is_external((), "raw")
+        assert refs.is_external(("stage",), "x")
+        assert not refs.is_external(("stage",), "s")
+
+    def test_iris(self):
+        refs = References(load_yaml(EXAMPLES / "iris" / "astra.yaml"))
+        assert refs.per_universe("f1_score")
+        assert refs.per_universe("conclusion")
+        assert not refs.per_universe("model_comparison")

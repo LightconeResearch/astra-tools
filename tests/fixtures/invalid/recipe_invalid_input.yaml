@@ -4,6 +4,7 @@ inputs: []
 outputs:
   - id: result
     type: metric
+    format: json
     inputs: [nonexistent_output]
     recipe:
       command: python run.py {inputs.nonexistent_output}

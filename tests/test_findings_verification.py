@@ -186,6 +186,7 @@ inputs:
 outputs:
   - id: accuracy_table
     type: table
+    format: csv
 decisions:
   method:
     label: Method

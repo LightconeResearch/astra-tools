@@ -42,6 +42,7 @@ analyses:
     outputs:
       - id: xi_pm
         type: data
+        format: parquet
         inputs: [catalog]
         decisions: [xi_pm_estimator]
         recipe:
@@ -75,6 +76,7 @@ analyses:
         outputs:
           - id: validation_report
             type: report
+            format: md
             inputs: [catalog_in]
             recipe:
               command: python src/validate.py {inputs.catalog_in}

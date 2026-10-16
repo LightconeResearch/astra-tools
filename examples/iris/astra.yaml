@@ -79,12 +79,14 @@ outputs:
     type: table
     format: csv
     description: Accuracy by model and preprocessing combination
-    inputs: [trained_output]
+    inputs:
+      - accuracy#baseline
+      - accuracy#svm_focused
     recipe:
       command: >-
-        python src/evaluate.py
-        --classifier {inputs.trained_output}
-        --metric comparison
+        python src/compare.py
+        --a {inputs.accuracy#baseline}
+        --b {inputs.accuracy#svm_focused}
         --out {output}
 
   - id: conclusion

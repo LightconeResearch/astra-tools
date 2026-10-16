@@ -4,11 +4,13 @@ inputs: []
 outputs:
   - id: a
     type: data
+    format: parquet
     inputs: [b]
     recipe:
       command: python a.py {inputs.b}
   - id: b
     type: data
+    format: parquet
     inputs: [a]
     recipe:
       command: python b.py {inputs.a}
