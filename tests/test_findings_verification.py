@@ -189,7 +189,6 @@ outputs:
 decisions:
   method:
     label: Method
-    default: a
     options:
       a: {label: A}
       b: {label: B}

@@ -42,7 +42,6 @@ outputs:
 decisions:
   training_sample:
     label: "Training Sample"
-    default: combined
     options:
       combined:
         label: "Combined"
@@ -51,7 +50,6 @@ decisions:
 
   model:
     label: "Model Type"
-    default: rf
     options:
       svm:
         label: "SVM"

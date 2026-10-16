@@ -429,7 +429,6 @@ class TestOutputDependencyValidation:
             "decisions": {
                 "real_decision": {
                     "label": "Real",
-                    "default": "a",
                     "options": {"a": {"label": "A"}},
                 },
             },
@@ -462,7 +461,7 @@ class TestCommandTemplateValidation:
             },
         }
         decisions = {
-            "m": {"label": "M", "default": "a", "options": {"a": {"label": "A"}}},
+            "m": {"label": "M", "options": {"a": {"label": "A"}}},
         }
         errors = validate_analysis(self._make(out, decisions))
         assert errors == []
@@ -510,7 +509,7 @@ class TestCommandTemplateValidation:
             "recipe": {"command": "python run.py"},
         }
         decisions = {
-            "m": {"label": "M", "default": "a", "options": {"a": {"label": "A"}}},
+            "m": {"label": "M", "options": {"a": {"label": "A"}}},
         }
         errors = validate_analysis(self._make(out, decisions))
         assert errors == []
@@ -617,10 +616,6 @@ class TestExcludedOptionValidation:
         errors = validate_analysis_file(invalid_dir / "excluded_no_reason.yaml")
         assert any(e.code == "MISSING_EXCLUDED_REASON" for e in errors)
 
-    def test_excluded_default(self, invalid_dir: Path):
-        errors = validate_analysis_file(invalid_dir / "excluded_default.yaml")
-        assert any(e.code == "EXCLUDED_DEFAULT" for e in errors)
-
     def test_orphan_excluded_reason(self, invalid_dir: Path):
         errors = validate_analysis_file(invalid_dir / "orphan_excluded_reason.yaml")
         assert any(e.code == "ORPHAN_EXCLUDED_REASON" for e in errors)
@@ -676,7 +671,6 @@ class TestConditionalOutputs:
             "decisions": {
                 "sample": {
                     "label": "Sample",
-                    "default": "combined",
                     "options": {
                         "combined": {"label": "Combined"},
                         "bright_only": {"label": "Bright Only"},
@@ -704,7 +698,6 @@ class TestConditionalOutputs:
             "decisions": {
                 "sample": {
                     "label": "Sample",
-                    "default": "combined",
                     "options": {
                         "combined": {"label": "Combined"},
                         "bright_only": {"label": "Bright Only"},
@@ -712,7 +705,6 @@ class TestConditionalOutputs:
                 },
                 "model": {
                     "label": "Model",
-                    "default": "svm",
                     "options": {
                         "svm": {"label": "SVM"},
                         "rf": {"label": "RF"},
@@ -744,7 +736,6 @@ class TestConditionalOutputs:
             "decisions": {
                 "model": {
                     "label": "Model",
-                    "default": "a",
                     "options": {"a": {"label": "A"}},
                 }
             },
@@ -767,7 +758,6 @@ class TestConditionalOutputs:
             "decisions": {
                 "mode": {
                     "label": "Mode",
-                    "default": "full",
                     "options": {
                         "full": {"label": "Full"},
                         "lite": {"label": "Lite"},
@@ -776,7 +766,6 @@ class TestConditionalOutputs:
                 "advanced_setting": {
                     "label": "Advanced",
                     "when": "~mode.lite",
-                    "default": "on",
                     "options": {
                         "on": {"label": "On"},
                         "off": {"label": "Off"},
@@ -882,8 +871,7 @@ class TestIsConditionMet:
     def test_a_malformed_reference_is_a_condition_nothing_satisfies(self, ref: str):
         """Not an exception. `is_condition_met` is reached from the
         validator as well as the resolver, so raising took `astra universe
-        check` and `astra universe generate` down on a typo the validator
-        is perfectly able to report."""
+        check` down on a typo the validator is perfectly able to report."""
         from astra.helpers import is_condition_met
 
         assert is_condition_met(ref, {"model": "svm"}) is False
@@ -899,8 +887,8 @@ class TestMalformedWhenIsReportedNotRaised:
 
     Every command that reads a spec goes through `is_condition_met`, so a
     single typo used to surface as an uncaught `ValueError` traceback from
-    `astra universe check` and `astra universe generate` — while `astra
-    validate`, on the same file, described the problem precisely.
+    `astra universe check` — while `astra validate`, on the same file,
+    described the problem precisely.
     """
 
     SPEC = {
@@ -909,8 +897,8 @@ class TestMalformedWhenIsReportedNotRaised:
         "inputs": [{"id": "seed", "type": "data", "source": "s3://raw"}],
         "outputs": [{"id": "out", "type": "data", "recipe": {"command": "run {output}"}}],
         "decisions": {
-            "method": {"options": {"pca": {}, "mlp": {}}, "default": "pca"},
-            "trees": {"when": ["method"], "options": {"fifty": {}}, "default": "fifty"},
+            "method": {"options": {"pca": {}, "mlp": {}}},
+            "trees": {"when": ["method"], "options": {"fifty": {}}},
         },
     }
 
@@ -925,7 +913,7 @@ class TestMalformedWhenIsReportedNotRaised:
     def test_an_output_when_is_reported_too(self):
         spec = {
             **self.SPEC,
-            "decisions": {"method": {"options": {"pca": {}}, "default": "pca"}},
+            "decisions": {"method": {"options": {"pca": {}}}},
             "outputs": [
                 {
                     "id": "out",
@@ -937,59 +925,3 @@ class TestMalformedWhenIsReportedNotRaised:
         }
         codes = {e.code for e in validate_analysis(spec)}
         assert "INVALID_WHEN_REF" in codes
-
-    def test_defaults_do_not_raise_either(self):
-        """`astra universe generate` reads `when:` through
-        `get_default_universe`."""
-        from astra.helpers import get_default_universe
-
-        assert get_default_universe(self.SPEC)["decisions"] == {"method": "pca"}
-
-
-class TestDefaultUniverseConditional:
-    """Tests for get_default_universe with conditional decisions."""
-
-    def test_defaults_with_list_when(self, valid_dir: Path):
-        """Conditional decision with list when should be included when conditions are met."""
-        from astra.helpers import get_default_universe
-
-        data = load_yaml(valid_dir / "decision_list_when.yaml")
-        defaults = get_default_universe(data)
-        decisions = defaults["decisions"]
-        # mode=advanced, backend=gpu -> gpu_optimization should be included
-        assert decisions["gpu_optimization"] == "tensor_cores"
-
-    def test_defaults_skip_unmet_list_when(self):
-        """Conditional decision with unmet list when should be skipped."""
-        from astra.helpers import get_default_universe
-
-        data = {
-            "decisions": {
-                "mode": {
-                    "label": "Mode",
-                    "default": "basic",
-                    "options": {
-                        "basic": {"label": "Basic"},
-                        "advanced": {"label": "Advanced"},
-                    },
-                },
-                "backend": {
-                    "label": "Backend",
-                    "default": "gpu",
-                    "options": {
-                        "cpu": {"label": "CPU"},
-                        "gpu": {"label": "GPU"},
-                    },
-                },
-                "gpu_opt": {
-                    "label": "GPU Opt",
-                    "when": ["mode.advanced", "backend.gpu"],
-                    "default": "on",
-                    "options": {"on": {"label": "On"}, "off": {"label": "Off"}},
-                },
-            }
-        }
-        defaults = get_default_universe(data)
-        decisions = defaults["decisions"]
-        # mode=basic -> condition not met, gpu_opt should NOT be included
-        assert "gpu_opt" not in decisions

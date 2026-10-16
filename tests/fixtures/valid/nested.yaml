@@ -16,7 +16,6 @@ outputs:
 decisions:
   cosmology_model:
     label: "Cosmological Model"
-    default: flat_lcdm
     options:
       flat_lcdm:
         label: "Flat LCDM"
@@ -45,7 +44,6 @@ analyses:
         from: ../cosmology_model
       noise_model:
         label: "Noise Model"
-        default: heteroscedastic
         options:
           homoscedastic:
             label: "Homoscedastic"
@@ -69,7 +67,6 @@ analyses:
     decisions:
       architecture:
         label: "Network Architecture"
-        default: maf
         options:
           maf:
             label: "Masked Autoregressive Flow"

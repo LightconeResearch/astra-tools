@@ -27,7 +27,6 @@ prior_insights:
 decisions:
   cosmology_model:
     label: "Cosmological Model"
-    default: flat_lcdm
     options:
       flat_lcdm:
         label: "Flat LCDM"
@@ -60,7 +59,6 @@ analyses:
     decisions:
       xi_pm_estimator:
         label: "Correlation Function Estimator"
-        default: treecorr
         options:
           treecorr:
             label: "TreeCorr"
@@ -84,7 +82,6 @@ analyses:
         decisions:
           coverage_check:
             label: "Coverage Check Method"
-            default: bootstrap
             options:
               bootstrap:
                 label: "Bootstrap"

@@ -19,7 +19,6 @@ from rich.tree import Tree
 
 from astra.helpers import (
     _collect_node_decisions,
-    create_universe_from_defaults,
     external_spec_path,
     get_analysis_decisions,
     get_decisions,
@@ -28,7 +27,6 @@ from astra.helpers import (
     iter_sub_analyses,
     load_yaml,
     resolve_analysis_tree,
-    save_yaml,
 )
 from astra.scaffold import create_boilerplate
 from astra.validation.schema import (
@@ -713,10 +711,8 @@ def _display_decisions(decisions: dict[str, Any], indent: str = "") -> None:
 
         options_branch = tree.add("[dim]Options:[/dim]")
         options = decision.get("options", {})
-        default = decision.get("default")
         for option_id, option in options.items():
-            default_marker = " [yellow](default)[/yellow]" if option_id == default else ""
-            option_text = f"{option_id}: {option.get('label', '')}{default_marker}"
+            option_text = f"{option_id}: {option.get('label', '')}"
             if option.get("description"):
                 option_text += f" - [dim]{option['description']}[/dim]"
             options_branch.add(option_text)
@@ -737,74 +733,6 @@ def _display_analysis_decisions(analyses: dict[str, Any], depth: int = 0) -> Non
 def universe() -> None:
     """Universe management commands."""
     pass
-
-
-@universe.command("generate")
-@click.option("--name", "-n", default="baseline", help="Universe name/ID")
-@click.option(
-    "--analysis",
-    "-a",
-    type=click.Path(exists=True, path_type=Path),
-    help="Analysis file",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(path_type=Path),
-    help="Output file (default: universes/<name>.yaml)",
-)
-@click.option("--description", "-d", help="Universe description")
-@click.option(
-    "--force",
-    "-f",
-    is_flag=True,
-    help="Overwrite the output file if it already exists",
-)
-def generate_universe(
-    name: str,
-    analysis: Path | None,
-    output: Path | None,
-    description: str | None,
-    force: bool,
-) -> None:
-    """Generate a universe from analysis defaults."""
-    analysis_path = _require_analysis(analysis)
-    data = load_yaml(analysis_path)
-
-    # Check all decisions have defaults (across entire tree)
-    missing_defaults: list[str] = []
-    _check_missing_defaults(data, missing_defaults, "")
-    if missing_defaults:
-        console.print("[red]Error:[/red] Some decisions don't have defaults:")
-        for d_id in missing_defaults:
-            console.print(f"  • {d_id}")
-        raise SystemExit(1)
-
-    uni = create_universe_from_defaults(data, name, description)
-
-    if output is None:
-        output = analysis_path.parent / "universes" / f"{name}.yaml"
-
-    if output.exists() and not force:
-        console.print(f"[red]Error:[/red] [cyan]{output}[/cyan] already exists.")
-        console.print("Use [cyan]--force[/cyan] to overwrite it.")
-        raise SystemExit(1)
-
-    output.parent.mkdir(parents=True, exist_ok=True)
-    save_yaml(uni, output)
-
-    console.print(f"[green]✓[/green] Generated universe at [cyan]{output}[/cyan]")
-    console.print("\nDecisions:")
-    _print_universe_decisions(uni)
-
-
-def _check_missing_defaults(node: dict[str, Any], missing: list[str], prefix: str = "") -> None:
-    """Recursively check for decisions without defaults."""
-    for d_id, d in _collect_node_decisions(node).items():
-        if d.get("default") is None:
-            missing.append(f"{prefix}{d_id}")
-    for analysis_id, sub_node in (node.get("analyses") or {}).items():
-        _check_missing_defaults(sub_node, missing, f"{prefix}{analysis_id}.")
 
 
 def _print_universe_decisions(uni: dict[str, Any], indent: str = "  ") -> None:
@@ -879,16 +807,14 @@ def _viz_ascii_node(parent_tree: Tree, node: dict[str, Any]) -> None:
         branch = parent_tree.add(f"[cyan]{decision_id}[/cyan]{tag_str}")
 
         options = decision.get("options", {})
-        default = decision.get("default")
         for option_id, option in options.items():
-            default_marker = " [default]" if option_id == default else ""
             constraints = []
             if option.get("incompatible_with"):
                 constraints.append(f"\u2717 {', '.join(option['incompatible_with'])}")
             if option.get("requires"):
                 constraints.append(f"\u2192 {', '.join(option['requires'])}")
 
-            option_text = f"{option_id}: {option.get('label', '')}{default_marker}"
+            option_text = f"{option_id}: {option.get('label', '')}"
             if constraints:
                 option_text += f" [dim]({'; '.join(constraints)})[/dim]"
             branch.add(option_text)
@@ -903,9 +829,6 @@ def _viz_mermaid(data: dict[str, Any]) -> None:
     lines = ["graph TD"]
 
     _viz_mermaid_node(lines, data, "root")
-
-    lines.append("")
-    lines.append("    classDef default fill:#90EE90")
 
     console.print("\n".join(lines))
 
@@ -925,11 +848,9 @@ def _viz_mermaid_node(lines: list[str], node: dict[str, Any], node_prefix: str) 
         lines.append(f"        {qualified}[{decision.get('label', decision_id)}]")
 
         options = decision.get("options", {})
-        default = decision.get("default")
         for option_id, option in options.items():
             node_id = f"{qualified}_{option_id}"
-            style = ":::default" if option_id == default else ""
-            lines.append(f"        {node_id}(({option.get('label', option_id)})){style}")
+            lines.append(f"        {node_id}(({option.get('label', option_id)}))")
             lines.append(f"        {qualified} --> {node_id}")
 
             if option.get("incompatible_with"):

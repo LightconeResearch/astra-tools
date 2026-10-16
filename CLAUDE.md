@@ -57,7 +57,7 @@ ASTRA/
    - `validate` with no FILE validates the whole project; `validate` and `info` accept `--json`
 
 3. **Helpers** (`src/astra/helpers.py`)
-   - Dict-based utilities: `load_yaml`, `get_decision`, `get_default_universe`
+   - Dict-based utilities: `load_yaml`, `get_decision`, `get_outputs`
 
 4. **Papers & Verification** (`src/astra/papers/`, `src/astra/verification/`)
    - Paper downloading and caching by DOI
@@ -100,11 +100,10 @@ semantic_errors = validate_analysis_file(file)
 
 ### 2. Dict-Based API
 ```python
-from astra.helpers import load_yaml, get_decision, get_default_universe
+from astra.helpers import load_yaml, get_decision
 
 data = load_yaml("astra.yaml")
 decision = get_decision(data, "preprocessing")
-defaults = get_default_universe(data)
 ```
 
 ### 3. Universe Format

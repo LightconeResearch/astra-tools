@@ -84,7 +84,6 @@ def minimal_analysis_data() -> dict[str, Any]:
         "decisions": {
             "method": {
                 "label": "Method",
-                "default": "a",
                 "options": {"a": {"label": "A"}, "b": {"label": "B"}},
             }
         },

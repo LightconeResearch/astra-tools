@@ -284,7 +284,6 @@ class TestFullValidationWorkflow:
                 "method": {
                     "label": "Method",
                     "type": "method",
-                    "default": "flexion",
                     "options": {
                         "flexion": {
                             "label": "Use flexion",

@@ -97,7 +97,6 @@ decisions:
     label: "Preprocessing Method"
     rationale: "Choice of preprocessing affects model performance"
     tags: [data_preparation]
-    default: standard
     options:
       none:
         label: "No Preprocessing"
@@ -120,7 +119,6 @@ decisions:
     label: "Model Type"
     rationale: "Core algorithmic choice"
     tags: [model_selection]
-    default: rf
     options:
       svm:
         label: "SVM"
@@ -137,7 +135,6 @@ decisions:
     label: "SVM Kernel"
     rationale: "Kernel choice for SVM"
     tags: [model_selection]
-    default: rbf
     options:
       linear:
         label: "Linear"
@@ -150,7 +147,6 @@ decisions:
     label: "Test Split"
     rationale: "Trade-off between training data and evaluation"
     tags: [evaluation]
-    default: split_20
     options:
       split_20:
         label: "20%"
@@ -160,7 +156,6 @@ decisions:
     label: "Random Seed"
     rationale: "For reproducibility"
     tags: [evaluation]
-    default: seed_42
     options:
       seed_42:
         label: "42"

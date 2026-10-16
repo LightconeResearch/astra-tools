@@ -87,7 +87,7 @@ def validate_analysis(data: dict[str, Any], base_path: Path | None = None) -> li
 
     Checks:
     - Input/output IDs are unique
-    - Decisions: defaults exist, evidence refs valid, constraint refs valid
+    - Decisions: evidence refs valid, constraint refs valid
     - Sub-analysis validation (recursive)
     - `from` reference validation on sub-analysis inputs
     - `from` reference validation on sub-analysis decisions
@@ -452,17 +452,6 @@ def _validate_decisions(
         decision_path = f"{decisions_prefix}.{decision_id}"
         options = decision.get("options", {})
 
-        # Check default option exists
-        default = decision.get("default")
-        if default is not None and default not in options:
-            errors.append(
-                SemanticError(
-                    "INVALID_DEFAULT",
-                    f"Default option '{default}' not found in options",
-                    decision_path,
-                )
-            )
-
         # Check `when` condition references a valid decision.option
         when = decision.get("when")
         if when:
@@ -552,18 +541,6 @@ def _validate_decisions(
                         "ORPHAN_EXCLUDED_REASON",
                         f"Option '{option_id}' has 'excluded_reason' but is not marked excluded",
                         option_path,
-                    )
-                )
-
-        # Check default is not an excluded option
-        if default is not None and default in options:
-            default_option = options[default]
-            if default_option.get("excluded", False):
-                errors.append(
-                    SemanticError(
-                        "EXCLUDED_DEFAULT",
-                        f"Default option '{default}' is marked as excluded",
-                        decision_path,
                     )
                 )
 

@@ -13,7 +13,6 @@ outputs:
 decisions:
   random_seed:
     label: "Random Seed"
-    default: seed_42
     options:
       seed_42:
         label: "42"
