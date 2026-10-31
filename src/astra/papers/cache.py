@@ -23,6 +23,26 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+_DOI_URL_PREFIX = re.compile(r"^https?://(?:dx\.)?doi\.org/", re.IGNORECASE)
+_DOI_LABEL_PREFIX = re.compile(r"^doi:\s*", re.IGNORECASE)
+
+
+def normalize_doi(doi: str) -> str:
+    """Return the case-insensitive key a DOI is looked up by.
+
+    Drops a ``doi:`` label and a ``doi.org`` URL prefix, then lowercases: the
+    same rule as ``@astra-spec/sdk``'s ``normalizeDoi``, so a DOI a browser
+    host sends finds the paper the command line stored.
+
+    Args:
+        doi: A DOI in any common spelling.
+
+    Returns:
+        The normalized DOI. Not validated.
+    """
+    doi = _DOI_LABEL_PREFIX.sub("", doi.strip())
+    return _DOI_URL_PREFIX.sub("", doi).strip().lower()
+
 
 def _sanitize_doi(doi: str, version: int | None = None) -> str:
     """Convert DOI to a safe directory name.
@@ -117,8 +137,17 @@ class PaperCache:
         self.cache_dir = cache_dir
 
     def _paper_dir(self, doi: str, version: int | None = None) -> Path:
-        """Get the cache directory for a paper."""
-        return self.cache_dir / _sanitize_doi(doi, version)
+        """Get the cache directory for a paper.
+
+        DOIs are case-insensitive while the cache keeps each directory as the
+        DOI was first written (``10.1088_0004-637X_…``), so a DOI spelled
+        differently, or normalized by another tool, finds the same entry.
+        """
+        exact = self.cache_dir / _sanitize_doi(doi, version)
+        if exact.is_dir() or not self.cache_dir.is_dir():
+            return exact
+        key = _sanitize_doi(normalize_doi(doi), version).lower()
+        return next((d for d in self.cache_dir.iterdir() if d.name.lower() == key), exact)
 
     def has(self, doi: str, version: int | None = None) -> bool:
         """Check if a paper is in the cache.
