@@ -61,6 +61,18 @@ class TestValidateCommand:
         assert result.exit_code == 1
         assert "requires an analysis file" in result.output
 
+    def test_validate_a_universe_against_a_structurally_broken_analysis(
+        self, runner: CliRunner, tmp_path: Path, monkeypatch, baseline_universe_path: Path
+    ):
+        """The universe is checked against the analysis, so the analysis's
+        structure has to hold first, and the report says which file failed."""
+        monkeypatch.chdir(tmp_path)
+        Path("astra.yaml").write_text('version: "0.0.14"\nname: d\ninputs: []\noutputs: 5\n')
+        result = runner.invoke(main, ["validate", str(baseline_universe_path), "-a", "astra.yaml"])
+        assert result.exit_code == 1
+        assert "has schema errors" in result.output
+        assert "outputs: Input should be a valid list" in result.output
+
     def test_validate_nonexistent_file(self, runner: CliRunner):
         result = runner.invoke(main, ["validate", "nonexistent.yaml"])
         assert result.exit_code != 0

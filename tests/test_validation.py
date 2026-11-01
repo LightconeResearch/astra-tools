@@ -67,6 +67,23 @@ class TestUnreadableFiles:
             validate_analysis_file(tmp_path / "astra.yaml")
 
 
+class TestSubAnalysisSchema:
+    """An external sub-analysis is a `path:` stub in its parent, so its own
+    file is schema-checked separately and its errors name that file."""
+
+    def test_a_structural_error_in_the_sub_analysis_file_names_it(self, tmp_path: Path):
+        (tmp_path / "child").mkdir()
+        (tmp_path / "child" / "astra.yaml").write_text("outputs: 5\n")
+        (tmp_path / "astra.yaml").write_text(
+            'version: "0.0.14"\nname: root\ninputs: []\noutputs: []\n'
+            "analyses:\n  child:\n    path: child\n"
+        )
+        errors = validate_analysis_schema(tmp_path / "astra.yaml")
+        assert errors == [
+            f"{tmp_path / 'child' / 'astra.yaml'}: outputs: Input should be a valid list"
+        ]
+
+
 class TestSchemaValidation:
     """Tests for JSON schema validation."""
 

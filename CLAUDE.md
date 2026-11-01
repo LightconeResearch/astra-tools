@@ -99,9 +99,18 @@ from astra.validation import validate_analysis_schema, validate_analysis_file
 # Stage 1: Schema validation (structure, types)
 schema_errors = validate_analysis_schema(file)
 
-# Stage 2: Semantic validation (references, constraints)
+# Stage 2: Semantic validation (references, constraints) — only if stage 1 passed
 semantic_errors = validate_analysis_file(file)
 ```
+
+The order is a contract, not a convenience: the semantic checks assume the
+structure holds, and a list where a mapping belongs is a crash in them, not
+a finding. So stage 1 covers everything stage 2 will read — an external
+`path:` sub-analysis's own file (`validate_analysis_data(data, base_path=…)`)
+and, for a universe, the analysis it is checked against.
+`tests/test_validate_reports.py` pins the result: a wrong-typed value in any
+field of an analysis, universe or sub-analysis ends `astra validate` in a
+report, never a traceback.
 
 ### 2. Dict-Based API
 ```python
