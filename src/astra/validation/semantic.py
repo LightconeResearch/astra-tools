@@ -450,7 +450,7 @@ def _validate_decisions(
     decisions_prefix = f"{path_prefix}.decisions" if path_prefix else "decisions"
     for decision_id, decision in decisions.items():
         decision_path = f"{decisions_prefix}.{decision_id}"
-        options = decision.get("options", {})
+        options = decision.get("options") or {}
 
         # Check default option exists
         default = decision.get("default")
@@ -492,7 +492,7 @@ def _validate_decisions(
                     ref_decision = decisions.get(when_decision_id) or (constraint_scope or {}).get(
                         when_decision_id
                     )
-                    if ref_decision and when_option_id not in ref_decision.get("options", {}):
+                    if ref_decision and when_option_id not in (ref_decision.get("options") or {}):
                         errors.append(
                             SemanticError(
                                 "INVALID_WHEN_REF",
@@ -615,7 +615,7 @@ def _validate_output_when(
                 )
             else:
                 ref_decision = decisions[decision_id]
-                if option_id not in ref_decision.get("options", {}):
+                if option_id not in (ref_decision.get("options") or {}):
                     errors.append(
                         SemanticError(
                             "INVALID_WHEN_REF",
@@ -1040,7 +1040,7 @@ def _validate_constraint_ref(
             ),
         ]
 
-    if option_id not in decisions[decision_id].get("options", {}):
+    if option_id not in (decisions[decision_id].get("options") or {}):
         return [
             SemanticError(
                 "INVALID_CONSTRAINT_REF",
@@ -1131,7 +1131,7 @@ def _validate_universe_node(
             )
             continue
 
-        options = analysis_decisions[decision_id].get("options", {})
+        options = analysis_decisions[decision_id].get("options") or {}
         if option_id not in options:
             errors.append(
                 SemanticError(
@@ -1271,7 +1271,7 @@ def _validate_node_universe_constraints(
         if not decision:
             continue
 
-        option = decision.get("options", {}).get(option_id)
+        option = (decision.get("options") or {}).get(option_id)
         if not option:
             continue
 

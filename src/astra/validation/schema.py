@@ -19,7 +19,12 @@ import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from astra.helpers import iter_analysis_nodes, load_yaml
+from astra.helpers import (
+    external_spec_path,
+    iter_analysis_nodes,
+    iter_sub_analyses,
+    load_yaml,
+)
 
 if TYPE_CHECKING:
     from pydantic import ValidationError as PydanticValidationError
@@ -62,16 +67,21 @@ def _format_pydantic_errors(exc: PydanticValidationError) -> list[str]:
 
 
 def validate_analysis_schema(path: str | Path) -> list[str]:
-    """Validate an analysis YAML file against the schema.
+    """Validate an analysis YAML file, and the sub-analysis files it references, against the schema.
 
     Returns a list of error messages (empty if valid).
     """
-    data = load_yaml(path)
-    return validate_analysis_data(data)
+    path = Path(path)
+    return validate_analysis_data(load_yaml(path), base_path=path.parent)
 
 
-def validate_analysis_data(data: dict[str, Any]) -> list[str]:
+def validate_analysis_data(data: dict[str, Any], base_path: Path | None = None) -> list[str]:
     """Validate analysis data dict against the schema.
+
+    An external sub-analysis is only a ``path:`` stub here, so with
+    ``base_path`` the file each stub names is validated too — once this
+    document's own structure holds, since only then can the stubs be found.
+    Its errors are prefixed with that file.
 
     Returns a list of error messages (empty if valid).
     """
@@ -83,9 +93,17 @@ def validate_analysis_data(data: dict[str, Any]) -> list[str]:
     _inject_ids_inplace(preprocessed)
     try:
         Analysis.model_validate(preprocessed)
-        return []
     except PydanticValidationError as exc:
         return _format_pydantic_errors(exc)
+    if base_path is None:
+        return []
+    errors: list[str] = []
+    for sub in iter_sub_analyses(data):
+        child = external_spec_path(base_path, str(sub["path"])) if sub.get("path") else None
+        if child is not None and child.is_file():
+            child_errors = validate_analysis_data(load_yaml(child), base_path=child.parent)
+            errors += [f"{child}: {e}" for e in child_errors]
+    return errors
 
 
 # Fields the schema marks `recommended: true` rather than `required`. Omitting

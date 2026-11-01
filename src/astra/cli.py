@@ -18,6 +18,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from astra.helpers import (
+    SpecLoadError,
     _collect_node_decisions,
     create_universe_from_defaults,
     external_spec_path,
@@ -35,6 +36,7 @@ from astra.validation.schema import (
     check_spec_version,
     collect_recommendations,
     validate_analysis_data,
+    validate_analysis_schema,
     validate_universe_data,
 )
 from astra.validation.semantic import validate_analysis, validate_universe_file
@@ -285,7 +287,11 @@ def validate(
                 raise click.UsageError("--analysis requires a FILE argument.")
             _validate_project(verify_evidence, skip_evidence)
         else:
-            _validate_one(file, analysis, verify_evidence, skip_evidence)
+            try:
+                _validate_one(file, analysis, verify_evidence, skip_evidence)
+            except SpecLoadError as exc:
+                console.print(f"[red]Error:[/red] {escape(str(exc))}")
+                raise SystemExit(1) from None
 
 
 # Any ANSI escape sequence (CSI form). --json output is for embedding in other
@@ -426,11 +432,22 @@ def _validate_one(
         if version_warning:
             console.print(f"[yellow]⚠[/yellow]  [yellow]{version_warning}[/yellow]")
 
-    # Schema validation
+    # Schema validation. A universe is checked against its analysis, so the
+    # analysis's structure has to hold too before the semantic pass can rely on it.
     if is_universe:
+        assert analysis is not None
+        analysis_errors = validate_analysis_schema(analysis)
+        if analysis_errors:
+            console.print(
+                f"\n[red]{escape(str(analysis))} has schema errors, "
+                "so this universe cannot be checked against it:[/red]"
+            )
+            for analysis_err in analysis_errors:
+                console.print(f"  • {escape(analysis_err)}")
+            raise SystemExit(1)
         schema_errors = validate_universe_data(data)
     else:
-        schema_errors = validate_analysis_data(data)
+        schema_errors = validate_analysis_data(data, base_path=file.parent)
 
     if schema_errors:
         console.print("\n[red]Schema validation errors:[/red]")

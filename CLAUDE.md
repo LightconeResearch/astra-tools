@@ -58,6 +58,11 @@ ASTRA/
 
 3. **Helpers** (`src/astra/helpers.py`)
    - Dict-based utilities: `load_yaml`, `get_decision`, `get_default_universe`
+   - `load_yaml` raises `SpecLoadError` (a `ValueError`) for a file that is
+     not UTF-8, not YAML, or not a mapping, naming the file (and the line and
+     column for a YAML error). Every `*_file`/`*_schema` validator loads through
+     it, so this is the one exception a consumer catches to report a broken
+     file cleanly; a missing file stays an `OSError`.
 
 4. **Papers & Verification** (`src/astra/papers/`, `src/astra/verification/`)
    - Paper downloading and caching by DOI
@@ -94,9 +99,18 @@ from astra.validation import validate_analysis_schema, validate_analysis_file
 # Stage 1: Schema validation (structure, types)
 schema_errors = validate_analysis_schema(file)
 
-# Stage 2: Semantic validation (references, constraints)
+# Stage 2: Semantic validation (references, constraints) — only if stage 1 passed
 semantic_errors = validate_analysis_file(file)
 ```
+
+The order is a contract, not a convenience: the semantic checks assume the
+structure holds, and a list where a mapping belongs is a crash in them, not
+a finding. So stage 1 covers everything stage 2 will read — an external
+`path:` sub-analysis's own file (`validate_analysis_data(data, base_path=…)`)
+and, for a universe, the analysis it is checked against.
+`tests/test_validate_reports.py` pins the result: a wrong-typed value in any
+field of an analysis, universe or sub-analysis ends `astra validate` in a
+report, never a traceback.
 
 ### 2. Dict-Based API
 ```python

@@ -61,9 +61,45 @@ class TestValidateCommand:
         assert result.exit_code == 1
         assert "requires an analysis file" in result.output
 
+    def test_validate_a_universe_against_a_structurally_broken_analysis(
+        self, runner: CliRunner, tmp_path: Path, monkeypatch, baseline_universe_path: Path
+    ):
+        """The universe is checked against the analysis, so the analysis's
+        structure has to hold first, and the report says which file failed."""
+        monkeypatch.chdir(tmp_path)
+        Path("astra.yaml").write_text('version: "0.0.14"\nname: d\ninputs: []\noutputs: 5\n')
+        result = runner.invoke(main, ["validate", str(baseline_universe_path), "-a", "astra.yaml"])
+        assert result.exit_code == 1
+        assert "has schema errors" in result.output
+        assert "outputs: Input should be a valid list" in result.output
+
     def test_validate_nonexistent_file(self, runner: CliRunner):
         result = runner.invoke(main, ["validate", "nonexistent.yaml"])
         assert result.exit_code != 0
+
+    @pytest.mark.parametrize("content", ["name: a: b\n", "", "- a\n"])
+    def test_validate_a_file_that_is_not_a_spec(
+        self, runner: CliRunner, tmp_path: Path, monkeypatch, content: str
+    ):
+        monkeypatch.chdir(tmp_path)  # a short path: Rich wraps long ones
+        Path("astra.yaml").write_text(content)
+        result = runner.invoke(main, ["validate", "astra.yaml"])
+        assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit)  # a report, not a traceback
+        assert "Error:" in result.output
+        assert "astra.yaml" in result.output
+
+    def test_validate_a_universe_that_is_not_a_spec(
+        self, runner: CliRunner, tmp_path: Path, monkeypatch, minimal_analysis_path: Path
+    ):
+        monkeypatch.chdir(tmp_path)
+        Path("baseline.yaml").write_text("decisions: [\n")
+        result = runner.invoke(
+            main, ["validate", "baseline.yaml", "-a", str(minimal_analysis_path)]
+        )
+        assert result.exit_code == 1
+        assert isinstance(result.exception, SystemExit)
+        assert "baseline.yaml" in result.output
 
     def test_an_external_sub_analysis_is_checked_for_recommended_fields(
         self, runner: CliRunner, tmp_path: Path, minimal_analysis_path: Path
@@ -256,6 +292,14 @@ class TestJsonOutput:
         assert result.exit_code == 1
         report = json.loads(result.output)
         assert "validation errors" in report
+
+    def test_validate_json_a_file_that_is_not_a_spec(self, runner: CliRunner, tmp_path: Path):
+        path = tmp_path / "astra.yaml"
+        path.write_text("name: a: b\n")
+        result = runner.invoke(main, ["validate", str(path), "--json"])
+        assert result.exit_code == 1
+        report = json.loads(result.output)
+        assert "mapping values are not allowed here" in report
 
     def test_info_json(self, runner: CliRunner, full_analysis_path: Path):
         result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--json"])
