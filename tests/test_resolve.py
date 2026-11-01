@@ -448,13 +448,18 @@ class TestSelectedUniverse:
         data, _ = self._project(tmp_path)
         assert resolve_universe(data, {"analyses": {"stage": {"universe": "deep"}}}) == {}
 
-    def test_an_empty_universe_file_leaves_the_node_as_it_stands(self, tmp_path: Path):
-        """A file that parses to `None` is the validator's to report; this
-        module promises not to raise on anything unresolvable."""
+    @pytest.mark.parametrize("content", ["# nothing here\n", "method: a: b\n"])
+    def test_an_unreadable_universe_file_leaves_the_node_as_it_stands(
+        self, tmp_path: Path, caplog, content: str
+    ):
+        """This module promises not to raise on anything unresolvable, and
+        `semantic.py` validates nothing about `universe:`, so it says why."""
         data, base = self._project(tmp_path)
-        (base / "stage" / "universes" / "blank.yaml").write_text("# nothing here\n")
+        (base / "stage" / "universes" / "blank.yaml").write_text(content)
         chosen = {"analyses": {"stage": {"universe": "blank"}}}
-        assert resolve_universe(data, chosen, base) == {}
+        with caplog.at_level(logging.WARNING, logger="astra.resolve"):
+            assert resolve_universe(data, chosen, base) == {}
+        assert "blank.yaml" in caplog.text
 
     def test_an_inline_sub_analysis_cannot_name_one_and_says_so(self, caplog):
         """Only an external sub-analysis has a `universes/` directory.

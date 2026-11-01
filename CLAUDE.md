@@ -58,6 +58,11 @@ ASTRA/
 
 3. **Helpers** (`src/astra/helpers.py`)
    - Dict-based utilities: `load_yaml`, `get_decision`, `get_default_universe`
+   - `load_yaml` raises `SpecLoadError` (a `ValueError`) for a file that is
+     not UTF-8, not YAML, or not a mapping, naming the file (and the line and
+     column for a YAML error). Every `*_file`/`*_schema` validator loads through
+     it, so this is the one exception a consumer catches to report a broken
+     file cleanly; a missing file stays an `OSError`.
 
 4. **Papers & Verification** (`src/astra/papers/`, `src/astra/verification/`)
    - Paper downloading and caching by DOI

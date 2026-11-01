@@ -42,6 +42,7 @@ from typing import Any
 
 from astra.helpers import (
     Scope,
+    SpecLoadError,
     ancestor_at,
     external_spec_path,
     get_input,
@@ -155,10 +156,11 @@ def _selected_universe(
     if not path.is_file():
         logger.warning("universe '%s' selected for '%s' but %s does not exist", name, where, path)
         return universe_node
-    loaded = load_yaml(path)
-    # An empty or comment-only file parses to `None`; that is the
-    # validator's to report, and this module promises not to raise on it.
-    return loaded if isinstance(loaded, Mapping) else universe_node
+    try:
+        return load_yaml(path)
+    except SpecLoadError as exc:
+        logger.warning("universe '%s' selected for '%s' cannot be read: %s", name, where, exc)
+        return universe_node
 
 
 def _settle(

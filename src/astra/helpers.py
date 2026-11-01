@@ -262,6 +262,15 @@ def resolve_analysis_tree(data: dict[str, Any], base_path: Path) -> dict[str, An
     return result
 
 
+class SpecLoadError(ValueError):
+    """A file whose content cannot be read as an ASTRA document.
+
+    Raised for what is wrong *in* the file — not UTF-8, not YAML, or not a
+    mapping — so a caller can report it the way it reports a validation
+    error. A file that is missing or unreadable stays an ``OSError``.
+    """
+
+
 def load_yaml(path: str | Path) -> dict[str, Any]:
     """Load a YAML file and return its contents as a dict.
 
@@ -270,11 +279,25 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
 
     Returns:
         The parsed YAML content as a dictionary.
+
+    Raises:
+        SpecLoadError: If the file is not UTF-8, not YAML, or does not hold
+            a mapping. The message names the file, and for a YAML error the
+            line and column.
     """
     import yaml
 
-    with open(path) as f:
-        data: dict[str, Any] = yaml.safe_load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except UnicodeDecodeError as exc:
+        raise SpecLoadError(f"{path}: not UTF-8 text ({exc.reason})") from exc
+    except yaml.YAMLError as exc:
+        # PyYAML's message already names the file, the line and the column.
+        raise SpecLoadError(str(exc)) from exc
+    if not isinstance(data, dict):
+        found = "nothing" if data is None else f"a {type(data).__name__}"
+        raise SpecLoadError(f"{path}: expected a mapping at the top level, found {found}")
     return data
 
 

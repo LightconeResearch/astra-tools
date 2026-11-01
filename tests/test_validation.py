@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from astra.helpers import load_yaml
+from astra.helpers import SpecLoadError, load_yaml
 from astra.validation.schema import (
     collect_recommendations,
     is_valid_analysis,
@@ -19,6 +19,52 @@ from astra.validation.semantic import (
     validate_universe,
     validate_universe_file,
 )
+
+
+class TestUnreadableFiles:
+    """A file that is not a spec at all is a `SpecLoadError` naming it, never
+    whatever the parser or the first `.get` on a non-dict happened to raise."""
+
+    @pytest.mark.parametrize(
+        ("content", "message"),
+        [
+            (b"name: a: b\n", "line 1, column 8"),
+            (b"outputs: [\n", "line 2, column 1"),
+            (b"name: \x00\n", "unacceptable character"),
+            ("name: caf\u00e9\n".encode("latin-1"), "not UTF-8 text"),
+            (b"", "found nothing"),
+            (b"# only a comment\n", "found nothing"),
+            (b"- a\n- b\n", "found a list"),
+            (b"just words\n", "found a str"),
+        ],
+    )
+    def test_load_yaml_names_the_file_and_the_fault(
+        self, tmp_path: Path, content: bytes, message: str
+    ):
+        path = tmp_path / "astra.yaml"
+        path.write_bytes(content)
+        with pytest.raises(SpecLoadError, match=message) as raised:
+            load_yaml(path)
+        assert str(path) in str(raised.value)
+
+    def test_a_missing_file_stays_an_os_error(self, tmp_path: Path):
+        with pytest.raises(FileNotFoundError):
+            load_yaml(tmp_path / "absent.yaml")
+
+    def test_a_universe_validator_names_the_universe(
+        self, tmp_path: Path, minimal_analysis_path: Path
+    ):
+        universe = tmp_path / "baseline.yaml"
+        universe.write_text("")
+        with pytest.raises(SpecLoadError, match="baseline.yaml"):
+            validate_universe_file(universe, minimal_analysis_path)
+
+    def test_an_external_sub_analysis_names_its_own_file(self, tmp_path: Path):
+        (tmp_path / "child").mkdir()
+        (tmp_path / "child" / "astra.yaml").write_text("name: a: b\n")
+        (tmp_path / "astra.yaml").write_text("name: root\nanalyses:\n  child:\n    path: child\n")
+        with pytest.raises(SpecLoadError, match="child"):
+            validate_analysis_file(tmp_path / "astra.yaml")
 
 
 class TestSchemaValidation:

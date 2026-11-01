@@ -18,6 +18,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from astra.helpers import (
+    SpecLoadError,
     _collect_node_decisions,
     create_universe_from_defaults,
     external_spec_path,
@@ -285,7 +286,11 @@ def validate(
                 raise click.UsageError("--analysis requires a FILE argument.")
             _validate_project(verify_evidence, skip_evidence)
         else:
-            _validate_one(file, analysis, verify_evidence, skip_evidence)
+            try:
+                _validate_one(file, analysis, verify_evidence, skip_evidence)
+            except SpecLoadError as exc:
+                console.print(f"[red]Error:[/red] {escape(str(exc))}")
+                raise SystemExit(1) from None
 
 
 # Any ANSI escape sequence (CSI form). --json output is for embedding in other
