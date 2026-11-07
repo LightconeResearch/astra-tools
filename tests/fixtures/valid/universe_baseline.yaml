@@ -1,8 +1,0 @@
-id: baseline
-description: "Baseline configuration"
-
-decisions:
-  preprocessing: standard
-  model: rf
-  test_split: split_20
-  seed: seed_42

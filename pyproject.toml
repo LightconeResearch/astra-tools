@@ -1,7 +1,7 @@
 [project]
 name = "astra-tools"
 dynamic = ["version"]
-description = "Python CLI and SDK for working with ASTRA (Agentic Schema for Transparent Research Analysis) specifications: validation, paper management, and evidence verification."
+description = "Validator, checker and a runner's building blocks for ASTRA v0.1 analyses."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
@@ -40,25 +40,15 @@ classifiers = [
 ]
 
 dependencies = [
-    "astra-spec>=0.0.14",
-    "linkml-runtime>=1.8",
-    "click>=8.0",
-    "pydantic>=2.0",
-    "pyyaml>=6.0",
-    "rich>=13.0",
-    "pypdf>=4.0",
-    "httpx>=0.27",
-    "rapidfuzz>=3.0",
+    "astra-spec >= 0.0.14.post1.dev0, < 0.2",  # becomes "== 0.1.0rc1", then "~= 0.1.0"
+    "click >= 8.2.1",
+    "jsonschema >= 4.23",
+    "rich >= 13.8",
+    "ruamel.yaml >= 0.19.1",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "pytest-cov",
-    "ruff",
-    "mypy",
-    "types-PyYAML",
-]
+reference = ["linkml-runtime >= 1.12"]
 
 [project.scripts]
 astra = "astra.cli:main"
@@ -71,6 +61,16 @@ Homepage = "https://astra-spec.org/"
 Repository = "https://github.com/LightconeResearch/astra-tools"
 Issues = "https://github.com/LightconeResearch/astra-tools/issues"
 Specification = "https://github.com/LightconeResearch/astra-spec"
+
+[dependency-groups]
+dev = [
+    "pytest >= 8.3",
+    "pytest-cov >= 6",
+    "ruff >= 0.9",
+    "mypy >= 1.15",
+    "types-jsonschema >= 4.23",
+    "astra-tools[reference]",  # the import-cost tests' "no linkml" checks need it there
+]
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
@@ -89,6 +89,9 @@ include = [
     "/LICENSE",
 ]
 
+[tool.uv.sources]
+astra-spec = { path = "../astra-spec-pinned", editable = true }
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -99,26 +102,12 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-namespace_packages = true
-explicit_package_bases = true
 mypy_path = "src"
+explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = [
-    "astra.datamodel",
-    "astra.datamodel.*",
-]
-follow_untyped_imports = true
-
-[[tool.mypy.overrides]]
-module = [
-    "linkml_runtime.*",
-]
+module = ["linkml_runtime", "linkml_runtime.*"]  # ships no py.typed
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-    "network: marks tests as requiring network access",
-    "slow: marks tests as slow running",
-]

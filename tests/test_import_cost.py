@@ -1,72 +1,118 @@
-"""What each public module is allowed to drag in when it is imported.
+"""What importing each module, and running the light commands, may pull in (design §4.12).
 
-Import cost is part of the API. A downstream tool that imports
-``astra.scaffold`` to write two template files, or ``astra.resolve`` to
-walk a dict it already has, should not pay for the datamodel — reaching
-``astra.datamodel`` loads ``linkml_runtime``, ~250 ms, an order of
-magnitude more than the rest of ASTRA put together. Whoever calls the
-function that needs a heavy dependency pays for it; whoever merely
-imports a module that could does not.
-
-The rule is one regrettable import away from being lost, and nothing
-about the import itself looks wrong when it happens — which is what this
-file is for. Subprocesses, because imports are process-global and pytest
-has already loaded everything.
+`astra --help`, completion and `validate --json` import neither rich nor the extras' packages,
+and rich is imported only under `astra/cli/text/`. Each run is a fresh interpreter, since this
+one has imported everything already.
 """
 
 from __future__ import annotations
 
+import ast
+import json
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
-#: Every dependency whose import cost is worth a decision, cheapest last.
-WATCHED = (
-    "linkml_runtime",
-    "astra.datamodel",
-    "pydantic",
-    "httpx",
-    "pypdf",
-    "importlib.metadata",
-    "yaml",
-    "rich",
-    "click",
-    "rapidfuzz",
-)
+from tests.conftest import analysis, git_init
 
-#: module → what importing it is allowed to pull in from `WATCHED`.
-#: A module may import what it *is*; it defers what a subset of its
-#: functions merely might need.
-ALLOWED: dict[str, tuple[str, ...]] = {
-    "astra.spec_version": (),
-    "astra.scaffold": (),
-    "astra.helpers": (),
-    "astra.resolve": (),
-    "astra.validation": (),
-    "astra.validation.schema": (),
-    "astra.validation.semantic": (),
-    "astra.papers": (),
-    "astra.spec_render": (),
-    # Fuzzy matching is what `verification.pdf` does, so it pays for it up
-    # front; `pypdf` and `httpx` are optional extras it may never touch.
-    "astra.verification": ("rapidfuzz",),
-    # The CLI cannot parse a command line or print without these.
-    "astra.cli": ("rich", "click"),
+WATCHED = ("rich", "linkml_runtime", "jsonschema", "ruamel.yaml")
+"""The dependencies whose import costs enough to watch."""
+
+EXTRAS_AND_RICH = {"rich", "linkml_runtime"}
+
+ALLOWED = {
+    "astra.api": ("ruamel.yaml",),
+    "astra.cli": (),
+    "astra.cli.completion": (),
+    "astra.cli.guide": (),
+    "astra.cli.rules": (),
+    "astra.cli.schema": (),
+    "astra.cli.spec": (),
+    "astra.cli.text": ("rich",),
+    "astra.cli.text.rules": ("rich",),
+    "astra.cli.text.spec": ("rich",),
+    "astra.cli.text.validate": ("rich", "ruamel.yaml"),
+    "astra.cli.validate": (),
+    "astra.contract": (),
+    "astra.diagnostics": (),
+    "astra.load": ("ruamel.yaml",),
+    "astra.reference": (),
+    "astra.sources": (),
+    "astra.sources.git": (),
+    "astra.sources.reader": (),
+    "astra.validate": ("ruamel.yaml",),
 }
+"""Each module, with what importing it may pull in of `WATCHED`. A new module is added here."""
+
+SRC = Path(__file__).parents[1] / "src" / "astra"
+
+
+def test_every_module_is_listed() -> None:
+    modules = set()
+    for path in SRC.rglob("*.py"):
+        parts = path.relative_to(SRC.parent).with_suffix("").parts
+        modules.add(".".join(parts[:-1] if parts[-1] == "__init__" else parts))
+    assert modules == set(ALLOWED)
+
+
+def imported(code: str, env: dict[str, str] | None = None) -> set[str]:
+    """Which of `WATCHED` running `code` in a fresh interpreter imports."""
+    probe = (
+        f"{code}\nimport json, sys\nprint(json.dumps([n for n in {WATCHED!r} if n in sys.modules]))"
+    )
+    process = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, env=env, check=True
+    )
+    return set(json.loads(process.stdout.splitlines()[-1]))
 
 
 @pytest.mark.parametrize("module", sorted(ALLOWED))
-def test_import_pulls_in_nothing_it_does_not_need(module: str) -> None:
-    code = (
-        "import sys, importlib\n"
-        f"importlib.import_module({module!r})\n"
-        f"print(' '.join(n for n in {WATCHED!r} if n in sys.modules))\n"
+def test_importing_a_module_pulls_in_only_what_it_is(module: str) -> None:
+    assert imported(f"import {module}") <= set(ALLOWED[module])
+
+
+def run(*args: str) -> str:
+    """Code that runs `astra <args>`, its output thrown away."""
+    return (
+        "import contextlib, io\n"
+        "from astra.cli import main\n"
+        "with contextlib.redirect_stdout(io.TextIOWrapper(io.BytesIO())):\n"
+        "    try:\n"
+        f"        main({list(args)!r}, prog_name='astra')\n"
+        "    except SystemExit:\n"
+        "        pass\n"
     )
-    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
-    pulled = set(proc.stdout.split())
-    assert pulled <= set(ALLOWED[module]), (
-        f"importing {module} pulled in {sorted(pulled - set(ALLOWED[module]))}; "
-        "import it inside the function that needs it, or add it to ALLOWED "
-        "with a note saying why the module is what it costs"
-    )
+
+
+def test_help_imports_neither_rich_nor_an_extra() -> None:
+    assert imported(run("--help")) & EXTRAS_AND_RICH == set()
+
+
+def test_completion_imports_neither_rich_nor_an_extra() -> None:
+    assert imported(run("completion", "bash")) & EXTRAS_AND_RICH == set()
+    env = {**os.environ, "_ASTRA_COMPLETE": "bash_complete", "COMP_WORDS": "astra va"}
+    assert imported(run(), {**env, "COMP_CWORD": "1"}) & EXTRAS_AND_RICH == set()
+
+
+def test_validate_json_imports_neither_rich_nor_an_extra(tmp_path: Path) -> None:
+    folder = analysis(git_init(tmp_path))
+    assert imported(run("validate", str(folder), "--json")) & EXTRAS_AND_RICH == set()
+
+
+def test_rich_is_imported_only_under_cli_text() -> None:
+    importing = []
+    for path in SRC.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_bytes())):
+            names = (
+                [alias.name for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [node.module or ""]
+                if isinstance(node, ast.ImportFrom)
+                else []
+            )
+            if any(name == "rich" or name.startswith("rich.") for name in names):
+                importing.append(path.relative_to(SRC).as_posix())
+    assert importing and all(path.startswith("cli/text/") for path in importing)

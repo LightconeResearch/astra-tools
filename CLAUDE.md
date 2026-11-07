@@ -4,147 +4,158 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ASTRA (Agentic Schema for Transparent Research Analysis) is the **Python CLI and SDK** for working with ASTRA analysis specifications. It provides validation, paper management, evidence verification, and exploration utilities.
+astra-tools is the validator, the checker and a runner's building blocks for ASTRA v0.1
+analyses. It is being rebuilt for ASTRA 0.1 on the `v0.1` branch: it reads only `0.1.x` files.
+Older files need astra-tools 0.2.18.
 
-**Architecture**:
-- **astra-spec** ([separate repo](https://github.com/LightconeResearch/astra-spec)) = the specification: LinkML schemas, generated data models
-- **ASTRA** (this repo) = tooling layer: validation, CLI, helpers, paper management, evidence verification
+- **astra-spec** ([separate repo](https://github.com/LightconeResearch/astra-spec)) owns the
+  specification. astra-tools installs it from `../astra-spec-pinned`, a worktree of
+  `../astra-spec` pinned to one commit (see Development). At runtime astra-tools reads its
+  data from the namespace package `astra.schema`: the JSON Schemas (`generated/*.schema.json`)
+  and the rule catalogue (`generated/rules.json`: every code's layer, level and statement).
+  Nothing is copied, so a change there costs astra-tools nothing. astra-spec ships no Python
+  models.
+- **astra-tools** (this repo) owns the tooling. It doesn't depend on, or prescribe, any
+  agentic layer or UI; lightcone-cli and others consume its API and its `--json` output.
 
-ASTRA is intentionally agnostic to any specific agentic layer or UI; downstream tools may consume ASTRA specifications, but this project does not depend on or prescribe one.
+Both packages share the `astra` namespace (PEP 420). There is **no** `src/astra/__init__.py`.
 
-Both `astra-spec` and this package share the `astra` Python namespace via implicit namespace packages (PEP 420). There is **no** `src/astra/__init__.py`.
+## Design and plan
 
-## Repository Structure
+- `design/2026-11-04-v0.1-tooling-design.md`: the design (cited as *design §n*). Its
+  specification is astra-spec `v0.1-schema` and its fix plan
+  (`git -C ../astra-spec show da76cda:design/2026-11-04-v0.1-review-fixes.md`, *fix Xnn*).
+- `design/2026-11-04-v0.1-phase-0-now-plan.md`: the implementation plan for phase 0's "now"
+  items, with the decisions R1-R15 that refine the design.
+- `design/2026-11-05-v0.1-phase-0-second-half-plan.md`: the plan for phase 0's second half
+  (`load.py`, `contract.py`, `astra validate`, `schema`, `guide`, `spec`), with the decisions
+  R16-R35 beside the "now" plan's.
+- `design/2026-11-06-v0.1-phase-0-follow-up-plan.md`: phase 0's follow-up, at astra-spec
+  `ebb143f` and then `b8f5597` (the parse layer, depth, and the review's bugs A1-A11), with the
+  decisions R36-R50.
+- Design commits land on `v0.1-design` and are merged into `v0.1`. The follow-up plan, and its
+  edits to the two earlier plans, were committed on `v0.1` instead (R49).
+
+## Layout and layers
+
+Each layer may import only from the layers listed before it (design §3, with layer 1 in R12's
+order). Phase 0 builds `diagnostics.py`, `sources/{paths,git,reader}.py`, `cache.py`,
+`hashing.py`, `load.py`, `contract.py`, `validate.py`, `api.py`, `reference.py` and the `cli/`
+commands; the rest comes in later phases (design §16).
 
 ```
-ASTRA/
-├── src/astra/                     # NO __init__.py (namespace package)
-│   ├── cli.py                     # Click-based CLI
-│   ├── helpers.py                 # Dict-based utilities
-│   ├── validation/
-│   │   ├── schema.py              # Pydantic model validation (models from astra-spec)
-│   │   └── semantic.py            # Semantic cross-reference validation
-│   ├── papers/                    # Paper downloading and caching
-│   └── verification/              # PDF processing and insight verification
-│
-├── examples/                      # Example projects
-│   ├── iris/                      # Simple flat analysis
-│   └── iris_pipeline/             # Nested analysis with sub-analyses
-│
-└── tests/
-    └── fixtures/                  # Test fixtures
+src/astra/                no __init__.py: astra-spec owns astra.schema
+  py.typed
+  # 0. foundations: pure, no IO
+  grammar.py              id, address, reference, option reference, condition: parse and format
+  model.py                frozen dataclasses for the documents
+  diagnostics.py          Location, Diagnostic, Rule, Catalogue (from rules.json), unchecked()
+  # 1. reading: every byte comes through a Reader
+  sources/paths.py        pure path checks; `..` removed as text
+  sources/git.py          Repository, through the git binary
+  sources/reader.py       the Reader protocol; WorktreeReader, CommitReader, MemoryReader
+  cache.py                the cache directory and its get/put interface
+  sources/remote.py       per-URL stores, fetching, materialize()
+  sources/standins.py     the stand-in extension point and its built-ins
+  load.py                 astra.yaml as strict YAML 1.2 with positions; records as strict JSON
+  contract.py             JSON Schema validation and the error -> code mapping, and `check_file`,
+                          which binding shares
+  # 2. binding
+  stack.py                bind(reader) -> Bound(stack | None, diagnostics)
+  # 3. semantics: pure functions of a Stack
+  universes.py            the universe being built, effective selections, activity, driving
+  rules/                  validator checks, one module per topic
+  validate.py             validate(): load, contract, bind, rules -> ValidationReport
+  plan.py                 planned results and their dependency graph; render_command
+  view.py                 the universe view
+  # 4. results
+  hashing.py              sha256 and size, through the cache
+  records.py              record layout, reading, atomic writing, landing, runner helpers
+  environments.py         the environment extension point
+  check.py                statuses of records, bytes and evidence; the fingerprint
+  history.py              record history and its queries (phase 4)
+  # 5. surfaces
+  api.py                  the stable public functions
+  cli/                    one module per command, loaded lazily; rich only under cli/text/
+  evidence/               papers by DOI, PDF text, quote checking (extra [evidence])
+  reference.py            `astra spec`, through LinkML (extra [reference])
+  scaffold.py             `astra init`
 ```
 
-## Key Design Principles
+`examples/` still holds pre-0.1 analyses; phase 1 moves them to v0.1. CI (`.github/`) runs
+only for `main` and is left alone on this branch.
 
-1. **astra-spec owns the specification** - LinkML schemas and Pydantic models
-2. **This repo owns the tooling** - validation, CLI, paper management
-3. **Namespace sharing** - Both packages provide modules under `astra.*`
-4. **Two-stage validation** - Pydantic (structural) then semantic (cross-references)
+## Global constraints
 
-## Core Components
+- Python `>= 3.11`. On 3.11, `Traversable.joinpath` takes one argument: write
+  `files("astra.schema") / "generated" / "rules.json"`.
+- Core dependencies are exactly `astra-spec`, `click`, `jsonschema`, `rich` and `ruamel.yaml`.
+  - pydantic, PyYAML and httpx are not dependencies of the core, and nothing in astra-tools
+    imports them.
+  - The `[reference]` extra's linkml-runtime does bring pydantic and PyYAML into `uv.lock`
+    and into `astra-tools[reference]`.
+- git only through the `git` binary, by `subprocess`. Never libgit2, dulwich or GitPython.
+- No module-level mutable state.
+  - No module-level caches or consoles, no `functools.cache` or `lru_cache` on loaders, and
+    nothing mutated after import.
+  - Module constants are immutable (`tuple`, `frozenset`, `MappingProxyType`).
+  - Click command objects are the one kind of module-level instance allowed: `astra.cli.main`,
+    and the `command` each `CommandSpec` targets. They are built at import and never changed
+    afterwards.
+  - `astra.cli.main` swaps `sys.stdout` for a guard while it runs, and restores it (R30);
+    `main` isn't re-entrant across threads.
+- Every write is atomic: a temporary file in the same directory, then `os.replace`.
+- The cache lives outside every repository: a relative `ASTRA_CACHE_DIR` is refused, and so is
+  a cache inside the work tree being read. The defaults never give a relative path.
+- `rich` is imported only under `src/astra/cli/text/`.
+- Never create `src/astra/__init__.py` or `src/astra/schema/`: either would hide astra-spec's
+  `astra.schema`.
+- `uv run mypy --strict src/`, `uv run ruff check src/ tests/` and
+  `uv run ruff format --check src/ tests/` pass. Ruff: line length 100, `py311`, rules
+  `E F I N W UP`.
+- Never modify `../astra-spec` or `../astra-spec-pinned` (move the pin only by checking out another commit there).
+- Import cost is part of the API: `tests/test_import_cost.py` lists what importing each module
+  may pull in. A new module is added there.
+- Levels come from the catalogue: `MUST` is an error, `SHOULD` a warning. Codes outside it are
+  advisory, prefixed `EVIDENCE_` or `PLAN_`, and always warnings.
 
-1. **Validation** (`src/astra/validation/`)
-   - `schema.py`: Structural validation using Pydantic models from `astra.datamodel`
-   - `semantic.py`: Cross-reference validation (IDs, constraints, universe coverage)
-   - `schema.collect_recommendations`: advisory pass for fields the schema marks
-     `recommended` rather than `required` (currently `Output.format`, mandatory
-     from ASTRA 0.1.0). Reported as warnings; never affects the exit code.
+## Development
 
-2. **CLI** (`src/astra/cli.py`)
-   - Built with Click and Rich
-   - Commands: init, validate, info, universe, viz, spec, guide, schema, paper
-   - `validate` with no FILE validates the whole project; `validate` and `info` accept `--json`
+astra-spec is an **editable** path source (`[tool.uv.sources]`, R3) pointing at
+`../astra-spec-pinned`: a git worktree of `../astra-spec` detached at one commit, so the spec's
+ongoing updates can't move under the tests. Never edit it. The pin is this commit, which
+`git -C ../astra-spec-pinned rev-parse HEAD` must print:
 
-3. **Helpers** (`src/astra/helpers.py`)
-   - Dict-based utilities: `load_yaml`, `get_decision`, `get_default_universe`
+    b8f55970258b0ee03ff6c10a0821427e2f8d3a0f
 
-4. **Papers & Verification** (`src/astra/papers/`, `src/astra/verification/`)
-   - Paper downloading and caching by DOI
-   - PDF text extraction and evidence quote verification
+`uv.lock` records only the path, so this line is the record of which spec each astra-tools
+commit was tested against. On a new machine, make the worktree once, then sync:
 
-## Development Commands
-
-### Setup
 ```bash
-# Install for development (includes pytest, ruff, mypy)
-pip install -e ".[dev]"
+git -C ../astra-spec worktree add --detach ../astra-spec-pinned b8f55970258b0ee03ff6c10a0821427e2f8d3a0f
+uv sync                                  # the venv, with the dev group and the [reference] extra
+uv run pytest
+uv run mypy --strict src/
+uv run ruff check src/ tests/
+uv run ruff format --check src/ tests/
 ```
 
-### Testing
+To move the pin, check out another commit there and reinstall. Edit the hash above in the same
+commit as the change that moves it:
+
 ```bash
-pytest
-pytest --cov=astra tests/
-astra validate examples/iris/astra.yaml
+git -C ../astra-spec-pinned checkout --detach <commit>
+uv sync --reinstall-package astra-spec   # also refreshes the version and astra/docs/llms.txt
 ```
 
-### Linting
-```bash
-ruff check src/ tests/
-ruff format src/ tests/
-mypy src/
-```
+The pytest header prints the installed astra-spec version. A sync can rewrite `uv.lock`, which
+is committed.
 
-## Important Design Patterns
+The dev group installs `astra-tools[reference]`, so linkml-runtime is in the venv: `astra spec`'s
+tests run, and the import-cost tests' "no linkml_runtime" checks have something to miss (R33).
 
-### 1. Two-Stage Validation
-```python
-from astra.validation import validate_analysis_schema, validate_analysis_file
+Two environment variables matter: `ASTRA_CACHE_DIR` moves the cache (it must be absolute; the
+tests point it at a temporary directory of their own), and `ASTRA_DEBUG`, when non-empty, prints
+an internal error's traceback.
 
-# Stage 1: Schema validation (structure, types)
-schema_errors = validate_analysis_schema(file)
-
-# Stage 2: Semantic validation (references, constraints)
-semantic_errors = validate_analysis_file(file)
-```
-
-### 2. Dict-Based API
-```python
-from astra.helpers import load_yaml, get_decision, get_default_universe
-
-data = load_yaml("astra.yaml")
-decision = get_decision(data, "preprocessing")
-defaults = get_default_universe(data)
-```
-
-### 3. Universe Format
-Universe decisions use a compact dict (decision ID → option ID):
-```yaml
-decisions:
-  scaling: standard
-  model: random_forest
-```
-
-### 4. Namespace Package
-Both `astra-spec` and this package contribute to the `astra` namespace:
-```python
-from astra.datamodel import Analysis    # from astra-spec
-from astra.helpers import load_yaml     # from this package
-from astra.validation import validate_analysis_file  # from this package
-```
-
-## Common Development Tasks
-
-### Adding a New Validation Rule
-1. For semantic validation: Add check to `src/astra/validation/semantic.py`
-2. Create test fixture in `tests/fixtures/invalid/`
-3. Add test case in `tests/test_validation.py`
-
-## Configuration
-
-### pyproject.toml
-- Python >=3.11
-- Ruff: line-length = 100, target-version = "py311"
-- MyPy: strict mode
-- Versioning: hatch-vcs (from git tags)
-
-### Dependencies
-- Core: astra-spec, click, pyyaml, rich, pypdf, httpx, rapidfuzz
-- Dev: pytest, pytest-cov, ruff, mypy
-
-## Key Conventions
-
-1. **ID patterns**: `^[a-z][a-z0-9_]*$`
-2. **Version format**: `^\d+\.\d+(\.\d+)?$`
-3. **Constraint references**: `decision.option` format (e.g., "scaling.standard")
-4. **DOI format**: `10\.\d{4,}/.*`
+Versioning comes from git tags (hatch-vcs). Commit subjects follow `Area: what changed`.

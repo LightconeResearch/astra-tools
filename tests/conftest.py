@@ -1,101 +1,58 @@
-"""Pytest configuration and fixtures."""
+"""Shared by the tests: the cache kept apart, astra-spec's fixtures and examples, and git."""
 
+from __future__ import annotations
+
+import importlib.metadata
+import subprocess
+from importlib.resources import files
 from pathlib import Path
-from typing import Any
 
 import pytest
 
+SPEC = Path(str(files("astra.schema") / "generated")).parents[3]
+"""The astra-spec the installed `astra.schema` comes from: its fixtures (`tests/data/`) and its
+`examples/` are the oracle (design §1, principle 6)."""
 
-def pytest_addoption(parser: pytest.Parser) -> None:
-    """Add --run-network option to pytest."""
-    parser.addoption(
-        "--run-network",
-        action="store_true",
-        default=False,
-        help="Run tests that require network access",
-    )
-
-
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Skip network tests unless --run-network is passed."""
-    if not config.getoption("--run-network"):
-        skip_network = pytest.mark.skip(reason="use --run-network to run network tests")
-        for item in items:
-            if "network" in item.keywords:
-                item.add_marker(skip_network)
+MINIMAL = """\
+spec_version: "0.1.0"
+outputs:
+  result:
+    type: metric
+    format: json
+    recipe:
+      command: python make.py '{output}'
+"""
+"""The smallest valid `astra.yaml`: a `spec_version` and one output (§5)."""
 
 
-# Fixture directories
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
-VALID_DIR = FIXTURES_DIR / "valid"
-INVALID_DIR = FIXTURES_DIR / "invalid"
+def pytest_report_header(config: pytest.Config) -> str:
+    return f"astra-spec {importlib.metadata.version('astra-spec')} at {SPEC}"
 
 
-@pytest.fixture
-def fixtures_dir() -> Path:
-    """Return the fixtures directory."""
-    return FIXTURES_DIR
+@pytest.fixture(autouse=True)
+def cache(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test's cache is a folder of its own, outside every repository."""
+    monkeypatch.setenv("ASTRA_CACHE_DIR", str(tmp_path_factory.mktemp("cache")))
 
 
 @pytest.fixture
-def valid_dir() -> Path:
-    """Return the valid fixtures directory."""
-    return VALID_DIR
+def outside(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A folder in no git repository: git looks for none above it."""
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    folder = tmp_path / "analysis"
+    folder.mkdir()
+    return folder
 
 
-@pytest.fixture
-def invalid_dir() -> Path:
-    """Return the invalid fixtures directory."""
-    return INVALID_DIR
+def git_init(folder: Path) -> Path:
+    """A new git repository whose working tree is `folder`."""
+    folder.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "--quiet", str(folder)], check=True)
+    return folder
 
 
-@pytest.fixture
-def minimal_analysis_path() -> Path:
-    """Return path to minimal valid analysis."""
-    return VALID_DIR / "minimal.yaml"
-
-
-@pytest.fixture
-def full_analysis_path() -> Path:
-    """Return path to full valid analysis."""
-    return VALID_DIR / "full.yaml"
-
-
-@pytest.fixture
-def baseline_universe_path() -> Path:
-    """Return path to baseline universe."""
-    return VALID_DIR / "universe_baseline.yaml"
-
-
-@pytest.fixture
-def svm_universe_path() -> Path:
-    """Return path to SVM universe."""
-    return VALID_DIR / "universe_svm.yaml"
-
-
-@pytest.fixture
-def minimal_analysis_data() -> dict[str, Any]:
-    """Return minimal analysis data as dict."""
-    return {
-        "version": "1.0",
-        "name": "Test Analysis",
-        "inputs": [{"id": "test_data", "type": "data"}],
-        "outputs": [{"id": "result", "type": "metric"}],
-        "decisions": {
-            "method": {
-                "label": "Method",
-                "default": "a",
-                "options": {"a": {"label": "A"}, "b": {"label": "B"}},
-            }
-        },
-    }
-
-
-@pytest.fixture
-def baseline_universe_data() -> dict[str, Any]:
-    """Return baseline universe data as dict."""
-    return {
-        "id": "baseline",
-        "description": "Test baseline",
-        "decisions": {"method": "a"},
-    }
+def analysis(folder: Path, text: str = MINIMAL) -> Path:
+    """`folder`, made if need be, with `text` as its `astra.yaml`."""
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "astra.yaml").write_text(text, encoding="utf-8")
+    return folder
