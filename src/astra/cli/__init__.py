@@ -2,9 +2,10 @@
 it is run, which imports only click until then: `astra --help` and completion load no library.
 
 Exit codes: 0; 1 when `validate` finds an error, `check` a planned result that isn't
-`unchanged`, `plan`, `view`, `check` and `history` an analysis that breaks a `MUST`, `history`
-nothing in git of what it is asked for, or `info` and `universe` no stack to show; 2 for a usage
-error, a broken environment or an internal error.
+`unchanged`, `plan`, `view`, `check`, `history` and `paper` an analysis that breaks a `MUST`,
+`history` nothing in git of what it is asked for, or `info` and `universe` no stack to show; 2
+for a usage error, a broken environment or an internal error. `paper`'s warnings never change an
+exit code (design §3).
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ COMMANDS = MappingProxyType(
         "history": "astra.cli.history",
         "info": "astra.cli.info",
         "init": "astra.cli.init",
+        "paper": "astra.cli.paper",
         "plan": "astra.cli.plan",
         "rules": "astra.cli.rules",
         "schema": "astra.cli.schema",

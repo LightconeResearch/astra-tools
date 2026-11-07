@@ -18,10 +18,10 @@ import pytest
 
 from tests.conftest import analysis, git_init
 
-WATCHED = ("rich", "linkml_runtime", "jsonschema", "ruamel.yaml")
+WATCHED = ("rich", "linkml_runtime", "pypdf", "rapidfuzz", "jsonschema", "ruamel.yaml")
 """The dependencies whose import costs enough to watch."""
 
-EXTRAS_AND_RICH = {"rich", "linkml_runtime"}
+EXTRAS_AND_RICH = {"rich", "linkml_runtime", "pypdf", "rapidfuzz"}
 
 ALLOWED = {
     "astra.api": ("ruamel.yaml",),
@@ -35,6 +35,7 @@ ALLOWED = {
     "astra.cli.history": (),
     "astra.cli.info": (),
     "astra.cli.init": (),
+    "astra.cli.paper": (),
     "astra.cli.plan": (),
     "astra.cli.rules": (),
     "astra.cli.schema": (),
@@ -43,6 +44,7 @@ ALLOWED = {
     "astra.cli.text.check": ("rich", "ruamel.yaml"),
     "astra.cli.text.history": ("rich", "ruamel.yaml"),
     "astra.cli.text.info": ("rich", "ruamel.yaml"),
+    "astra.cli.text.paper": ("rich",),
     "astra.cli.text.plan": ("rich", "ruamel.yaml"),
     "astra.cli.text.rules": ("rich",),
     "astra.cli.text.spec": ("rich",),
@@ -55,6 +57,9 @@ ALLOWED = {
     "astra.contract": (),
     "astra.diagnostics": (),
     "astra.environments": (),
+    "astra.evidence": (),
+    "astra.evidence.papers": ("pypdf",),
+    "astra.evidence.quotes": ("pypdf", "rapidfuzz"),
     "astra.grammar": (),
     "astra.hashing": (),
     "astra.history": ("ruamel.yaml",),
@@ -144,8 +149,9 @@ def test_validate_json_imports_neither_rich_nor_an_extra(tmp_path: Path) -> None
     assert imported(run("validate", str(folder), "--json")) & EXTRAS_AND_RICH == set()
 
 
-def test_rich_is_imported_only_under_cli_text() -> None:
-    importing = []
+def importing(packages: set[str]) -> list[str]:
+    """The modules of astra-tools whose source imports one of `packages`, or a module of one."""
+    found = []
     for path in SRC.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_bytes())):
             names = (
@@ -155,6 +161,16 @@ def test_rich_is_imported_only_under_cli_text() -> None:
                 if isinstance(node, ast.ImportFrom)
                 else []
             )
-            if any(name == "rich" or name.startswith("rich.") for name in names):
-                importing.append(path.relative_to(SRC).as_posix())
-    assert importing and all(path.startswith("cli/text/") for path in importing)
+            if any(name.split(".")[0] in packages for name in names):
+                found.append(path.relative_to(SRC).as_posix())
+    return found
+
+
+def test_rich_is_imported_only_under_cli_text() -> None:
+    found = importing({"rich"})
+    assert found and all(path.startswith("cli/text/") for path in found)
+
+
+def test_the_evidence_extra_is_imported_only_under_evidence() -> None:
+    found = importing({"pypdf", "rapidfuzz"})
+    assert found and all(path.startswith("evidence/") for path in found)

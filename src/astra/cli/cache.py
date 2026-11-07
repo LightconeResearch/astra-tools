@@ -12,7 +12,8 @@ def command() -> None:
     """Show or clear the cache.
 
     The cache keeps the commits fetched from remotes, the validity of analyses from a commit,
-    the hashes of files and the checkouts runners make for their runs, outside every repository.
+    the hashes of files, the checkouts runners make for their runs and the papers `astra paper
+    add` keeps, outside every repository.
     Everything in it is safe to delete.
     ASTRA_CACHE_DIR, an absolute path, moves it.
     """

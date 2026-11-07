@@ -3,20 +3,15 @@ the remote it came from, as `line:col level CODE message`."""
 
 from __future__ import annotations
 
-from itertools import groupby
-
 from rich.text import Text
 
-from astra.cli.text import console, file_named, rule_line
+from astra.cli.text import by_file, console
 from astra.validate import ValidationReport
 
 
 def show(report: ValidationReport) -> None:
     out = console()
-    for file, diagnostics in groupby(report.diagnostics, key=lambda d: file_named(d.location)):
-        out.print(Text(file, style="bold"))
-        for d in diagnostics:
-            out.print(rule_line(d.location, d.level, d.code, d.message))
+    by_file(out, report.diagnostics)
     errors = sum(d.level == "error" for d in report.diagnostics)
     warnings = len(report.diagnostics) - errors
     verdict = Text("valid" if report.valid else "invalid", style="green" if report.valid else "red")

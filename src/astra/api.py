@@ -1,5 +1,5 @@
 """The stable public functions of astra-tools (design §2): `validate`, `bind`, `init`, `plan`,
-`view`, `check` and `history`."""
+`view`, `check` and `history`; and, with the extra `[evidence]`, `papers` and `quotes`."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import posixpath
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from astra.check import CheckReport
 from astra.check import check as check_stack
@@ -25,6 +26,10 @@ from astra.validate import validate as validate_reader
 from astra.view import UniverseView
 from astra.view import view as view_stack
 
+if TYPE_CHECKING:
+    from astra.diagnostics import Diagnostic
+    from astra.evidence.papers import Cited
+
 __all__ = [
     "Bound",
     "CheckReport",
@@ -40,7 +45,9 @@ __all__ = [
     "check",
     "history",
     "init",
+    "papers",
     "plan",
+    "quotes",
     "validate",
     "view",
 ]
@@ -134,6 +141,26 @@ def history(path: str | os.PathLike[str] | None = None) -> History:
     # OPEN(O49): the form of the public API.
     remotes = Remotes()
     return History(_valid(path, None, remotes), remotes)
+
+
+def papers(path: str | os.PathLike[str] | None = None) -> tuple[Cited, ...]:
+    """Each work the evidence of the analysis whose folder is `path` cites by DOI, read as
+    `validate` reads it, at each version it cites, once, and whether the cache holds its paper
+    (design §6 *Phase 5*). Raises ImportError where the extra `[evidence]` isn't installed,
+    InvalidAnalysisError where the analysis breaks a `MUST`, and otherwise as `validate` does."""
+    from astra.evidence.papers import cited  # OPEN(O58): the extra's API
+
+    return cited(_valid(path))
+
+
+def quotes(path: str | os.PathLike[str] | None = None) -> tuple[Diagnostic, ...]:
+    """The `EVIDENCE_` warnings on the quotes that the evidence of the analysis whose folder is
+    `path` takes from works it cites by DOI, read as `validate` reads it (`evidence.quotes`): a
+    paper not in the cache, or a quote not found in it. Raises `evidence.papers.PaperError`
+    where a paper the cache holds can't be read, and otherwise as `papers` does."""
+    from astra.evidence.quotes import verify  # OPEN(O58)
+
+    return verify(_valid(path))
 
 
 def _valid(
