@@ -126,6 +126,19 @@ class Repository:
             return None
         return os.fsdecode(result.stdout).strip() or None
 
+    def log(self, path: str) -> tuple[str, ...]:
+        """The commits along HEAD's history that change what is at `path`, from the top of the
+        working tree, newest first, as `git log -- <path>` lists them: every ancestor of HEAD,
+        through git's default simplification of merges; none while HEAD has no commit."""
+        # OPEN(O44): which history is read.
+        if self.head() is None:
+            return ()
+        result = _git("-C", str(self.top), "log", "--format=%H", "HEAD", "--", f":(literal){path}")
+        if result.returncode != 0:
+            error = os.fsdecode(result.stderr).strip()
+            raise GitError(f"git can't read the history of {self.top}: {error}")
+        return tuple(os.fsdecode(result.stdout).split())
+
     def remote_url(self) -> str | None:
         """The URL of the default remote, as git chooses it (the current branch's, or the one
         remote, or `origin`); None where there is none."""

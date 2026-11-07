@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from importlib.resources import files
 from pathlib import Path
 
@@ -33,6 +33,15 @@ outputs:
 
 def pytest_report_header(config: pytest.Config) -> str:
     return f"astra-spec {importlib.metadata.version('astra-spec')} at {SPEC}"
+
+
+@pytest.fixture(autouse=True, scope="session")
+def session_cache(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """A cache for fixtures wider than a test, such as a module's built repository, which are set
+    up before `cache` and would otherwise use the user's own."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("ASTRA_CACHE_DIR", str(tmp_path_factory.mktemp("session-cache")))
+        yield
 
 
 @pytest.fixture(autouse=True)

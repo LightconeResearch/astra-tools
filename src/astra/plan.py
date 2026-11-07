@@ -44,6 +44,7 @@ class Read:
     path: str  # the input's file, or the default place of the result's bytes
     commit: str | None  # the commit `path` is read at; None for the working tree
     result: Result | None  # the planned result it reads; None for an input
+    place: Place | None  # the place of the result's name whose bytes it reads; None for an input
 
 
 @dataclass(frozen=True)
@@ -219,7 +220,7 @@ def _result(context: Context, result: Planned, reads: Reads, made: Mapping[Key, 
             written = stack.analysis(analysis).inputs[entry.element.id].path
             path = paths.join(analysis.folder, written)
             assert path is not None  # inside its analysis's folder (INPUT_IN_ANOTHER_ANALYSIS)
-            inputs.append(Read(entry.written, path, analysis.commit, None))
+            inputs.append(Read(entry.written, path, analysis.commit, None, None))
             continue
         done = made[read.output, read.universe]
         # OPEN(O32): the name along the entry's declarations from the analysis `read` belongs
@@ -227,7 +228,7 @@ def _result(context: Context, result: Planned, reads: Reads, made: Mapping[Key, 
         start = result.chains[0] if result.owner == read.owner else ()
         index = along(read, (*start, *entry.chain))
         place = done.places[0 if index is None else index]
-        inputs.append(Read(entry.written, place.bytes, done.owner.commit, done))
+        inputs.append(Read(entry.written, place.bytes, done.owner.commit, done, place))
     selection = None if result.universe is None else context.selections[result.universe]
     read_only = result.owner.commit != stack.root.commit
     return Result(

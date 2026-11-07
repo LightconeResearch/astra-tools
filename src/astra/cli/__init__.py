@@ -2,8 +2,9 @@
 it is run, which imports only click until then: `astra --help` and completion load no library.
 
 Exit codes: 0; 1 when `validate` finds an error, `check` a planned result that isn't
-`unchanged`, `plan`, `view` and `check` an analysis that breaks a `MUST`, or `info` and
-`universe` no stack to show; 2 for a usage error, a broken environment or an internal error.
+`unchanged`, `plan`, `view`, `check` and `history` an analysis that breaks a `MUST`, `history`
+nothing in git of what it is asked for, or `info` and `universe` no stack to show; 2 for a usage
+error, a broken environment or an internal error.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ COMMANDS = MappingProxyType(
         "check": "astra.cli.check",
         "completion": "astra.cli.completion",
         "guide": "astra.cli.guide",
+        "history": "astra.cli.history",
         "info": "astra.cli.info",
         "init": "astra.cli.init",
         "plan": "astra.cli.plan",

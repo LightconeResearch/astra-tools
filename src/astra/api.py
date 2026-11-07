@@ -1,5 +1,5 @@
 """The stable public functions of astra-tools (design §2): `validate`, `bind`, `init`, `plan`,
-`view` and `check`."""
+`view`, `check` and `history`."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pathlib import Path
 
 from astra.check import CheckReport
 from astra.check import check as check_stack
+from astra.history import History, NotInHistoryError
 from astra.plan import Plan, RequestError
 from astra.plan import plan as plan_stack
 from astra.sources.git import Repository
@@ -27,14 +28,17 @@ from astra.view import view as view_stack
 __all__ = [
     "Bound",
     "CheckReport",
+    "History",
     "InvalidAnalysisError",
     "NoAnalysisError",
+    "NotInHistoryError",
     "Plan",
     "RequestError",
     "UniverseView",
     "ValidationReport",
     "bind",
     "check",
+    "history",
     "init",
     "plan",
     "validate",
@@ -119,6 +123,17 @@ def check(
     remotes = Remotes()
     stack = _valid(path, at, remotes)  # OPEN(O5): no statuses on an invalid analysis
     return check_stack(stack, universes, outputs, remotes)
+
+
+def history(path: str | os.PathLike[str] | None = None) -> History:
+    """The history of the records of the planned results of the analysis whose folder is
+    `path`, read as `validate` reads it, and read from git on demand (design §6 *Phase 4*):
+    each query is one call of what this gives, `timeline`, `lineage`, `find` or `get`
+    (`history.History`). Raises InvalidAnalysisError where the analysis breaks a `MUST`, and
+    otherwise as `validate` does."""
+    # OPEN(O49): the form of the public API.
+    remotes = Remotes()
+    return History(_valid(path, None, remotes), remotes)
 
 
 def _valid(

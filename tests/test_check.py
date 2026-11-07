@@ -72,14 +72,15 @@ def rewrite(path: Path, change: Callable[[dict[str, Any]], object]) -> None:
     path.write_text(json.dumps(value), "utf-8")
 
 
-def remake(top: Path, address: str, data: bytes) -> None:
+def remake(top: Path, address: str, data: bytes, environment: str = ENVIRONMENT) -> None:
     """Make the result whose first place is `address` again in the working tree `top`, as a
-    runner would from HEAD: `data` its bytes, and its record from `new_record` (§19)."""
+    runner would from HEAD: `data` its bytes, and its record from `new_record`, run in
+    `environment` (§19)."""
     (result,) = [r for r in api.plan(top).results if r.places[0].address == address]
     (top / result.places[0].bytes).write_bytes(data)
     commit = git(top, "rev-parse", "HEAD").strip()
     (record,) = new_record(
-        result, checkout=top, commit=commit, environment=ENVIRONMENT, runner=RUNNER
+        result, checkout=top, commit=commit, environment=environment, runner=RUNNER
     )
     write_record(top / result.places[0].record, record)
 

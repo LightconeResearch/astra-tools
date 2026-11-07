@@ -41,7 +41,7 @@ from astra.records import Record, read_record
 from astra.rules.context import Context
 from astra.sources import standins
 from astra.sources.git import Repository
-from astra.sources.reader import CommitReader
+from astra.sources.reader import CommitReader, in_repository
 from astra.sources.remote import Remotes
 from astra.stack import Element, Member, Resolution, Stack, bind
 from astra.universes import Place, Selection, along
@@ -507,7 +507,7 @@ class _Checker:
         reader = member.reader
         if isinstance(reader, CommitReader):
             return True
-        repo, folder = reader.holding(member.identity.folder)
+        repo, inner = in_repository(reader, member.identity.folder, path)
         if repo not in self._heads:
             head = repo.head()
             self._heads[repo] = (
@@ -516,7 +516,6 @@ class _Checker:
         kept = self._heads[repo]
         if kept is None:
             return False
-        inner = posixpath.join(folder, posixpath.relpath(path, member.identity.folder or "."))
         entry = kept.stat(inner)
         return entry is not None and entry.kind == "file" and kept.read(inner) == reader.read(path)
 
@@ -560,10 +559,10 @@ def _worst(statuses: Iterable[RecordStatus]) -> RecordStatus:
 
 
 def _read(read: Read, statuses: Mapping[Key, tuple[Status, ...]]) -> Status:
-    """The status of the place whose bytes `read` reads (`plan.Read.path`)."""
+    """The status of the place whose bytes `read` reads (`plan.Read.place`)."""
     done = read.result
     assert done is not None
-    return next(s for s in statuses[done.output, done.universe] if s.place.bytes == read.path)
+    return next(s for s in statuses[done.output, done.universe] if s.place == read.place)
 
 
 def _location(member: Member, path: str) -> Location:

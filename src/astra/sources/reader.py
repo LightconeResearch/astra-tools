@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import errno
 import os
+import posixpath
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,6 +63,14 @@ class Reader(Protocol):
         """The repository that holds the analysis in `folder`, the innermost (Annex B *The
         repository that holds a file*), and the folder as a path from its top."""
         ...
+
+
+def in_repository(reader: Reader, folder: str, path: str) -> tuple[Repository, str]:
+    """The repository that holds the analysis in `folder` (`Reader.holding`), and `path`, a
+    file of that analysis from the top of the tree `reader` reads, as a path from that
+    repository's top."""
+    repo, inner = reader.holding(folder)
+    return repo, posixpath.join(inner, posixpath.relpath(path, folder or "."))
 
 
 @dataclass(frozen=True)
