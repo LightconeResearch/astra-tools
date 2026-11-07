@@ -1,5 +1,5 @@
 """The six commands of phase 0, on what they promise: output, `--json` shape and exit codes
-(design §4.12)."""
+(design §4.12). Phase 1's are in `test_commands.py`."""
 
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner, Result
 
-from astra.cli import main
+from astra import validate
+from astra.cli import COMMANDS, main
+from astra.diagnostics import Catalogue
 from tests.conftest import MINIMAL, analysis, git_init
 
 
@@ -19,11 +21,12 @@ def astra(*args: str, env: dict[str, str] | None = None) -> Result:
     return CliRunner().invoke(main, list(args), env=env)
 
 
-def test_help_names_the_six_commands() -> None:
+def test_help_names_every_command() -> None:
     result = astra("--help")
     assert result.exit_code == 0
-    for name in ("validate", "schema", "rules", "guide", "spec", "completion"):
+    for name in COMMANDS:
         assert f"  {name} " in result.stdout
+    assert {"validate", "info", "universe", "init", "cache"} <= set(COMMANDS)
 
 
 # --- validate ---
@@ -33,7 +36,8 @@ def test_validate_exits_0_for_a_valid_analysis(tmp_path: Path) -> None:
     result = astra("validate", str(analysis(git_init(tmp_path))))
     assert result.exit_code == 0
     assert "astra.yaml: valid, 0 error(s), 0 warning(s)" in result.stdout
-    assert "32 validator rules aren't checked" in result.stdout
+    assert validate.unchecked(Catalogue.load()) == ()  # phase 1 checks every validator rule
+    assert "aren't checked" not in result.stdout
 
 
 def test_validate_prints_line_col_level_code_message_by_file(tmp_path: Path) -> None:
@@ -83,7 +87,7 @@ def test_validate_exits_2_where_there_is_no_analysis(tmp_path: Path) -> None:
 def test_an_internal_error_exits_2(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from astra import api
 
-    def broken(path: object) -> None:
+    def broken(path: object, **options: object) -> None:
         raise RuntimeError("broken")
 
     monkeypatch.setattr(api, "validate", broken)

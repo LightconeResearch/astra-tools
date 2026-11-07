@@ -1,4 +1,5 @@
-"""The validation report as text: grouped by file, as `line:col level CODE message`."""
+"""The validation report as text: grouped by file, a file read at a commit named with it and
+the remote it came from, as `line:col level CODE message`."""
 
 from __future__ import annotations
 
@@ -7,7 +8,7 @@ from types import MappingProxyType
 
 from rich.text import Text
 
-from astra.cli.text import console
+from astra.cli.text import console, file_named
 from astra.validate import ValidationReport
 
 _STYLES = MappingProxyType({"error": "bold red", "warning": "yellow"})
@@ -15,7 +16,7 @@ _STYLES = MappingProxyType({"error": "bold red", "warning": "yellow"})
 
 def show(report: ValidationReport) -> None:
     out = console()
-    for file, diagnostics in groupby(report.diagnostics, key=lambda d: d.location.file):
+    for file, diagnostics in groupby(report.diagnostics, key=lambda d: file_named(d.location)):
         out.print(Text(file, style="bold"))
         for diagnostic in diagnostics:
             line = Text("  ")

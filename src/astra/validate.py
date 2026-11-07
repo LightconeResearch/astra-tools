@@ -1,8 +1,10 @@
 """validate(): the validator's report on an analysis (§3, design §4.11).
 
-Phase 0 reads the root's `astra.yaml` alone: the parse and schema rules (§5, Annex A, Annex E),
-`UNSUPPORTED_SPEC_VERSION`, and `NOT_IN_REPOSITORY`. It follows no declaration. The validator
-codes it doesn't check yet are listed in the report as `unchecked`.
+It binds the stack (`astra.stack`): every `astra.yaml` of it, by the parse and schema rules and
+`UNSUPPORTED_SPEC_VERSION` (§5, Annex A, Annex E). Then it runs the validator rules
+(`astra.rules`) on the stack, or reports `NOT_IN_REPOSITORY` for a root in no repository, whose
+declarations aren't followed (Annex D case 11). The validator codes no check of this build
+reports are listed in the report as `unchecked`.
 """
 
 from __future__ import annotations
@@ -11,16 +13,17 @@ import posixpath
 from dataclasses import dataclass
 from typing import Any
 
-from astra import contract, load
-from astra.contract import Contract
+from astra import contract, load, rules
 from astra.diagnostics import Catalogue, Diagnostic, Location
-from astra.load import ParseError, load_yaml
+from astra.rules.context import Context
 from astra.sources.reader import Reader
+from astra.sources.remote import Remotes
+from astra.stack import bind
 
 SHAPE = "astra-validation-report/1"
 
 CODES = frozenset({"NOT_IN_REPOSITORY"})
-"""The validator codes checked here, beside those `load` and `contract` report."""
+"""The validator codes checked here, beside those `load`, `contract` and the rules report."""
 
 
 @dataclass(frozen=True)
@@ -48,36 +51,41 @@ class ValidationReport:
         }
 
 
+def _order(location: Location) -> tuple[bool, str, str, int, int]:
+    """The working tree's files first, then each commit's, each file in order of place."""
+    commit = location.commit
+    file, line, column = location.file, location.line or 0, location.column or 0
+    return commit is not None, commit or "", file, line, column
+
+
 def unchecked(catalogue: Catalogue) -> tuple[str, ...]:
     """The validator codes of the catalogue that no check of this build reports."""
-    checked = load.CODES | contract.CODES | CODES
+    checked = load.CODES | contract.CODES | CODES | rules.CODES
     return tuple(code for code in catalogue.codes("validator") if code not in checked)
 
 
-def validate(reader: Reader, root: str) -> ValidationReport:
+def validate(reader: Reader, root: str, remotes: Remotes | None = None) -> ValidationReport:
     """The report on the analysis whose folder is `root` in `reader` ("" for its top), which
-    holds its `astra.yaml`. Raises OSError if that can't be read."""
+    holds its `astra.yaml`; commits are got from remotes through `remotes` (§17). Raises
+    OSError if a file of the stack can't be read."""
     file = posixpath.join(root, "astra.yaml")
     catalogue = Catalogue.load()
-    try:
-        document = load_yaml(reader.read(file))
-    except ParseError as error:
-        # Annex D case 1: a file that can't be read is checked no further.
-        location = Location(file, "", error.line, error.column)
-        found = [catalogue.diagnostic(error.code, error.message, location)]
-    else:
-        found = list(Contract.load(catalogue).check_analysis(document, file))
+    bound = bind(reader, root, catalogue, remotes)
+    found = list(bound.diagnostics)
+    if reader.repo is None:
         # Annex D case 2: a file that isn't a valid document isn't checked by the validator
         # layer, NOT_IN_REPOSITORY included. OPEN(O6), OPEN(O8)
-        if not found and reader.repo is None:
+        if not found:
             message = (
                 "the analysis's folder isn't in the working tree of a git repository: "
                 "make one with `git init`, or move the analysis into one"
             )
             location = Location(file, "", None, None)
             found.append(catalogue.diagnostic("NOT_IN_REPOSITORY", message, location))
-    diagnostics = sorted(
-        found,
-        key=lambda d: (d.location.file, d.location.line or 0, d.location.column or 0, d.code),
-    )
+    elif bound.stack is not None:
+        found.extend(rules.check(Context(bound.stack, catalogue)))
+    # A MUST broken in an analysis from a commit can be found both under this root and as that
+    # analysis's own root (`rules.commits`): it is reported once.
+    unique = dict.fromkeys(found)
+    diagnostics = sorted(unique, key=lambda d: _order(d.location) + (d.code,))
     return ValidationReport(file, tuple(diagnostics), unchecked(catalogue))

@@ -61,9 +61,19 @@ def contract() -> Contract:
 
 
 def found(path: Path, repository: Path, contract: Contract) -> set[tuple[str, str]]:
+    """The parse and schema diagnostics, and UNSUPPORTED_SPEC_VERSION, that the fixture gives:
+    those that decide whether a document is valid (§3). A fixture is one document, and the
+    validator rules it breaks, such as a declaration of a folder that isn't there, are no part
+    of its point."""
     if path.suffix == ".yaml":
         report = api.validate(repository / path.stem)
-        return {(d.location.pointer, d.code) for d in report.diagnostics}
+        layers = {"parse", "schema"}
+        return {
+            (d.location.pointer, d.code)
+            for d in report.diagnostics
+            if contract.catalogue.rules[d.code].layer in layers
+            or d.code == "UNSUPPORTED_SPEC_VERSION"
+        }
     try:
         document = load_json(path.read_bytes())
     except ParseError as error:

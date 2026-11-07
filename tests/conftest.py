@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import subprocess
+from collections.abc import Mapping
 from importlib.resources import files
 from pathlib import Path
 
@@ -49,6 +50,42 @@ def git_init(folder: Path) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "--quiet", str(folder)], check=True)
     return folder
+
+
+GIT = (
+    "git",
+    "-c",
+    "user.name=astra-tools tests",
+    "-c",
+    "user.email=tests@astra.invalid",
+    "-c",
+    "commit.gpgsign=false",
+    "-c",
+    "protocol.file.allow=always",
+)
+"""git, with an identity of its own, never signing, and free to add a local submodule."""
+
+
+def git(top: Path, *args: str) -> str:
+    """Run git in the working tree `top`, and give what it prints."""
+    process = subprocess.run([*GIT, "-C", str(top), *args], capture_output=True, text=True)
+    assert process.returncode == 0, process.stderr
+    return process.stdout
+
+
+def repository(top: Path, files: Mapping[str, str | bytes]) -> Path:
+    """The git repository at `top`, made if need be, with `files` (each path from `top`, and
+    its text or bytes) written and committed: a stack of analyses, say, as
+    `{"astra.yaml": ROOT, "sub/astra.yaml": SUB, "sub/data/x.csv": "1,2\n"}`. Gives `top`."""
+    if not (top / ".git").exists():
+        git_init(top)
+    for path, content in files.items():
+        (top / path).parent.mkdir(parents=True, exist_ok=True)
+        data = content.encode("utf-8") if isinstance(content, str) else content
+        (top / path).write_bytes(data)
+    git(top, "add", "--all")
+    git(top, "commit", "--quiet", "--no-verify", "--allow-empty", "--message", "stack")
+    return top
 
 
 def analysis(folder: Path, text: str = MINIMAL) -> Path:

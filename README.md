@@ -25,10 +25,17 @@ For development, follow [CLAUDE.md](CLAUDE.md#development): this branch needs as
 
 ## On this branch
 
-astra-tools is being rebuilt for ASTRA 0.1 on the `v0.1` branch; use astra-tools 0.2.18 for older files (`uv tool install astra-tools==0.2.18`). `astra init` isn't back yet. These commands work:
+astra-tools is being rebuilt for ASTRA 0.1 on the `v0.1` branch; use astra-tools 0.2.18 for older files (`uv tool install astra-tools==0.2.18`). These commands work:
 
 ```bash
-astra validate [PATH] [--json]   # check astra.yaml at the parse and schema layers; lists the validator rules not checked yet
+astra init [DIR]                  # a minimal analysis, in a new git repository
+astra validate [PATH] [--json]    # every parse, schema and validator rule, over the whole stack
+astra validate PATH --offline     # the same, fetching no remote commit
+astra info [PATH]                 # the stack in brief: analyses, inputs, outputs, decisions, universes
+astra universe list [PATH]        # the analysis's universes and imports
+astra universe show U [PATH]      # one universe's effective selection
+astra cache path                  # where fetched commits are kept; ASTRA_CACHE_DIR moves it
+astra cache clear                 # delete what astra keeps there
 astra rules                       # the rules of the ASTRA specification, by layer
 astra rules MISSING_DECISION      # one rule in full
 astra schema show NAME            # a JSON Schema of astra-spec's, verbatim: analysis, provenance, provenance.open

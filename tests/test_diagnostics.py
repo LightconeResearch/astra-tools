@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from astra import contract, load, validate
+from astra import contract, load, rules, validate
 from astra.diagnostics import Catalogue, Location
 
 AT = Location("astra.yaml", "", None, None)
@@ -35,3 +35,9 @@ def test_the_other_declared_codes_are_the_catalogues() -> None:
     catalogue = Catalogue.load()
     assert {catalogue.rules[code].layer for code in contract.CODES} == {"validator", "check"}
     assert {catalogue.rules[code].layer for code in validate.CODES} == {"validator"}
+    assert {catalogue.rules[code].layer for code in rules.CODES} == {"validator"}
+
+
+def test_no_two_checks_declare_one_code() -> None:
+    declared = [load.CODES, contract.CODES, validate.CODES, *(m.CODES for m in rules.MODULES)]
+    assert sum(len(codes) for codes in declared) == len(frozenset().union(*declared))

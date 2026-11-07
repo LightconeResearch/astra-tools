@@ -1,8 +1,8 @@
 """The `astra` command line (design §4.12). Each command is a module of its own, imported when
 it is run, which imports only click until then: `astra --help` and completion load no library.
 
-Exit codes: 0; 1 when `validate` finds an error; 2 for a usage error, a broken environment or
-an internal error.
+Exit codes: 0; 1 when `validate` finds an error, or `info` and `universe` find no stack to show;
+2 for a usage error, a broken environment or an internal error.
 """
 
 from __future__ import annotations
@@ -11,18 +11,26 @@ import importlib
 import json
 import os
 import traceback
+from pathlib import Path
 from types import MappingProxyType
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import click
 
+if TYPE_CHECKING:
+    from astra.stack import Stack
+
 COMMANDS = MappingProxyType(
     {
+        "cache": "astra.cli.cache",
         "completion": "astra.cli.completion",
         "guide": "astra.cli.guide",
+        "info": "astra.cli.info",
+        "init": "astra.cli.init",
         "rules": "astra.cli.rules",
         "schema": "astra.cli.schema",
         "spec": "astra.cli.spec",
+        "universe": "astra.cli.universe",
         "validate": "astra.cli.validate",
     }
 )
@@ -62,11 +70,36 @@ def fail(message: str) -> NoReturn:
     raise click.exceptions.Exit(USAGE)
 
 
+def read_stack(path: Path | None) -> Stack:
+    """The stack whose root is the analysis in `path` (`api.bind`). Stops with exit 2 where it
+    can't be read, and with exit 1 where its root's file isn't a valid document or it is in no
+    repository, so that there is no stack to show."""
+    from astra import api
+    from astra.cache import CacheError
+    from astra.sources.git import GitError
+
+    try:
+        bound = api.bind(path)
+    except (api.NoAnalysisError, CacheError, GitError) as error:
+        fail(str(error))
+    except OSError as error:
+        fail(f"can't read {error.filename}: {error.strerror}")
+    if bound.stack is None:  # OPEN(O23)
+        folder = "." if path is None else str(path)
+        click.echo(
+            "astra: the analysis's astra.yaml isn't a valid document, or isn't in a git "
+            f"repository, so there is no stack to show: `astra validate {folder}` says why",
+            err=True,
+        )
+        raise click.exceptions.Exit(FAILED)
+    return bound.stack
+
+
 def write_json(document: Any) -> None:
     """Print `document` as JSON, indented."""
     click.echo(json.dumps(document, indent=2, ensure_ascii=False))
 
 
 main = click.version_option(package_name="astra-tools")(
-    _Astra("astra", help="Validate ASTRA analyses, and read the specification's rules.")
+    _Astra("astra", help="Validate ASTRA analyses, show their stacks, and read the specification.")
 )

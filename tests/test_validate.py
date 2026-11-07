@@ -1,5 +1,6 @@
 """`validate`: the root `astra.yaml` by the parse and schema rules, UNSUPPORTED_SPEC_VERSION and
-NOT_IN_REPOSITORY (§5, Annex A, Annex D cases 1, 2 and 11, Annex E), and the report it gives."""
+NOT_IN_REPOSITORY (§5, Annex A, Annex D cases 1, 2 and 11, Annex E), and the report it gives.
+The validator rules of the stack have modules of their own (`test_names.py`, ...)."""
 
 from __future__ import annotations
 
@@ -9,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from astra import api
+from astra import api, contract, rules, validate
 from astra.diagnostics import Catalogue
-from tests.conftest import MINIMAL, SPEC, analysis, git_init
+from tests.conftest import MINIMAL, SPEC, analysis, git_init, repository
 
 
 def pairs(report: api.ValidationReport) -> list[tuple[str, str]]:
@@ -51,6 +52,13 @@ def test_outside_a_repository_the_parse_and_schema_rules_are_checked(outside: Pa
     assert pairs(report) == [("UNKNOWN_FIELD", "")]
     report = api.validate(analysis(outside, MINIMAL + "outputs: {}\n"))
     assert pairs(report) == [("DUPLICATE_KEY", "")]
+
+
+def test_outside_a_repository_no_declaration_is_followed(outside: Path) -> None:
+    """Annex D case 11: no other validator rule is checked, and the declarations aren't
+    followed, so a folder that isn't there isn't MISSING_DECLARED_ANALYSIS."""
+    report = api.validate(analysis(outside, MINIMAL + "analyses: {sub: {path: nothere}}\n"))
+    assert pairs(report) == [("NOT_IN_REPOSITORY", "")]
 
 
 # --- §5 Versions: UNSUPPORTED_SPEC_VERSION, and Annex D case 1 ---
@@ -154,7 +162,7 @@ def test_plain_scalars_are_typed_by_the_core_schema(tmp_path: Path) -> None:
 
 def test_a_pin_needs_no_quotes_and_a_url_needs_none_in_a_flow_map(tmp_path: Path) -> None:
     """`#` inside a token is literal (Annex A), and `{url: https://…}` is read whole
-    (design §4.1, `pure=True`)."""
+    (design §4.1, `pure=True`): offline, all it breaks is that its commit is not got (§17)."""
     text = f"""\
 spec_version: "0.1.0"
 analyses: {{up: {{url: https://example.org/up.git, commit: "{"0" * 40}"}}}}
@@ -166,7 +174,8 @@ outputs:
     recipe:
       command: python make.py '{{inputs.up.output1#u1}}' '{{output}}'
 """
-    assert checked_in_repository(tmp_path, text).diagnostics == ()
+    report = api.validate(analysis(git_init(tmp_path / "repo"), text), offline=True)
+    assert pairs(report) == [("REMOTE_UNREACHABLE", "/analyses/up")]
 
 
 def test_a_pattern_ends_where_the_value_ends(tmp_path: Path) -> None:
@@ -222,16 +231,15 @@ def test_a_value_is_placed_at_its_line_and_column(tmp_path: Path) -> None:
 
 
 def test_unchecked_lists_the_validator_codes_this_build_doesnt_check(tmp_path: Path) -> None:
-    """Every validator code of rules.json but the two phase 0 checks."""
+    """Every validator code of rules.json, in its order, but those the build's checks declare
+    (design §3)."""
     catalogue = Catalogue.load()
-    expected = [
-        code
-        for code in catalogue.codes("validator")
-        if code not in ("NOT_IN_REPOSITORY", "UNSUPPORTED_SPEC_VERSION")
-    ]
+    checked = validate.CODES | contract.CODES | rules.CODES
+    expected = [code for code in catalogue.codes("validator") if code not in checked]
     report = api.validate(analysis(git_init(tmp_path)))
     assert list(report.unchecked) == expected
-    assert len(report.unchecked) == 32
+    assert "UNSUPPORTED_SPEC_VERSION" not in report.unchecked
+    assert "UNRESOLVED_ADDRESS" not in report.unchecked
 
 
 def test_the_report_as_json(outside: Path) -> None:
@@ -257,9 +265,8 @@ def test_the_report_as_json(outside: Path) -> None:
                 "related": [],
             }
         ],
-        "unchecked": document["unchecked"],
+        "unchecked": list(validate.unchecked(Catalogue.load())),
     }
-    assert len(document["unchecked"]) == 32
 
 
 def test_a_folder_without_an_astra_yaml_is_no_analysis(tmp_path: Path) -> None:
@@ -290,12 +297,20 @@ def test_the_examples_are_found() -> None:
     assert len(EXAMPLES) == 4
 
 
+@pytest.fixture(scope="module")
+def examples(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """astra-spec's `examples/`, committed in a repository of their own. They read no input
+    file, so there is none to write."""
+    top = tmp_path_factory.mktemp("examples")
+    shutil.copytree(SPEC / "examples", top / "examples")
+    return repository(top, {})
+
+
 @pytest.mark.parametrize("folder", EXAMPLES, ids=lambda path: path.relative_to(SPEC).as_posix())
-def test_an_example_reports_no_problems(tmp_path: Path, folder: Path) -> None:
-    shutil.copytree(SPEC / "examples", tmp_path / "examples")
-    git_init(tmp_path)
-    report = api.validate(tmp_path / folder.relative_to(SPEC))
-    assert (report.diagnostics, len(report.unchecked)) == ((), 32)
+def test_an_example_reports_no_problems(examples: Path, folder: Path) -> None:
+    """Phase 1's *Done when* (design §6): no problems, and no rule left unchecked."""
+    report = api.validate(examples / folder.relative_to(SPEC))
+    assert (report.diagnostics, report.unchecked) == ((), ())
 
 
 WORKED_EXAMPLE = """\
@@ -347,5 +362,6 @@ findings:
 
 
 def test_the_worked_example_reports_no_problems(tmp_path: Path) -> None:
-    """§2, whose pins `output1#u1` need no quotes."""
-    assert checked_in_repository(tmp_path, WORKED_EXAMPLE).diagnostics == ()
+    """§2, whose pins `output1#u1` need no quotes, with its input file committed (§7)."""
+    files = {"astra.yaml": WORKED_EXAMPLE, "data/input1.csv": "1,2\n"}
+    assert api.validate(repository(tmp_path, files)).diagnostics == ()
