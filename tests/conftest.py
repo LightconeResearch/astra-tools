@@ -1,14 +1,19 @@
-"""Shared by the tests: the cache kept apart, astra-spec's fixtures and examples, and git."""
+"""Shared by the tests: the cache kept apart, astra-spec's fixtures and examples, git, and
+results built as a runner builds them."""
 
 from __future__ import annotations
 
 import importlib.metadata
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from importlib.resources import files
 from pathlib import Path
 
 import pytest
+
+from astra import api
+from astra.plan import Result
+from astra.records import Runner, new_record, write_record
 
 SPEC = Path(str(files("astra.schema") / "generated")).parents[3]
 """The astra-spec the installed `astra.schema` comes from: its fixtures (`tests/data/`) and its
@@ -93,3 +98,36 @@ def analysis(folder: Path, text: str = MINIMAL) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "astra.yaml").write_text(text, encoding="utf-8")
     return folder
+
+
+RUNNER = Runner("astra-tools-tests", "1")
+ENVIRONMENT = "urn:example:environment1"
+
+
+def build(
+    top: Path,
+    folder: Path | None = None,
+    *,
+    commit: str | None = None,
+    made: Callable[[Result], bytes] = lambda result: f"{result.places[0].address}\n".encode(),
+) -> tuple[Result, ...]:
+    """Build the analysis in `folder`, `top` by default, in the working tree whose top is `top`,
+    as a runner would but without running a recipe: each planned result it doesn't read through
+    a record (§17), in the plan's order, gets the bytes `made` gives it at each of its default
+    places, and a record from `records.new_record` at each of its places, naming `commit`
+    (HEAD by default) as the commit its recipe ran from (§18, §19). Nothing is committed. Gives
+    the plan's results."""
+    commit = commit or git(top, "rev-parse", "HEAD").strip()
+    results = api.plan(folder or top).results
+    for result in results:
+        if result.read_only:
+            continue
+        for place in result.places:
+            (top / place.bytes).parent.mkdir(parents=True, exist_ok=True)
+            (top / place.bytes).write_bytes(made(result))
+        records = new_record(
+            result, checkout=top, commit=commit, environment=ENVIRONMENT, runner=RUNNER
+        )
+        for place, record in zip(result.places, records, strict=True):
+            write_record(top / place.record, record)
+    return results

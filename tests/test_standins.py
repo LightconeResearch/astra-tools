@@ -65,6 +65,19 @@ def test_dvc_recognises_its_file_beside_the_path(tree: WorktreeReader) -> None:
     assert not Dvc().recognises(tree, "plain.csv")
 
 
+def test_each_gives_the_hash_and_size_of_what_it_stands_for_where_it_can(
+    tree: WorktreeReader,
+) -> None:
+    """design §4.5's *Gives*, which the checker compares as an input's content (§20): a Git LFS
+    pointer's `oid` and `size`, a git-annex key of a SHA-256 backend, and nothing of a DVC
+    file, whose hash is an MD5."""
+    assert GitLfs().gives(tree, "lfs.bin") == (f"sha256:{'a' * 64}", 6)
+    assert GitLfs().gives(tree, "plain.csv") is None
+    assert GitAnnex().gives(tree, "locked.bin") == (f"sha256:{'5' * 64}", 6)
+    assert GitAnnex().gives(tree, "unlocked.bin") == (f"sha256:{'5' * 64}", 6)
+    assert Dvc().gives(tree, "huge.csv") is None
+
+
 PLUGIN = """\
 from dataclasses import dataclass
 
@@ -79,6 +92,9 @@ class Store:
     def recognises(self, reader, path):
         entry = reader.stat(path)
         return entry is not None and entry.kind == "symlink" and entry.target.startswith("store/")
+
+    def gives(self, reader, path):
+        return None
 
 
 STANDIN = Store()

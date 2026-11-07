@@ -18,9 +18,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-NAMESPACES = ("remotes", "validity")
-"""The folders astra-tools keeps in the cache: the remote stores (`sources.remote`) and the
-validity of analyses from a commit (`rules.commits`)."""
+NAMESPACES = ("remotes", "validity", "hashes", "worktrees")
+"""The folders astra-tools keeps in the cache: the remote stores (`sources.remote`), the
+validity of analyses from a commit (`rules.commits`), the hashes of files (`hashing`) and the
+checkouts made for runs (`Repository.worktree`)."""
 
 
 class CacheError(Exception):

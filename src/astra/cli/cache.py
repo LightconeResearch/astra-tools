@@ -11,9 +11,10 @@ from astra.cli import fail
 def command() -> None:
     """Show or clear the cache.
 
-    The cache keeps the commits fetched from remotes and the validity of analyses from a
-    commit, outside every repository. Everything in it is safe to delete. ASTRA_CACHE_DIR, an
-    absolute path, moves it.
+    The cache keeps the commits fetched from remotes, the validity of analyses from a commit,
+    the hashes of files and the checkouts runners make for their runs, outside every repository.
+    Everything in it is safe to delete.
+    ASTRA_CACHE_DIR, an absolute path, moves it.
     """
 
 

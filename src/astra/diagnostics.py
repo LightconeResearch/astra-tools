@@ -94,12 +94,15 @@ class Catalogue:
         """The codes of `layer`'s rules, in the specification's order."""
         return tuple(code for code, rule in self.rules.items() if rule.layer == layer)
 
+    def level(self, code: str) -> Level:
+        """The level of `code`: an error for a `MUST`, a warning for a `SHOULD` (§3)."""
+        return "error" if self.rule(code).level == "MUST" else "warning"
+
     def diagnostic(
         self, code: str, message: str, location: Location, related: Iterable[Location] = ()
     ) -> Diagnostic:
         """A diagnostic for `code`, at the level its rule's `MUST` or `SHOULD` gives (§3)."""
-        level: Level = "error" if self.rule(code).level == "MUST" else "warning"
-        return Diagnostic(code, level, message, location, tuple(related))
+        return Diagnostic(code, self.level(code), message, location, tuple(related))
 
 
 def json_pointer(path: Iterable[str | int]) -> str:

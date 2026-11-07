@@ -266,6 +266,15 @@ def cut_loops(start: Identity, chain: Chain) -> Chain:
     return tuple(kept)
 
 
+def along(result: Planned, chain: Chain) -> int | None:
+    """Which of `result`'s names `chain` gives, its index: `chain`'s declarations from the
+    analysis it belongs to on, every stretch that leads back cut out (`cut_loops`), are those of
+    the name (§20 *Evidence*). None where they give none of its names, as where `chain` never
+    reaches that analysis."""
+    cut = cut_loops(result.owner, chain)
+    return next((index for index, named in enumerate(result.chains) if named == cut), None)
+
+
 def driven(stack: Stack) -> Mapping[Identity, tuple[Chain, ...]]:
     """The chains of declarations from each analysis's file that its universes drive (§16
     *Which declarations are driven*), each driven on its own:

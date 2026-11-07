@@ -1,14 +1,18 @@
 """Git, through its own commands (design §4.3): which repository holds a folder, what its
-index tracks (§7), its commits and their objects (§17), and the remote stores' fetches."""
+index tracks (§7), its commits and their objects (§17), the remote stores' fetches, and, for a
+runner, what a checkout has changed and checkouts of its own (§21, design §4.8)."""
 
 from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 import weakref
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+
+from astra import cache
 
 
 class GitError(Exception):
@@ -111,6 +115,17 @@ class Repository:
             return None
         return os.fsdecode(result.stdout).strip() or None
 
+    def commit(self, revision: str) -> str | None:
+        """The full id of the commit `revision` names, as git reads a revision (a branch, a tag,
+        a shortened id, `HEAD~1`); None where it names none."""
+        result = _git(
+            "-C", str(self.top), "rev-parse", "--quiet", "--verify", "--end-of-options",
+            f"{revision}^{{commit}}",
+        )  # fmt: skip
+        if result.returncode != 0:
+            return None
+        return os.fsdecode(result.stdout).strip() or None
+
     def remote_url(self) -> str | None:
         """The URL of the default remote, as git chooses it (the current branch's, or the one
         remote, or `origin`); None where there is none."""
@@ -128,6 +143,63 @@ class Repository:
             "--filter=blob:none", "origin", f"{commit}:refs/astra/{commit}",
         )  # fmt: skip
         return self.has_commit(commit)  # also where another process kept it first
+
+    def changes(self) -> tuple[str, ...]:
+        """Each path, from the top of the working tree, that `git status --porcelain=v2
+        --untracked-files=all` reports: changed in the index or the working tree since HEAD, or
+        untracked, renames as two paths; and, in each checked-out submodule that has changes of
+        its own, each of those, after the submodule's path. A submodule is a change itself only
+        where git reports more than its content changed: its commit, say."""
+        # OPEN(O4): what git reports as a change, in the checkout and its submodules.
+        result = _git(
+            "-C", str(self.top), "status", "--porcelain=v2", "--untracked-files=all",
+            "--no-renames", "--ignore-submodules=none", "-z",
+        )  # fmt: skip
+        if result.returncode != 0:
+            error = os.fsdecode(result.stderr).strip()
+            raise GitError(f"git can't read the status of {self.top}: {error}")
+        found: list[str] = []
+        for record in result.stdout.split(b"\0"):
+            if record.startswith(b"? "):  # "? <path>"
+                found.append(os.fsdecode(record[2:]))
+            elif record.startswith((b"1 ", b"u ")):  # "1 <XY> <sub> <6 fields> <path>", "u ..."
+                fields = record.split(b" ", 8 if record.startswith(b"1") else 10)
+                xy, sub, path = fields[1], fields[2], os.fsdecode(fields[-1])
+                if not sub.startswith(b"S"):  # "N...", not a submodule
+                    found.append(path)
+                    continue
+                if sub[2:4] != b"..":  # "S<C><M><U>": tracked or untracked changes inside
+                    found.extend(
+                        f"{path}/{inner}" for inner in Repository(self.top / path).changes()
+                    )
+                if sub[1:2] == b"C" or xy != b".M":
+                    found.append(path)
+        return tuple(sorted(found))
+
+    def worktree(self, commit: str) -> Repository:
+        """A checkout of `commit` of its own, for a run (§21, design §4.8): a detached `git
+        worktree add` in a new folder of the cache's `worktrees`, its submodules updated (`git
+        submodule update --init --recursive`). Raises GitError where git can't make it, and
+        CacheError where the cache can't be used."""
+        folder = cache.root() / "worktrees"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            path = Path(tempfile.mkdtemp(prefix=f"{commit[:12]}-", dir=folder))
+        except OSError as cant:
+            raise cache.CacheError(
+                f"can't make a folder in {folder}: {cant.strerror}; set ASTRA_CACHE_DIR to a "
+                "folder astra can write"
+            ) from cant
+        commands = (
+            ("-C", str(self.top), "worktree", "add", "--quiet", "--detach", str(path), commit),
+            ("-C", str(path), "submodule", "update", "--quiet", "--init", "--recursive"),
+        )
+        for args in commands:
+            result = _git(*args)
+            if result.returncode != 0:
+                error = os.fsdecode(result.stderr).strip()
+                raise GitError(f"git can't make a checkout of {commit} in {path}: {error}")
+        return Repository(path)
 
 
 class Objects:

@@ -1,9 +1,9 @@
 """The `astra` command line (design §4.12). Each command is a module of its own, imported when
 it is run, which imports only click until then: `astra --help` and completion load no library.
 
-Exit codes: 0; 1 when `validate` finds an error, `plan` and `view` an analysis that breaks a
-`MUST`, or `info` and `universe` no stack to show; 2 for a usage error, a broken environment or
-an internal error.
+Exit codes: 0; 1 when `validate` finds an error, `check` a planned result that isn't
+`unchanged`, `plan`, `view` and `check` an analysis that breaks a `MUST`, or `info` and
+`universe` no stack to show; 2 for a usage error, a broken environment or an internal error.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 COMMANDS = MappingProxyType(
     {
         "cache": "astra.cli.cache",
+        "check": "astra.cli.check",
         "completion": "astra.cli.completion",
         "guide": "astra.cli.guide",
         "info": "astra.cli.info",

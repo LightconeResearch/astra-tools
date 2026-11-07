@@ -25,7 +25,7 @@ from astra.diagnostics import Catalogue
 from astra.rules.context import Context
 from astra.sources import paths
 from astra.stack import Element, Identity, Resolution, Stack
-from astra.universes import Place, Planned, building, cut_loops, places, read_in
+from astra.universes import Place, Planned, Selection, along, building, places, read_in
 
 SHAPE = "astra-plan/1"
 
@@ -59,8 +59,10 @@ class Result:
     decisions: Mapping[str, str | None]  # each entry of its output's `decisions`, and its option
     command: str  # its recipe's `command`, a template (§11)
     workdir: str  # the folder its recipe runs in: its output's analysis's (§11)
-    read_only: bool  # it belongs to an analysis from a commit: read through its record (§17)
-    run_at: str | None  # for a driven analysis from a commit, the commit its recipe runs on
+    read_only: bool  # it belongs to an analysis read at another commit than the root's, one
+    # from a commit or reached from it: read through its record (§17)
+    run_at: str | None  # for a driven analysis from a commit, the commit its recipe runs on, on
+    # that analysis's files; never the commit its record names, which is the driver's (§19)
 
 
 @dataclass(frozen=True)
@@ -117,7 +119,7 @@ def plan(
     context = Context(stack, Catalogue.load())
     wanted = None if universes is None else {root_universe(stack, id_) for id_ in universes}
     addresses = tuple(outputs or ())
-    requested = tuple(_output(stack, address) for address in addresses)
+    requested = tuple(root_output(stack, address) for address in addresses)
     found = building(
         stack, context.written, context.selections, context.driven, context.pins,
         context.per_universe, requested,
@@ -175,7 +177,7 @@ def root_universe(stack: Stack, id_: str) -> Element:
     return Element(stack.root, "universe", id_)
 
 
-def _output(stack: Stack, address: str) -> Element:
+def root_output(stack: Stack, address: str) -> Element:
     """The output `address` names in the root's file. Raises RequestError where it names
     none."""
     output = stack.element(address, "output")
@@ -223,20 +225,11 @@ def _result(context: Context, result: Planned, reads: Reads, made: Mapping[Key, 
         # OPEN(O32): the name along the entry's declarations from the analysis `read` belongs
         # to, after `result`'s first chain where `result` belongs there too, or else the first.
         start = result.chains[0] if result.owner == read.owner else ()
-        along = cut_loops(read.owner, (*start, *entry.chain))
-        named = zip(read.chains, done.places, strict=True)
-        place = next((place for chain, place in named if chain == along), done.places[0])
+        index = along(read, (*start, *entry.chain))
+        place = done.places[0 if index is None else index]
         inputs.append(Read(entry.written, place.bytes, done.owner.commit, done))
-    decisions: dict[str, str | None] = {}
-    if result.universe is not None:
-        selection = context.selections[result.universe]
-        assert selection is not None  # every universe of a valid stack has one (Annex D case 7)
-        for entry in context.written[result.output]:
-            if entry.field == "decisions":
-                assert entry.element is not None
-                # OPEN(O30): an inactive decision has no option selected.
-                decisions[entry.written] = min(selection.options(entry.element), default=None)
-    read_only = result.owner.commit is not None
+    selection = None if result.universe is None else context.selections[result.universe]
+    read_only = result.owner.commit != stack.root.commit
     return Result(
         result.names,
         result.owner,
@@ -244,12 +237,27 @@ def _result(context: Context, result: Planned, reads: Reads, made: Mapping[Key, 
         result.universe,
         places(stack, result),
         tuple(inputs),
-        MappingProxyType(decisions),
+        MappingProxyType(selected(context.written[result.output], selection)),
         stack.analysis(identity).outputs[result.output.id].recipe.command,
         identity.folder,
         read_only,
-        None if read_only else identity.commit,
+        None if read_only or identity.commit == stack.root.commit else identity.commit,
     )
+
+
+def selected(entries: Iterable[Resolution], selection: Selection | None) -> dict[str, str | None]:
+    """Each entry of an output's `decisions`, among the addresses it writes (`entries`), as
+    written, and the option `selection`, the effective selection of the universe its result is
+    built in, selects for it; None where there is no selection, the entry names nothing or no
+    option is selected."""
+    # OPEN(O30): an inactive decision has no option selected.
+    return {
+        entry.written: None
+        if selection is None or entry.element is None
+        else min(selection.options(entry.element), default=None)
+        for entry in entries
+        if entry.field == "decisions"
+    }
 
 
 _TEMPLATE = re.compile(r"\{\{|\}\}|\{([^}]*)\}")

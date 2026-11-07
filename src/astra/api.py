@@ -1,5 +1,5 @@
-"""The stable public functions of astra-tools (design §2): `validate`, `bind`, `init`, `plan`
-and `view`."""
+"""The stable public functions of astra-tools (design §2): `validate`, `bind`, `init`, `plan`,
+`view` and `check`."""
 
 from __future__ import annotations
 
@@ -10,10 +10,12 @@ import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 
+from astra.check import CheckReport
+from astra.check import check as check_stack
 from astra.plan import Plan, RequestError
 from astra.plan import plan as plan_stack
 from astra.sources.git import Repository
-from astra.sources.reader import Reader, WorktreeReader
+from astra.sources.reader import CommitReader, Reader, WorktreeReader
 from astra.sources.remote import Remotes
 from astra.stack import Bound, Stack
 from astra.stack import bind as bind_reader
@@ -24,6 +26,7 @@ from astra.view import view as view_stack
 
 __all__ = [
     "Bound",
+    "CheckReport",
     "InvalidAnalysisError",
     "NoAnalysisError",
     "Plan",
@@ -31,6 +34,7 @@ __all__ = [
     "UniverseView",
     "ValidationReport",
     "bind",
+    "check",
     "init",
     "plan",
     "validate",
@@ -43,7 +47,8 @@ class NoAnalysisError(Exception):
 
 
 class InvalidAnalysisError(Exception):
-    """The analysis breaks a `MUST`, so it has no plan and no view: `report` says where."""
+    """The analysis breaks a `MUST`, so it has no plan, no view and no statuses: `report` says
+    where."""
 
     def __init__(self, report: ValidationReport) -> None:
         super().__init__(f"{report.root} breaks a MUST: `astra validate` says where")
@@ -96,10 +101,42 @@ def view(universe: str, path: str | os.PathLike[str] | None = None) -> UniverseV
     return view_stack(_valid(path), universe)
 
 
-def _valid(path: str | os.PathLike[str] | None) -> Stack:
-    """The stack whose root is the analysis in `path`, where it is valid (§3)."""
+def check(
+    path: str | os.PathLike[str] | None = None,
+    *,
+    at: str | None = None,
+    universes: Iterable[str] | None = None,
+    outputs: Iterable[str] | None = None,
+) -> CheckReport:
+    """The checker's report on the analysis whose folder is `path`, read as `validate` reads it
+    (§20, design §4.7): each planned result's record and bytes statuses at each of its places,
+    and its evidence's, all of them or those `universes` and `outputs` narrow it to
+    (`check.check`). With `at`, a revision of the repository that holds the analysis (a commit,
+    a branch, a tag), the analysis is checked as it is at that commit, with its records and
+    bytes read there. Raises InvalidAnalysisError where the analysis breaks a `MUST`,
+    RequestError where `at` names no commit or a universe or an output asked for isn't there,
+    and otherwise as `validate` does."""
+    remotes = Remotes()
+    stack = _valid(path, at, remotes)  # OPEN(O5): no statuses on an invalid analysis
+    return check_stack(stack, universes, outputs, remotes)
+
+
+def _valid(
+    path: str | os.PathLike[str] | None, at: str | None = None, remotes: Remotes | None = None
+) -> Stack:
+    """The stack whose root is the analysis in `path`, read in the working tree or at the
+    revision `at`, where it is valid (§3). Raises RequestError where `at` names no commit."""
     reader, root = _root(path)
-    report, stack = validated(reader, root, Remotes())
+    remotes = remotes or Remotes()
+    if at is not None and reader.repo is not None:
+        commit = reader.repo.commit(at)
+        if commit is None:
+            raise RequestError(f"`{at}` names no commit of {reader.repo.top}")
+        reader = CommitReader(reader.repo, commit, None, remotes)
+        entry = reader.stat(posixpath.join(root, "astra.yaml"))
+        if entry is None or entry.kind != "file":
+            raise NoAnalysisError(f"{root or '.'} has no astra.yaml file at {commit}")
+    report, stack = validated(reader, root, remotes)
     if not report.valid:  # OPEN(O27): no plan and no view of an invalid analysis
         raise InvalidAnalysisError(report)
     assert stack is not None  # a valid analysis has a stack
