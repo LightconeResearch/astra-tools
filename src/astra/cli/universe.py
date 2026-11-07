@@ -40,22 +40,15 @@ def show(universe: str, path: Path | None) -> None:
     """
     from astra import universes
     from astra.cli.text.universe import show_selection
-    from astra.stack import Element
+    from astra.plan import RequestError, root_universe
 
     stack = read_stack(path)
-    analysis = stack.analysis(stack.root)  # read_stack gives a stack whose root's file is valid
-    entry = analysis.universes.get(universe)
-    if entry is None or entry.is_import:
-        own = [id_ for id_, u in analysis.universes.items() if not u.is_import]
-        listed = ", ".join(own) if own else "none"
-        what = (
-            f"`{universe}` is an import, which selects nothing"
-            if entry
-            else f"the analysis has no universe `{universe}`"
-        )
-        raise click.BadParameter(f"{what}: its universes are {listed}", param_hint="UNIVERSE")
+    try:
+        element = root_universe(stack, universe)
+    except RequestError as error:
+        raise click.BadParameter(str(error), param_hint="UNIVERSE") from None
     found = universes.selections(stack, universes.written(stack))
-    selection = found[Element(stack.root, "universe", universe)]
+    selection = found[element]
     if selection is None:  # Annex D case 7; OPEN(O23)
         click.echo(
             f"astra: `{universe}` has no effective selection, since its `derived_from` names no "
@@ -64,4 +57,5 @@ def show(universe: str, path: Path | None) -> None:
             err=True,
         )
         raise click.exceptions.Exit(FAILED)
-    show_selection(selection, entry.derived_from)  # OPEN(O22): text alone
+    derived_from = stack.analysis(stack.root).universes[universe].derived_from
+    show_selection(selection, derived_from)  # OPEN(O22): text alone

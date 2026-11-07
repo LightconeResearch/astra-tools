@@ -1,5 +1,5 @@
-"""The stable public functions of astra-tools (design §2): phase 1 has `validate`, `bind` and
-`init`."""
+"""The stable public functions of astra-tools (design §2): `validate`, `bind`, `init`, `plan`
+and `view`."""
 
 from __future__ import annotations
 
@@ -7,21 +7,47 @@ import contextlib
 import os
 import posixpath
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
 
+from astra.plan import Plan, RequestError
+from astra.plan import plan as plan_stack
 from astra.sources.git import Repository
 from astra.sources.reader import Reader, WorktreeReader
 from astra.sources.remote import Remotes
-from astra.stack import Bound
+from astra.stack import Bound, Stack
 from astra.stack import bind as bind_reader
-from astra.validate import ValidationReport
+from astra.validate import ValidationReport, validated
 from astra.validate import validate as validate_reader
+from astra.view import UniverseView
+from astra.view import view as view_stack
 
-__all__ = ["Bound", "NoAnalysisError", "ValidationReport", "bind", "init", "validate"]
+__all__ = [
+    "Bound",
+    "InvalidAnalysisError",
+    "NoAnalysisError",
+    "Plan",
+    "RequestError",
+    "UniverseView",
+    "ValidationReport",
+    "bind",
+    "init",
+    "plan",
+    "validate",
+    "view",
+]
 
 
 class NoAnalysisError(Exception):
     """No `astra.yaml` where an analysis is asked for: a usage error, not a broken rule."""
+
+
+class InvalidAnalysisError(Exception):
+    """The analysis breaks a `MUST`, so it has no plan and no view: `report` says where."""
+
+    def __init__(self, report: ValidationReport) -> None:
+        super().__init__(f"{report.root} breaks a MUST: `astra validate` says where")
+        self.report = report
 
 
 def validate(
@@ -47,6 +73,37 @@ def bind(path: str | os.PathLike[str] | None = None) -> Bound:
     `validate` does."""
     reader, root = _root(path)
     return bind_reader(reader, root, remotes=Remotes())
+
+
+def plan(
+    path: str | os.PathLike[str] | None = None,
+    *,
+    universes: Iterable[str] | None = None,
+    outputs: Iterable[str] | None = None,
+) -> Plan:
+    """The planned results of the analysis whose folder is `path`, read as `validate` reads
+    it, in an order a runner can build them in (§18, design §4.6): all of them, or those
+    `universes` and `outputs` ask for (`plan.plan`). Raises InvalidAnalysisError where the
+    analysis breaks a `MUST`, RequestError where a universe or an output asked for isn't there,
+    and otherwise as `validate` does."""
+    return plan_stack(_valid(path), universes, outputs)
+
+
+def view(universe: str, path: str | os.PathLike[str] | None = None) -> UniverseView:
+    """The analysis whose folder is `path`, read as `validate` reads it, as it is in its
+    universe `universe` (design §4.6). Raises InvalidAnalysisError where the analysis breaks a
+    `MUST`, RequestError where it has no such universe, and otherwise as `validate` does."""
+    return view_stack(_valid(path), universe)
+
+
+def _valid(path: str | os.PathLike[str] | None) -> Stack:
+    """The stack whose root is the analysis in `path`, where it is valid (§3)."""
+    reader, root = _root(path)
+    report, stack = validated(reader, root, Remotes())
+    if not report.valid:  # OPEN(O27): no plan and no view of an invalid analysis
+        raise InvalidAnalysisError(report)
+    assert stack is not None  # a valid analysis has a stack
+    return stack
 
 
 MINIMAL = """\

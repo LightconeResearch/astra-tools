@@ -18,7 +18,7 @@ from astra.diagnostics import Catalogue, Diagnostic, Location
 from astra.rules.context import Context
 from astra.sources.reader import Reader
 from astra.sources.remote import Remotes
-from astra.stack import bind
+from astra.stack import Stack, bind
 
 SHAPE = "astra-validation-report/1"
 
@@ -68,6 +68,14 @@ def validate(reader: Reader, root: str, remotes: Remotes | None = None) -> Valid
     """The report on the analysis whose folder is `root` in `reader` ("" for its top), which
     holds its `astra.yaml`; commits are got from remotes through `remotes` (§17). Raises
     OSError if a file of the stack can't be read."""
+    return validated(reader, root, remotes)[0]
+
+
+def validated(
+    reader: Reader, root: str, remotes: Remotes | None = None
+) -> tuple[ValidationReport, Stack | None]:
+    """The report, as `validate` gives it, and the stack it judged: None where the root's file
+    isn't a valid document, or it is in no repository. A valid report always has its stack."""
     file = posixpath.join(root, "astra.yaml")
     catalogue = Catalogue.load()
     bound = bind(reader, root, catalogue, remotes)
@@ -88,4 +96,4 @@ def validate(reader: Reader, root: str, remotes: Remotes | None = None) -> Valid
     # analysis's own root (`rules.commits`): it is reported once.
     unique = dict.fromkeys(found)
     diagnostics = sorted(unique, key=lambda d: _order(d.location) + (d.code,))
-    return ValidationReport(file, tuple(diagnostics), unchecked(catalogue))
+    return ValidationReport(file, tuple(diagnostics), unchecked(catalogue)), bound.stack

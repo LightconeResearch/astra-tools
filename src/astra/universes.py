@@ -13,7 +13,8 @@ Pure functions of a Stack, each of which `rules.Context` computes once:
 - `per_universe`: the outputs built per universe, every other being built once (§13);
 - `building`: the universes built, what is built in each, the root's planned results, each with
   its names, and the universe each entry they read is read in (§16 *The universe being built*,
-  §18).
+  §18); `places`, where each name of a planned result puts its record and its bytes (§18
+  *Where records and bytes go*).
 
 A universe is named by its analysis and its id (§16 *The universe being built*): an `Element` of
 kind `universe`, so imports of one universe, under any ids, name one Element.
@@ -21,6 +22,7 @@ kind `universe`, so imports of one universe, under any ids, name one Element.
 
 from __future__ import annotations
 
+import posixpath
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -245,16 +247,23 @@ def looping(key: Resolution) -> tuple[int, int] | None:
 def unlooped(key: Resolution) -> str:
     """`key` with every stretch of declarations that leads back cut out: `stage.d` for
     `stage.again.d`, where `stage` declares `again: {path: .}` (§16)."""
-    on_chain: list[Identity | None] = [key.file]
-    ids: list[str] = []
-    for declaration in key.chain:
+    ids = (declaration.id for declaration in cut_loops(key.file, key.chain))
+    return ".".join((*ids, *key.address.segments[len(key.chain) :]))
+
+
+def cut_loops(start: Identity, chain: Chain) -> Chain:
+    """`chain`, from `start`'s file, with every stretch of declarations that leads back to an
+    analysis already on it, `start` included, cut out (§16 *Driving*)."""
+    on_chain: list[Identity | None] = [start]
+    kept: list[Declaration] = []
+    for declaration in chain:
         if declaration.reached in on_chain:
             back = on_chain.index(declaration.reached)
-            del on_chain[back + 1 :], ids[back:]
+            del on_chain[back + 1 :], kept[back:]
         else:
             on_chain.append(declaration.reached)
-            ids.append(declaration.id)
-    return ".".join((*ids, *key.address.segments[len(key.chain) :]))
+            kept.append(declaration)
+    return tuple(kept)
 
 
 def driven(stack: Stack) -> Mapping[Identity, tuple[Chain, ...]]:
@@ -409,6 +418,56 @@ class Planned:
             for chain in self.chains
         )
 
+    @property
+    def owner(self) -> Identity:
+        """The analysis it belongs to (§18): the universe's, whichever file pins it, or, for an
+        output built once, its output's."""
+        return self.output.analysis if self.universe is None else self.universe.analysis
+
+
+@dataclass(frozen=True)
+class Place:
+    """Where one name of a planned result puts it (§18 *Where records and bytes go*): each path
+    from the top of the tree its owner is read in (§17 *Identity*), in the owner's folder."""
+
+    name: str
+    address: str  # the name, then `#` and the universe's own id for a result built in one
+    record: str  # .astra/records/{universe}/{name}.json, or .astra/records/{name}.json
+    bytes: str  # the default place: results/{universe}/{name}.{format}, or results/{name}.{format}
+
+
+def places(stack: Stack, result: Planned) -> tuple[Place, ...]:
+    """`result`'s places, one for each of its names, in their order. The universe in a place is
+    always the universe's own id, never an import's."""
+    format_ = stack.analysis(result.output.analysis).outputs[result.output.id].format
+    universe = () if result.universe is None else (result.universe.id,)
+    folder = result.owner.folder
+    return tuple(
+        Place(
+            name,
+            "#".join((name, *universe)),
+            posixpath.join(folder, ".astra", "records", *universe, f"{name}.json"),
+            posixpath.join(folder, "results", *universe, f"{name}.{format_}"),
+        )
+        for name in result.names
+    )
+
+
+def read_in(
+    entry: Resolution,
+    universe: Element | None,
+    pinned: Mapping[Resolution, Element | None],
+    per_universe: frozenset[Element],
+) -> Element | None:
+    """The universe in which an entry of `inputs`, or evidence, that names an output reads it,
+    from a result built in `universe` or once (§13 *Which universe a reference reads*): for an
+    output built per universe, the one its pin names (`pins`), or else `universe`; None for an
+    output built once, whose one result is read pinned or not, and for a pin that names
+    nothing."""
+    if entry.element not in per_universe:
+        return None
+    return universe if entry.pin is None else pinned[entry]
+
 
 @dataclass(frozen=True)
 class Building:
@@ -436,11 +495,13 @@ def building(
     chains: Mapping[Identity, tuple[Chain, ...]],
     pinned: Mapping[Resolution, Element | None],
     per_universe: frozenset[Element],
+    requested: tuple[Element, ...] = (),
 ) -> Building:
     """The universes built and the root's planned results (§16 *The universe being built*,
     §18), from the addresses each output writes (`written`), the effective selections, the
     chains each analysis's universes drive (`driven`), the universe each pin names (`pins`) and
-    the outputs built per universe:
+    the outputs built per universe, with the outputs `requested` planned as the root's own are,
+    to build them on request (`plan.plan`):
 
     - the root's universes are built, and each universe a pin on an output built per universe
       names, in the `inputs` of a planned result's output or in the root's evidence;
@@ -482,14 +543,12 @@ def building(
             todo.append(result)
 
     def read(entry: Resolution, universe: Element | None) -> None:
-        """What an entry of `inputs`, or evidence, reads: an output built once, once; one built
-        per universe in the universe its pin names, or else in `universe`."""
+        """What an entry of `inputs`, or evidence, reads (`read_in`)."""
         output = entry.element
         if output is None or output.kind != "output":
             return
-        at = None
+        at = read_in(entry, universe, pinned, per_universe)
         if output in per_universe:
-            at = universe if entry.pin is None else pinned[entry]
             if at is None:
                 return
             build(at)
@@ -503,8 +562,8 @@ def building(
         build(universe)
     every: list[Element | None] = [*own]
     once: list[Element | None] = [None]
-    for id_ in root.outputs:
-        output = Element(stack.root, "output", id_)
+    outputs = [Element(stack.root, "output", id_) for id_ in root.outputs]
+    for output in (*outputs, *requested):  # OPEN(O33): one asked for, as the root's own
         for target in every if output in per_universe else once:
             plan(output, target)
     for entry in stack.resolutions:

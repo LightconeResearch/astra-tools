@@ -179,6 +179,11 @@ class Stack:
         assert analysis is not None
         return analysis
 
+    def element(self, address: str, kind: Kind) -> Element | None:
+        """The element of kind `kind` that `address` names, read in the root's file (§6
+        *Addresses*); None where it names none."""
+        return _resolve(self.analyses, self.root, parse_address(address), (kind,))[1]
+
     def determined(self) -> Iterator[tuple[Member, model.Analysis]]:
         """Each analysis whose file is a valid document, with its content: those the validator
         layer checks (Annex D cases 2 and 4)."""
