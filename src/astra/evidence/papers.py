@@ -56,8 +56,8 @@ class Cited:
 def evidence(stack: Stack) -> Iterator[tuple[Pointer, str, model.Evidence]]:
     """Each item of the root's evidence that cites a `doi`, with its pointer in the root's file
     and its DOI."""
-    # OPEN(O52): the root's evidence, as a check covers "the evidence of the analysis it is run
-    # on" (§14).
+    # The root's evidence, as a check covers "the evidence of the analysis it is run
+    # on" (§20 *Evidence*).
     analysis = stack.analysis(stack.root)
     for field, insights in (
         ("prior_insights", analysis.prior_insights),
@@ -125,7 +125,7 @@ def _fetch(doi: str, version: int | None, email: str | None) -> bytes:
         paper = urllib.parse.quote(doi[len(ARXIV) :], safe="/")
         at = "" if version is None else f"v{version}"
         return _download(f"https://arxiv.org/pdf/{paper}{at}")
-    # OPEN(O55): Unpaywall's email is the user's to give; OPEN(O57): only arXiv's versions.
+    # Unpaywall's email is the user's to give: only arXiv's versions.
     if version is not None:
         raise PaperError(
             f"only arXiv's papers can be fetched at a version: get version {version} of `{doi}` "
@@ -166,7 +166,7 @@ def _download(url: str) -> bytes:
 
 def _read(data: bytes) -> PdfReader:
     """The PDF `data`, as pypdf reads it; PaperError where it isn't one."""
-    # OPEN(O57): a PDF is bytes that begin `%PDF-` and whose pages pypdf reads.
+    # A PDF is bytes that begin `%PDF-` and whose pages pypdf reads.
     if data.startswith(b"%PDF-"):
         try:
             reader = PdfReader(io.BytesIO(data))
@@ -181,4 +181,4 @@ def _read(data: bytes) -> PdfReader:
 
 def _key(doi: str, version: int | None) -> str:
     """The cache's key for `doi` at `version`: DOI names are case-insensitive."""
-    return json.dumps([doi.lower(), version])  # OPEN(O57)
+    return json.dumps([doi.lower(), version])

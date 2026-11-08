@@ -6,8 +6,9 @@ shape `astra-plan/1`, and `astra plan`.
 The stacks are §2's worked example; astra-spec's `examples/iris_pipeline`; §16's `output5`
 reading §15's `subanalysis` in three universes, where `subanalysis`'s own `v1` drives its
 parent (§18), with an output of every placeholder; §9's `decision3`, in an output's
-`decisions`; §18's `inner` reached through `inner` and `stage.inner`; and §17's analysis from a
-commit, driven and pinned.
+`decisions`; §18's `inner` reached through `inner` and `stage.inner`; §17's analysis from a
+commit, driven and pinned; an analysis whose recipes ask for resources and containers; and one
+with each note a stack read where the root is can have (design §4.6).
 """
 
 from __future__ import annotations
@@ -21,9 +22,11 @@ from click.testing import CliRunner, Result
 
 from astra import api
 from astra.cli import main
-from astra.plan import Plan, render_command
+from astra.model import Resources
+from astra.plan import Plan, outside, render_command
+from astra.records import new_record
 from astra.stack import Identity
-from tests.conftest import MINIMAL, SPEC, git, git_init, repository
+from tests.conftest import ENVIRONMENT, MINIMAL, RUNNER, SPEC, git, git_init, repository
 from tests.test_planned import ROOT, SUBANALYSIS
 from tests.test_validate import WORKED_EXAMPLE
 
@@ -440,11 +443,12 @@ outputs:
 
 
 def test_a_result_reached_through_two_chains_has_a_place_for_each_name(tmp_path: Path) -> None:
-    """§18 *Whose a result is, and its name*: `inner`'s `output1` is made once in each
-    universe, and placed and recorded under `stage.inner.output1` and `inner.output1`. A
-    recipe writes it at the first name's place, and reads it at the place of the name along
-    the entry's declarations from the analysis the result belongs to, the root (O32): for
-    `staged`'s `inner.output1`, along the root's `stage`, then `stage`'s `inner`."""
+    """§18 *Which analysis a result belongs to, and its name* and *Where records and bytes go*:
+    `inner`'s `output1` is made once in each universe, and placed and recorded under
+    `stage.inner.output1` and `inner.output1`. A recipe writes it at the first name's place, and
+    reads it at the place of the name along the entry's declarations from the analysis the result
+    belongs to, the root: for `staged`'s `inner.output1`, along the root's `stage`, then `stage`'s
+    `inner`."""
     files = {"astra.yaml": PAIR, "stage/astra.yaml": STAGE, "stage/inner/astra.yaml": INNER}
     top = repository(tmp_path, files)
     plan = api.plan(top)
@@ -516,7 +520,7 @@ it, pinned to `lib`'s own `v1`, and `lib`'s `once`, built once."""
 def test_an_analysis_from_a_commit_is_read_through_its_records_unless_driven(
     tmp_path: Path,
 ) -> None:
-    """§17 *Using one* and *Driving one*: what the root's universes build of `lib` is the
+    """§17 *Using one*: what the root's universes build of `lib` is the
     root's, run on `lib`'s files at its commit (`run_at`); `lib`'s results in its own `v1`, and
     its output built once, though driven, are `lib`'s at that commit, read through their
     records (`read_only`), and no recipe of theirs runs (§21)."""
@@ -542,11 +546,46 @@ def test_an_analysis_from_a_commit_is_read_through_its_records_unless_driven(
     ]
 
 
+def test_an_entry_read_at_a_commit_is_where_the_runner_put_its_bytes(tmp_path: Path) -> None:
+    """§17, §21: what `result` reads of `lib` at its commit is in that commit's tree, not the
+    checkout's, so its path is git's `<commit>:<path>` until the runner says where it put the
+    bytes it got (`got`), from the checkout's top or absolute; and `new_record` hashes them
+    there, refusing an entry `got` doesn't give."""
+    top = repository(tmp_path / "repo", {"astra.yaml": MINIMAL, "lib/astra.yaml": LIB})
+    commit = git(top, "rev-parse", "HEAD").strip()
+    repository(top, {"astra.yaml": FROM_COMMIT % commit})
+    (result,) = [r for r in api.plan(top).results if r.names == ("result",)]
+    assert render_command(result, top) == (
+        f"python make.py results/u1/lib.out.json {commit}:lib/results/v1/out.json "
+        f"{commit}:lib/results/once.json 'results/u1/result.csv'"
+    )
+    got = {"lib.out#v1": "../got/out.json", "lib.once": str(tmp_path / "got" / "once.json")}
+    assert render_command(result, top, got=got) == (
+        "python make.py results/u1/lib.out.json ../got/out.json ../got/once.json "
+        "'results/u1/result.csv'"
+    )
+    (tmp_path / "got").mkdir()
+    for name, data in (("out.json", b"1\n"), ("once.json", b"22\n")):
+        (tmp_path / "got" / name).write_bytes(data)
+    for path in ("results/u1/lib.out.json", "results/u1/result.csv"):
+        (top / path).parent.mkdir(parents=True, exist_ok=True)
+        (top / path).write_bytes(b"0\n")
+    made = {"checkout": top, "commit": commit, "environment": ENVIRONMENT, "runner": RUNNER}
+    with pytest.raises(ValueError, match="lib.out#v1"):
+        new_record(result, **made)
+    (record,) = new_record(result, **made, got=got)
+    assert [(item.entry, item.size) for item in record.inputs] == [
+        ("lib.out", 2),
+        ("lib.out#v1", 2),
+        ("lib.once", 3),
+    ]
+
+
 # --- the shape, and astra plan ---
 
 
 def test_the_plan_as_astra_plan_1(worked: Path) -> None:
-    """O28: the results in the plan's order, each read of a planned result by its index."""
+    """The results in the plan's order, each read of a planned result by its index."""
     shape = api.plan(worked).to_json()
     assert (shape["shape"], shape["root"], len(shape["results"])) == (
         "astra-plan/1",
@@ -577,9 +616,12 @@ def test_the_plan_as_astra_plan_1(worked: Path) -> None:
         "workdir": "",
         "read_only": False,
         "run_at": None,
+        "resources": None,
+        "container": None,
     }  # fmt: skip
     assert shape["results"][0]["universe"] == "u1"
     assert shape["results"][0]["decisions"] == {"decision1": "a"}
+    assert shape["notes"] == []
 
 
 def test_astra_plan_shows_each_result_with_its_places_and_command(worked: Path) -> None:
@@ -587,20 +629,20 @@ def test_astra_plan_shows_each_result_with_its_places_and_command(worked: Path) 
     assert result.exit_code == 0
     assert result.stdout.splitlines() == [
         "output1#u1",
-        "  record   .astra/records/u1/output1.json",
-        "  bytes    results/u1/output1.json",
-        "  run in   .",
-        "  command  python src/output1.py 'data/input1.csv' 'a' 'results/u1/output1.json'",
+        "  record    .astra/records/u1/output1.json",
+        "  bytes     results/u1/output1.json",
+        "  run in    .",
+        "  command   python src/output1.py 'data/input1.csv' 'a' 'results/u1/output1.json'",
         "output1#u2",
-        "  record   .astra/records/u2/output1.json",
-        "  bytes    results/u2/output1.json",
-        "  run in   .",
-        "  command  python src/output1.py 'data/input1.csv' 'b' 'results/u2/output1.json'",
+        "  record    .astra/records/u2/output1.json",
+        "  bytes     results/u2/output1.json",
+        "  run in    .",
+        "  command   python src/output1.py 'data/input1.csv' 'b' 'results/u2/output1.json'",
         "output2",
-        "  record   .astra/records/output2.json",
-        "  bytes    results/output2.csv",
-        "  run in   .",
-        "  command  python src/output2.py 'results/u1/output1.json' 'results/u2/output1.json' "
+        "  record    .astra/records/output2.json",
+        "  bytes     results/output2.csv",
+        "  run in    .",
+        "  command   python src/output2.py 'results/u1/output1.json' 'results/u2/output1.json' "
         "'results/output2.csv'",
         "3 planned result(s)",
     ]
@@ -608,8 +650,416 @@ def test_astra_plan_shows_each_result_with_its_places_and_command(worked: Path) 
     assert shape == api.plan(worked).to_json()
 
 
+# --- what a recipe asks for, and the plan's notes (design §4.6) ---
+
+
+ASKING = """\
+spec_version: "0.1.0"
+container: ghcr.io/lab/analysis:1
+outputs:
+  default:
+    type: metric
+    format: json
+    recipe:
+      command: python make.py '{output}'
+  own:
+    type: metric
+    format: json
+    recipe:
+      command: python make.py '{output}'
+      container: containers/Containerfile
+      resources: {cpus: 0.5, memory: 4GB, gpus: 1}
+"""
+"""An analysis with a default container, and a recipe with a container and resources of its
+own."""
+
+
+def test_each_result_carries_what_its_recipe_asks_for(tmp_path: Path) -> None:
+    """§11, design §4.6: a result carries its recipe's `resources`, and its recipe's `container`
+    or else its analysis's, as written, which a runner schedules with. `astra-plan/1` gives the
+    resources asked for, and `astra plan` shows both."""
+    top = repository(tmp_path, {"astra.yaml": ASKING})
+    plan = api.plan(top)
+    default, own = plan.results
+    assert (default.container, default.resources) == ("ghcr.io/lab/analysis:1", None)
+    assert (own.container, own.resources) == (
+        "containers/Containerfile",
+        Resources(cpus=0.5, memory="4GB", gpus=1),
+    )
+    assert [(r["container"], r["resources"]) for r in plan.to_json()["results"]] == [
+        ("ghcr.io/lab/analysis:1", None),
+        ("containers/Containerfile", {"cpus": 0.5, "memory": "4GB", "gpus": 1}),
+    ]
+    assert astra("plan", str(top)).stdout.splitlines() == [
+        "default",
+        "  record    .astra/records/default.json",
+        "  bytes     results/default.json",
+        "  run in    .",
+        "  container ghcr.io/lab/analysis:1",
+        "  command   python make.py 'results/default.json'",
+        "own",
+        "  record    .astra/records/own.json",
+        "  bytes     results/own.json",
+        "  run in    .",
+        "  container containers/Containerfile",
+        "  resources cpus 0.5, memory 4GB, gpus 1",
+        "  command   python make.py 'results/own.json'",
+        "2 planned result(s)",
+    ]
+
+
+def test_the_plan_notes_a_pin_that_names_another_analysiss_universe_by_the_fallback(
+    pinning: Path,
+) -> None:
+    """design §4.6, §16 *Pins and imported universes*: the root's `subanalysis.output1#v1`
+    names `subanalysis`'s `v1` only because the root's file has no universe `v1`, so adding one
+    would change what it names. That is noted, though it breaks no rule; the pins naming the
+    root's own `u1` and its imports aren't."""
+    plan = api.plan(pinning)
+    (note,) = [note for note in plan.notes if note.kind == "fallback_pin"]
+    assert note.results == ()
+    assert note.location is not None
+    assert (note.location.file, note.location.pointer) == (
+        "astra.yaml",
+        "/outputs/output5/inputs/2",
+    )
+    assert note.message == (
+        "`subanalysis.output1#v1` names `v1` of `subanalysis` only because this file has no "
+        "universe `v1`: adding one, or an import of that id, would change what it names"
+    )
+    (shaped,) = [note for note in plan.to_json()["notes"] if note["kind"] == "fallback_pin"]
+    assert shaped == {
+        "kind": "fallback_pin",
+        "message": note.message,
+        "location": {
+            "file": "astra.yaml",
+            "pointer": "/outputs/output5/inputs/2",
+            "line": note.location.line,
+            "column": note.location.column,
+            "key": None,
+            "commit": None,
+            "url": None,
+        },
+        "results": [],
+        "built": True,
+    }
+    where = f"astra.yaml:{note.location.line}:{note.location.column}"
+    assert f"note {where} {note.message}" in astra("plan", str(pinning), "--notes").stdout
+    assert "  1 pin(s) rely on the fallback (§16)" in astra("plan", str(pinning)).stdout
+
+
+def test_the_plan_notes_each_result_with_two_names(tmp_path: Path) -> None:
+    """design §4.6, §18: `inner`'s `output1`, reached through `inner` and `stage.inner`, has two
+    names in each universe. Each is noted, though `RESULT_IN_TWO_PLACES` is only a SHOULD, and
+    `astra-plan/1` gives the result by its index."""
+    files = {"astra.yaml": PAIR, "stage/astra.yaml": STAGE, "stage/inner/astra.yaml": INNER}
+    top = repository(tmp_path, files)
+    plan = api.plan(top)
+    assert [(note.kind, note.location) for note in plan.notes] == [("two_names", None)] * 2
+    assert [[r.places[0].address for r in note.results] for note in plan.notes] == [
+        ["inner.output1#u1"],
+        ["inner.output1#u2"],
+    ]
+    assert plan.notes[0].message == (
+        "one result has the names `inner.output1#u1`, `stage.inner.output1#u1`: it is made "
+        "once and placed under each, as its analysis is driven through two chains of "
+        "declarations"
+    )
+    shaped = plan.to_json()
+    for note in shaped["notes"]:
+        (index,) = note["results"]
+        assert shaped["results"][index]["names"] == ["inner.output1", "stage.inner.output1"]
+    lines = astra("plan", str(top), "--notes").stdout.splitlines()
+    assert lines[-4:] == [
+        f"note {plan.notes[0].message}",
+        f"note {plan.notes[1].message}",
+        f"{len(plan.results)} planned result(s), and notes, none of them a breach:",
+        "  2 result(s) have two names",
+    ]
+
+
+NOTED = """\
+spec_version: "0.1.0"
+inputs:
+  input1: {path: data/input1.csv}
+decisions:
+  decision1:
+    options: {a: {}, b: {}, c: {}}
+  decision2:
+    options: {x: {}, y: {}}
+outputs:
+  first:
+    type: metric
+    format: json
+    inputs: [input1]
+    decisions: [decision1]
+    recipe:
+      command: PYTHONPATH=../lib python -m first '{inputs.input1}' '{decisions.decision1}' {output}
+  second:
+    type: metric
+    format: json
+    inputs: [first]
+    recipe:
+      command: python src/second.py '{inputs.first}' '{output}'
+  third:
+    type: metric
+    format: json
+    inputs: [first]
+    decisions: [decision2]
+    recipe:
+      command: python src/third.py '{inputs.first}' '{decisions.decision2}' '{output}'
+  never:
+    type: figure
+    format: png
+    when: [decision1.c]
+    recipe:
+      command: python src/never.py '{output}'
+universes:
+  u1: {decisions: {decision1: a, decision2: x}}
+  u2: {decisions: {decision1: a, decision2: y}}
+  u3: {decisions: {decision1: b, decision2: x}}
+"""
+"""`first` selects the same option of `decision1` in `u1` and `u2`, so it is one computation
+there, and so is `second`, which reads it; `third` selects `decision2` too, which differs.
+`never` is active in no universe, and `first`'s command names `../lib`."""
+
+
+def test_the_plan_notes_each_output_with_no_planned_result(pinning: Path, tmp_path: Path) -> None:
+    """design §4.6, §18: an output of a declared analysis that no planned result reads and the
+    root's evidence doesn't cite, and an output of the root active in none of its universes,
+    have no planned result, so a check of the root never covers them. Each is noted at the
+    output, in the files read where the root is."""
+    found = [note for note in api.plan(pinning).notes if note.kind == "unplanned"]
+    assert [(n.location and n.location.file, n.location and n.location.pointer) for n in found] == [
+        ("subanalysis/astra.yaml", "/outputs/unread"),
+        ("subanalysis/astra.yaml", "/outputs/cond"),
+        ("subanalysis/astra.yaml", "/outputs/reader"),
+    ]
+    assert found[0].message == (
+        "`unread` has no planned result: no planned result reads it and the root's evidence "
+        "doesn't cite it, so a check of the root never covers it"
+    )
+    top = repository(tmp_path, {"astra.yaml": NOTED, "data/input1.csv": "1\n"})
+    (never,) = [note for note in api.plan(top).notes if note.kind == "unplanned"]
+    assert never.location is not None
+    assert (never.location.pointer, never.results) == ("/outputs/never", ())
+    assert never.message == (
+        "`never` has no planned result: it is active in none of the root's universes, so a "
+        "check of the root never covers it"
+    )
+
+
+def test_the_plan_notes_results_that_are_one_computation_in_several_universes(
+    pinning: Path, tmp_path: Path
+) -> None:
+    """design §4.6: results of one output that read the same files and the same computations,
+    with the same options selected, are one computation, which a runner can build once and
+    place at each. The root's `u1` and `subanalysis`'s own `u1` both select `a` for
+    `subanalysis`'s `decision1`, so its `output1` is one computation in both; each result is
+    named in its owner's terms."""
+    top = repository(tmp_path, {"astra.yaml": NOTED, "data/input1.csv": "1\n"})
+    plan = api.plan(top)
+    found = [note for note in plan.notes if note.kind == "same_computation"]
+    assert [[r.places[0].address for r in note.results] for note in found] == [
+        ["first#u1", "first#u2"],
+        ["second#u1", "second#u2"],
+    ]
+    assert found[0].location is None
+    assert found[0].message == (
+        "`first#u1`, `first#u2` are one computation, with the same command, inputs and selected "
+        "options: a runner can build one and place its bytes at each"
+    )
+    index = {r.places[0].address: at for at, r in enumerate(plan.results)}
+    shaped = [note for note in plan.to_json()["notes"] if note["kind"] == "same_computation"]
+    assert [note["results"] for note in shaped] == [
+        [index["first#u1"], index["first#u2"]],
+        [index["second#u1"], index["second#u2"]],
+    ]
+    found = [note for note in api.plan(pinning).notes if note.kind == "same_computation"]
+    assert [[r.places[0].address for r in note.results] for note in found] == [
+        ["subanalysis.output1#u1", "output1#u1"],
+        ["subanalysis.output1#u2", "output1#v1"],
+    ]
+    assert found[0].message.startswith(
+        "`subanalysis.output1#u1`, `output1#u1` of `subanalysis` are one computation"
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "climbing"),
+    [
+        ("python ../../src/x.py '{output}'", ("../../src/x.py",)),
+        ("PYTHONPATH=../lib:{inputs.code}/src python -m x", ("../lib",)),
+        ("python x.py --config=../c.yaml 2>../log", ("../c.yaml", "../log")),
+        ("cd .. && make", ("..",)),
+        ('bash -c "python ../x.py" && cat ../x.py', ("../x.py",)),
+        ("python src/../x.py a/b/../../c", ()),
+        ("python src/../../x.py", ("src/../../x.py",)),
+        ("python {inputs.data}/../x.py {output}", ()),
+        ("/usr/bin/env python /opt/../x.py", ()),
+        ("awk '{{print $1}}' x | seq 1..3 > ...", ()),
+    ],
+)
+def test_a_command_names_a_path_outside_its_folder_where_it_climbs_out(
+    command: str, climbing: tuple[str, ...]
+) -> None:
+    """design §4.6, §11: a path climbs out of the folder the recipe runs in where its `..`
+    outnumber the folders before them. A path from a placeholder starts elsewhere, and an
+    absolute path names no folder of the analysis."""
+    assert outside(command) == climbing
+
+
+def test_the_plan_notes_each_command_that_names_a_path_outside_its_folder(tmp_path: Path) -> None:
+    """design §4.6, §21 `CODE_OUTSIDE_ANALYSIS`: `first`'s command names `../lib`, outside the
+    root's folder, and `second`'s names `sub/second.py`, inside `sub`, which holds an
+    `astra.yaml` of its own, declared or not. Each is noted at the command, citing the rule,
+    which a runner holds a recipe to; `third`'s `src/third.py` is the root's own."""
+    files = {
+        "astra.yaml": NOTED.replace("python src/second.py", "python ./sub/second.py"),
+        "data/input1.csv": "1\n",
+        "sub/astra.yaml": MINIMAL,
+    }
+    top = repository(tmp_path, files)
+    found = [note for note in api.plan(top).notes if note.kind == "outside_folder"]
+    assert [note.location and note.location.pointer for note in found] == [
+        "/outputs/first/recipe/command",
+        "/outputs/second/recipe/command",
+    ]
+    rule = (
+        "a recipe should run only code tracked in its analysis's folder, outside every folder "
+        "below it that holds an analysis of its own, or that its output's inputs give it "
+        "(`CODE_OUTSIDE_ANALYSIS`, §21)"
+    )
+    assert [note.message for note in found] == [
+        f"the command names `../lib`, outside its analysis's folder: {rule}",
+        f"the command names `./sub/second.py`, inside `sub`, which holds an analysis of its own: "
+        f"{rule}",
+    ]
+    assert all(note.results == () for note in found)
+
+
+BUILDS = {
+    "astra.yaml": """\
+spec_version: "0.1.0"
+inputs:
+  input1: {path: data/input1.csv}
+decisions:
+  decision1:
+    options: {a: {}, b: {}}
+outputs:
+  result:
+    type: metric
+    format: json
+    decisions: [decision1]
+    recipe:
+      command: python make.py '{decisions.decision1}' '{output}'
+  other:
+    type: metric
+    format: json
+    recipe:
+      command: python ../tools/other.py '{output}'
+universes:
+  u1: {decisions: {decision1: a}}
+""",
+    "data/input1.csv": "1\n",
+    "sub/astra.yaml": """\
+spec_version: "0.1.0"
+analyses:
+  paper: {path: ..}
+  inner: {path: inner}
+outputs:
+  read:
+    type: metric
+    format: json
+    inputs: [paper.input1, paper.result#u1]
+    recipe:
+      command: python read.py '{inputs.paper.input1}' '{inputs.paper.result#u1}' '{output}'
+""",
+    "sub/inner/astra.yaml": """\
+spec_version: "0.1.0"
+analyses:
+  paper: {path: ../..}
+outputs:
+  pinned:
+    type: metric
+    format: json
+    inputs: [paper.result#u1]
+    recipe:
+      command: python ../pinned.py '{inputs.paper.result#u1}' '{output}'
+""",
+}
+"""`sub` reads from the analysis above it, which has decisions its universes don't set, so it
+doesn't build it; it builds `inner`, which has none, and plans none of its outputs. Both pin
+`paper.result#u1` by the fallback, and only `sub`'s pin is read through. A command of each
+climbs out of its folder."""
+
+
+def test_the_plan_notes_say_whether_they_concern_what_the_root_builds(tmp_path: Path) -> None:
+    """design §4.6: a fallback pin concerns what the root builds where a planned result reads
+    through it, and an output with no planned result, or a command naming a path outside its
+    analysis, where its analysis is the root or one the root drives. `astra plan` counts and
+    lists those, and gives the whole stack's count of each kind on a line of its own; the JSON
+    lists every note, with `built`."""
+    sub = repository(tmp_path, BUILDS) / "sub"
+    plan = api.plan(sub)
+    found = [(note.kind, note.location and note.location.file, note.built) for note in plan.notes]
+    assert found == [
+        ("fallback_pin", "sub/astra.yaml", True),
+        ("fallback_pin", "sub/inner/astra.yaml", False),
+        ("unplanned", "astra.yaml", False),
+        ("unplanned", "sub/inner/astra.yaml", True),
+        ("outside_folder", "astra.yaml", False),
+        ("outside_folder", "sub/inner/astra.yaml", True),
+    ]
+    lines = astra("plan", str(sub), "--notes").stdout.splitlines()
+    listed = [line for line in lines if line.startswith("note ")]
+    assert [line.split(" ", 2)[1].split(":")[0] for line in listed] == [
+        "sub/astra.yaml",
+        "sub/inner/astra.yaml",
+        "sub/inner/astra.yaml",
+    ]
+    assert lines[-7:] == [
+        f"{len(plan.results)} planned result(s), and notes, none of them a breach:",
+        "  1 pin(s) rely on the fallback (§16)",
+        "  2 pin(s) in the whole stack rely on the fallback (§16)",
+        "  1 output(s) have no planned result",
+        "  2 output(s) in the whole stack have no planned result",
+        "  1 command(s) name a path outside their analysis (CODE_OUTSIDE_ANALYSIS)",
+        "  2 command(s) in the whole stack name a path outside their analysis",
+    ]
+    shaped = json.loads(astra("plan", str(sub), "--json").stdout)["notes"]
+    assert [note["built"] for note in shaped] == [True, False, False, True, False, True]
+
+
+def test_astra_plan_counts_the_notes_by_kind_and_lists_them_on_request(tmp_path: Path) -> None:
+    """design §4.6: `astra plan` counts the notes by kind after the results, and `--notes`
+    lists each one first. The JSON always lists them."""
+    top = repository(tmp_path, {"astra.yaml": NOTED, "data/input1.csv": "1\n"})
+    plan = api.plan(top)
+    counts = [
+        "  1 output(s) have no planned result",
+        "  2 computation(s) repeated across universes, in 4 result(s)",
+        "  1 command(s) name a path outside their analysis (CODE_OUTSIDE_ANALYSIS)",
+    ]
+    lines = astra("plan", str(top)).stdout.splitlines()
+    assert not any(line.startswith("note ") for line in lines)
+    assert lines[-4:] == [
+        f"{len(plan.results)} planned result(s), and notes, none of them a breach "
+        "(--notes lists them):",
+        *counts,
+    ]
+    lines = astra("plan", str(top), "--notes").stdout.splitlines()
+    listed = [line for line in lines if line.startswith("note ")]
+    assert all(line.endswith(note.message) for line, note in zip(listed, plan.notes, strict=True))
+    assert lines[-4:] == [
+        f"{len(plan.results)} planned result(s), and notes, none of them a breach:",
+        *counts,
+    ]
+    assert len(json.loads(astra("plan", str(top), "--json", "--notes").stdout)["notes"]) == 4
+
+
 def test_an_invalid_analysis_has_no_plan(tmp_path: Path) -> None:
-    """O27: `astra plan` prints the validation report, as `astra validate` does, and exits 1;
+    """`astra plan` prints the validation report, as `astra validate` does, and exits 1;
     `api.plan` raises InvalidAnalysisError with the report."""
     broken = WORKED_EXAMPLE.replace("{decision1: b}", "{decision1: c}")
     top = repository(tmp_path, {"astra.yaml": broken, "data/input1.csv": "1\n"})

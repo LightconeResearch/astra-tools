@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from astra.cli import FAILED, environment, write_json, write_report
+from astra.cli import FAILED, environment, write_json
 
 
 @click.command("check")
@@ -25,18 +25,16 @@ def command(path: Path | None, at: str | None, as_json: bool) -> None:
     PATH is the analysis's folder, the current one by default. Each planned result is shown at
     each of its places with its record's status, unchanged, stale or missing, and its bytes',
     present or absent, and why; then each evidence with the status of what it cites (§20).
-    Exits 0 when every planned result and evidence is unchanged, 1 when one isn't or the
-    analysis breaks a MUST, which is shown as `astra validate` shows it, and 2 where it can't be
-    read or REV names no commit.
+    Where the analysis breaks a MUST, its errors come first, as `astra validate` shows them,
+    and only the results they leave determined are shown. Exits 0 when the analysis is valid
+    and every planned result and evidence is unchanged, 1 when one isn't or the analysis breaks
+    a MUST, and 2 where it can't be read or REV names no commit.
     """
     from astra import api
 
     with environment():
         try:
             report = api.check(path, at=at)
-        except api.InvalidAnalysisError as error:  # OPEN(O5)
-            write_report(error.report, as_json)
-            raise click.exceptions.Exit(FAILED) from None
         except api.RequestError as error:
             raise click.BadParameter(str(error), param_hint="--at") from None
     if as_json:

@@ -1,10 +1,10 @@
-"""Phase 1's *Done when* (design §6): every validator code of rules.json has a case that makes the
-validator report it, at the place its section gives, and `unchecked` is empty. astra-spec's
-examples and §2's worked example are in `test_validate.py`.
+"""Phase 1's *Done when* (design §6): every validator code of rules.json, and of astra-tools' own
+(design §3), has a case that makes the validator report it, at the place its section gives, and
+`unchecked` is empty. astra-spec's examples and §2's worked example are in `test_validate.py`.
 
 The cases are small stacks built from each code's section, one folder each, in one repository
 shared by all of them. The modules beside this one (`test_names.py`, `test_inputs.py`, ...)
-hold each rule's breaking and keeping cases in full, and the Annex D cases.
+hold each rule's breaking and keeping cases in full, and the design §4.13 cases.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ class Case:
 
 CASES: Mapping[str, Case] = {
     "NOT_IN_REPOSITORY": Case("§5", OUTPUT, ""),
-    "UNSUPPORTED_SPEC_VERSION": Case("§5 Versions", OUTPUT, "/spec_version"),
+    "UNSUPPORTED_SPEC_VERSION": Case("§5 Versions, design §3", OUTPUT, "/spec_version"),
     "UNRESOLVED_ADDRESS": Case(
         "§6 Addresses",
         OUTPUT.replace("    recipe:", "    inputs: [nothing]\n    recipe:"),
@@ -183,7 +183,7 @@ universes:
         "/universes/u1/decisions",
     ),
     "PIN_INACTIVE": Case(
-        "§13 Which universe a reference reads",
+        "§13 Pins",
         DECISIONS
         + """\
   output4:
@@ -203,7 +203,7 @@ universes: {u1: {decisions: {decision1: a}}, u2: {decisions: {decision1: b}}}
         "/outputs/output2/inputs/0",
     ),
     "INPUT_NOT_BUILT": Case(
-        "§13 Which universe a reference reads",
+        "§13 Pins",
         DECISIONS
         + """\
   output4:
@@ -228,15 +228,15 @@ universes: {u1: {decisions: {decision1: a}}}
         "/decisions/decision1/options/a/insights/0",
     ),
     "DECLARATION_OUTSIDE_REPOSITORY": Case(
-        "§15 A declaration by path", "analyses: {up: {path: ../..}}\n" + OUTPUT, "/analyses/up/path"
+        "§15 The rules", "analyses: {up: {path: ../..}}\n" + OUTPUT, "/analyses/up/path"
     ),
     "MISSING_DECLARED_ANALYSIS": Case(
-        "§15 A declaration by path",
+        "§15 The rules",
         "analyses: {subanalysis: {path: subanalysis}}\n" + OUTPUT,
         "/analyses/subanalysis/path",
     ),
     "CLASHING_RESULT_NAME": Case(
-        "§15 One analysis, however it is declared",
+        "§6 Ids and maps, §15",
         "analyses: {result: {path: subanalysis}}\n" + OUTPUT,
         "/outputs",
         {"subanalysis/astra.yaml": MINIMAL},
@@ -337,15 +337,17 @@ universes:
         "/analyses/old/commit",
     ),
     "COMMIT_NOT_ANCESTOR": Case(
-        "§17", "analyses: {side: {path: ., commit: '{side}'}}\n" + OUTPUT, "/analyses/side/commit"
+        "§17, design §3",
+        "analyses: {side: {path: ., commit: '{side}'}}\n" + OUTPUT,
+        "/analyses/side/commit",
     ),
     "REMOTE_UNREACHABLE": Case(
-        "§17 Getting a commit from a remote",
+        "§17 Reading one, design §3",
         f"analyses: {{up: {{url: 'file:///nowhere/up.git', commit: '{ZERO}'}}}}\n" + OUTPUT,
         "/analyses/up",
     ),
     "DECLARED_ANALYSIS_INVALID": Case(
-        "§17 What is read, and validity",
+        "§17 Reading one",
         "analyses: {old: {path: ., commit: '{first}'}}\n" + OUTPUT,
         "/analyses/old",
     ),

@@ -42,7 +42,7 @@ def verify(stack: Stack) -> tuple[Diagnostic, ...]:
     isn't in the cache (`EVIDENCE_PAPER_MISSING`, at its `doi`), or whose `exact` isn't found
     where it is sought (`EVIDENCE_QUOTE_NOT_FOUND`, at its `quote`); nothing for one found.
     Reads only the cache: `papers.add` keeps a paper."""
-    # OPEN(O53): only the cache is read.
+    # Only the cache is read.
     found: list[Diagnostic] = []
     texts: dict[tuple[str, int | None], tuple[str, ...] | None] = {}
     for pointer, doi, item in papers.evidence(stack):
@@ -74,7 +74,7 @@ def _page(location: model.FragmentSelector | None) -> int | None:
     """The page, counted from 1, that the first `page=` of a PDF fragment identifier gives, its
     parameters joined with `&` (§14 *Fragment identifiers*); None where the location gives none
     or follows another syntax."""
-    # OPEN(O54): any other location is sought in the whole text.
+    # Any other location is sought in the whole text.
     if location is None or location.conforms_to not in PDF:
         return None
     for parameter in location.value.split("&"):
@@ -88,7 +88,7 @@ def _found(exact: str, text: str) -> bool:
     """Whether `exact` is in `text` to within THRESHOLD, both read alike: every run of
     whitespace, line breaks included, made one space, and a ligature such as `ﬁ`, which a PDF's
     text often holds, its letters (NFKC)."""
-    # OPEN(O56): how a quote counts as found.
+    # How a quote counts as found.
     exact, text = (" ".join(unicodedata.normalize("NFKC", s).split()) for s in (exact, text))
     # partial_ratio matches the shorter of the two inside the longer: a text shorter than the
     # quote is compared whole.

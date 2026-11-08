@@ -5,8 +5,9 @@ a result planned in the universe being built is active there (`INPUT_NOT_BUILT`)
 `PIN_INACTIVE` holds of every pin on an output, in every file of the stack. `INPUT_NOT_BUILT`
 holds only in the universes built, for the results planned there (§16 *What a validator
 checks*, `universes.building`). Neither is checked for an output whose activity is
-undetermined, nor in a universe with no effective selection (Annex D cases 6 and 7), nor for a
-reference that names nothing or a pin that names no universe (case 5).
+undetermined, nor in a universe with no effective selection (design §4.13 cases 6 and 7), nor for a
+reference that names nothing or a pin that names no universe (case 5), nor for one that names an
+output on a cycle (case 13).
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ def _pinned(context: Context) -> Iterator[Diagnostic]:
         output, universe = entry.element, context.pins.get(entry)
         if output is None or output.kind != "output" or universe is None:
             continue
+        if context.on_cycle(output):  # design §4.13 case 13
+            continue
         if context.activity(universe, output) is False:
             message = (
                 f"`{entry.written}` pins `{entry.address}` to "
@@ -48,6 +51,8 @@ def _read(context: Context) -> Iterator[Diagnostic]:
     for entry, universe in context.building.reads:
         if entry.field == "inputs" and entry.pin is None and universe is not None:
             assert entry.element is not None
+            if context.on_cycle(entry.element):  # design §4.13 case 13
+                continue
             if context.activity(universe, entry.element) is False:
                 inactive.setdefault(entry, []).append(universe)
     for entry, universes in inactive.items():

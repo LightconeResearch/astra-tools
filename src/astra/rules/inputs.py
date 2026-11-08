@@ -7,7 +7,9 @@ stack (`RESERVED_PATH`, §5 *The folder*).
 A path is joined to its file's folder and tidied as text, and names the entry at exactly that
 path, a symlink never followed (Annex B). Each analysis is read through its own Reader, in the
 working tree or at a commit. Stand-ins are those `sources.standins` registers. An input that
-breaks `MISSING_INPUT_FILE` isn't checked by `INPUT_NOT_TRACKED` (Annex D case 8).
+breaks `MISSING_INPUT_FILE` isn't checked by `INPUT_NOT_TRACKED` (design §4.13 case 8). One whose
+tidied path goes above the top breaks `INPUT_IN_ANOTHER_ANALYSIS` only (design §4.13, *Added
+since*).
 """
 
 from __future__ import annotations
@@ -53,10 +55,8 @@ def _inputs(
     for id_, input_ in analysis.inputs.items():
         path, written = joined[id_], input_.path
         at = context.at(member.identity, ("inputs", id_, "path"))
-        if path is None:
-            message = f"`{written}` goes above the top of the repository, so it names no file"
-            yield context.diagnostic("MISSING_INPUT_FILE", message, at)
-            message = f"`{written}` is outside this analysis's folder: {_ELSEWHERE}"
+        if path is None:  # above the top: outside its analysis, and checked no further
+            message = f"`{written}` goes above the top of the repository: {_ELSEWHERE}"
             yield context.diagnostic("INPUT_IN_ANOTHER_ANALYSIS", message, at)
             continue
         why = _no_file(reader, path, standins)
@@ -116,7 +116,6 @@ def _elsewhere(reader: Reader, folder: str, path: str) -> str | None:
 def _reserved(context: Context, member: Member, analysis: model.Analysis) -> Iterator[Diagnostic]:
     """`RESERVED_PATH` on each path `member`'s file writes, against the analyses read in the
     same tree as it: the working tree, or the same commit."""
-    # OPEN(O15): paths read in different trees are never compared.
     reserved = [
         posixpath.join(other.identity.folder, name)
         for other in context.stack.analyses.values()

@@ -2,22 +2,33 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
+from rich.console import Console
 from rich.text import Text
 
 from astra.cli.text import console
-from astra.diagnostics import Catalogue, Rule
+from astra.diagnostics import OWN, Catalogue, Rule
 
 LAYERS = ("parse", "schema", "validator", "check", "runner")
 
 
 def show_rules(catalogue: Catalogue) -> None:
+    """`rules.json`'s rules by layer, then astra-tools' own (design §3)."""
     out = console()
     for layer in LAYERS:
-        out.print(Text(layer, style="bold underline"))
-        for code in catalogue.codes(layer):
-            rule = catalogue.rules[code]
-            out.print(Text.assemble("  ", (code, "bold"), f" {rule.level} {rule.statement}"))
-        out.print()
+        _section(out, layer, (rule for rule in catalogue.rules.values() if rule.layer == layer))
+    for layer in LAYERS:
+        own = [rule for rule in OWN.values() if rule.layer == layer]
+        if own:
+            _section(out, f"{layer}, astra-tools' own", own)
+
+
+def _section(out: Console, heading: str, rules: Iterable[Rule]) -> None:
+    out.print(Text(heading, style="bold underline"))
+    for rule in rules:
+        out.print(Text.assemble("  ", (rule.code, "bold"), f" {rule.level} {rule.statement}"))
+    out.print()
 
 
 def show_rule(rule: Rule) -> None:

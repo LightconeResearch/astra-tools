@@ -2,12 +2,13 @@
 
 A store is a bare repository, one per URL, into which each commit asked for is fetched without
 its blobs (`git fetch --filter=blob:none`) and kept by a ref of its own, so that a commit is
-fetched once: a commit kept from an earlier fetch counts as got (§17 *Getting a commit from a
-remote*). Authentication is git's, and git never waits for a password. Offline, nothing is
+fetched once: a commit kept from an earlier fetch counts as got (§17 *Reading one*).
+Authentication is git's, and git never waits for a password. Offline, nothing is
 fetched.
 
-A gitlink's commit is got from the URL its `.gitmodules` gives, a relative one resolved as git
-resolves it (Annex B *A gitlink's commit*), and never from a submodule's local repository.
+A gitlink's commit that the submodule's checkout holds is read there before any fetch (§17
+*Reading one*); otherwise it is got from the URL its `.gitmodules` gives, a
+relative one resolved as git resolves it (Annex B *A gitlink's commit*).
 """
 
 from __future__ import annotations
@@ -30,10 +31,17 @@ class Remotes:
     offline: bool = False  # fetch nothing: read only the commits kept from earlier fetches
     _got: dict[tuple[str, str], Repository | None] = field(default_factory=dict, repr=False)
 
-    def get(self, url: str, commit: str) -> Repository | None:
-        """The store of `url`, holding `commit`, kept or fetched now; None where the commit
-        can't be got (`REMOTE_UNREACHABLE`)."""
-        # OPEN(O7): a gitlink's commit too, never from the submodule's local repository.
+    def get(
+        self, url: str | None, commit: str, local: Repository | None = None
+    ) -> Repository | None:
+        """The repository to read `commit` in: `local`, a local repository that may hold it,
+        where it does; or else the store of `url`, holding it, kept or fetched now. None where
+        the commit can't be got (astra-tools' `REMOTE_UNREACHABLE`, design §3)."""
+        # A gitlink's commit the submodule's checkout holds counts as got, before any fetch (§17).
+        if local is not None and local.has_commit(commit):
+            return local
+        if url is None:
+            return None
         if (url, commit) not in self._got:
             store = _store(url)
             got = store.has_commit(commit) or (not self.offline and store.fetch(commit))

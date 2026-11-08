@@ -1,5 +1,4 @@
-"""Stand-ins: what a large-file tool keeps in a file's place (§7, Annex B *Stand-ins*, design
-§4.5).
+"""Stand-ins: what a large-file tool keeps in a file's place (§7, design §4.5).
 
 Which stand-ins count is the validator's to say. astra-tools recognises three, and never
 fetches what they stand for:

@@ -6,7 +6,7 @@ itself is active there (`INACTIVE_DECISION`).
 
 Every universe of every analysis of the stack is checked (§16 *What a validator checks*), on its
 effective selection (`universes.selections`). None of the last four is checked for a universe
-that has none (Annex D case 7), for a selection that names nothing, nor against a constraint
+that has none (design §4.13 case 7), for a selection that names nothing, nor against a constraint
 that names nothing (case 5), nor `INACTIVE_DECISION` for a decision whose activity is
 undetermined (case 6).
 """
@@ -75,8 +75,8 @@ def _derived_from(
 
 def _loop(analysis: model.Analysis, id_: str) -> tuple[str, ...] | None:
     """The chain of `derived_from` from `id_` back to it, where `id_` is on a loop; None where
-    it isn't, though its chain may reach one. OPEN(O19): only a universe on the loop breaks
-    DERIVED_FROM_CYCLE."""
+    it isn't, though its chain may reach one: only a universe on the loop breaks
+    DERIVED_FROM_CYCLE (§12)."""
     chain = [id_]
     while True:
         named = analysis.universes[chain[-1]].derived_from
@@ -145,7 +145,7 @@ def _at(
 ) -> tuple[Location, list[Location]]:
     """Where a rule broken by a selection is reported, and the places related: at its key, where
     the universe sets it itself; or at the universe's `derived_from`, with the key where it is
-    written beside it, where the universe inherits it. OPEN(O17)"""
+    written beside it, where the universe inherits it (design §3)."""
     written = context.at(entry.file, entry.pointer, entry.key)
     if selection.own(entry):
         return written, []

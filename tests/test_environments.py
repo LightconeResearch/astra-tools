@@ -1,6 +1,6 @@
 """Environments, an extension point (design §4.10): no scheme is built in; another package
 registers one in the entry-point group `astra.environments`, and the check report shows what
-each registered scheme answered for each record's environment (O39)."""
+each registered scheme answered for each record's environment."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def test_with_no_scheme_registered_the_report_shows_none(built: Path) -> None:
 
 
 def test_the_report_shows_what_each_scheme_answered(built: Path, plugin: None) -> None:
-    """O39: at each place whose record the report gives, as text and in its shape."""
+    """At each place whose record the report gives, as text and in its shape."""
     report = api.check(built)
     (status,) = [status for c in report.results for status in c.statuses]
     assert status.environment == (Answer("example", HOLDS, True),)

@@ -4,13 +4,15 @@
 Pure functions of a Stack, each of which `rules.Context` computes once:
 
 - `selections`: every universe's effective selection (§12), with the activity of every decision
-  and output of the stack in it (§9; Annex D cases 6 and 7);
-- `driven`: the chains of declarations each analysis's universes drive (§16 *Driving*; Annex D
+  and output of the stack in it (§9; design §4.13 cases 6 and 7);
+- `driven`: the chains of declarations each analysis's universes drive (§16 *Driving*; design §4.13
   case 10), and `built`, the analyses built in its universes, whose decisions they set, each
   with the chains that reach it;
 - `imports` and `pins`: the universe each import and each pin names (§16 *Pins and imported
   universes*);
 - `per_universe`: the outputs built per universe, every other being built once (§13);
+- `depends` and `cycles`: what each output depends on directly, and the outputs that depend on
+  themselves (§10);
 - `building`: the universes built, what is built in each, the root's planned results, each with
   its names, and the universe each entry they read is read in (§16 *The universe being built*,
   §18); `places`, where each name of a planned result puts its record and its bytes (§18
@@ -59,7 +61,7 @@ class Selection:
 
     def active(self, element: Element) -> bool | None:
         """Whether a decision or an output is active here (§9); None where that is undetermined
-        (Annex D case 6)."""
+        (design §4.13 case 6)."""
         return self.activity.get(element)
 
 
@@ -78,7 +80,7 @@ def when(stack: Stack, element: Element) -> tuple[str, ...]:
 
 def names_option(stack: Stack, resolution: Resolution) -> bool:
     """Whether a condition, a constraint or a selection names an option: its address resolves to
-    a decision, and its option is one of that decision's (Annex D case 5)."""
+    a decision, and its option is one of that decision's (design §4.13 case 5)."""
     decision = resolution.element
     return decision is not None and resolution.option in options(stack, decision)
 
@@ -100,7 +102,7 @@ def selections(
 ) -> Mapping[Element, Selection | None]:
     """The effective selection of every universe of every analysis of the stack, a driven
     analysis's own included (§16 *What a validator checks*), from the addresses each decision
-    and output writes (`written`); None for a universe that has none (Annex D case 7)."""
+    and output writes (`written`); None for a universe that has none (design §4.13 case 7)."""
     whens = {
         element: tuple(entry for entry in entries if entry.field == "when")
         for element, entries in written.items()
@@ -123,7 +125,7 @@ def effective_selection(
 ) -> Selection | None:
     """§12's three steps for `universe`, or None where its `derived_from` doesn't name another
     of its analysis's universes, or its chain loops or reaches a universe with no effective
-    selection (Annex D case 7). `found` holds the selections already made, and `deriving` the
+    selection (design §4.13 case 7). `found` holds the selections already made, and `deriving` the
     universes waiting on this one's."""
     if universe in found:
         return found[universe]
@@ -153,7 +155,7 @@ def _derive(
 ) -> Selection:
     """Steps 2 and 3: each own selection replaces what is inherited for its decision, and an
     inherited selection of a decision that isn't active in the result is dropped. One whose
-    activity is undetermined isn't (Annex D case 6)."""
+    activity is undetermined isn't (design §4.13 case 6)."""
     kept = tuple(entry for entry in inherited if not any(_one_key(entry, mine) for mine in own))
     activity = _activity(stack, whens, (*kept, *own))  # OPEN(O2): step 3 is one pass
     kept = tuple(
@@ -194,7 +196,7 @@ def _activity(
     entries: tuple[Resolution, ...],
 ) -> Mapping[Element, bool | None]:
     """Whether each decision and output is active in the selection `entries`: each condition
-    of its `when` holds (§9). None where a condition is undetermined (Annex D case 6): it names
+    of its `when` holds (§9). None where a condition is undetermined (design §4.13 case 6): it names
     nothing, or tests a decision that `entries` set to an option that names nothing, or leave
     unset though it isn't inactive."""
     chosen: dict[Element, set[str]] = {}
@@ -233,7 +235,7 @@ def looping(key: Resolution) -> tuple[int, int] | None:
     on the key's chain, the universe's analysis included (§16 *Driving*), and the place on the
     chain of the analysis it leads back to (0 for the universe's own, `n` for the one the `n`th
     declaration reaches); None where none does, judged up to the first declaration that doesn't
-    resolve or whose analysis is undetermined (Annex D case 10)."""
+    resolve or whose analysis is undetermined (design §4.13 case 10)."""
     on_chain: list[Identity | None] = [key.file]
     for index, declaration in enumerate(key.chain):
         if declaration.reached in on_chain:
@@ -279,21 +281,22 @@ def driven(stack: Stack) -> Mapping[Identity, tuple[Chain, ...]]:
     """The chains of declarations from each analysis's file that its universes drive (§16
     *Which declarations are driven*), each driven on its own:
 
-    - each chain a key goes through, but for a key that loops (Annex D case 10). Every key of an
-      effective selection is one that a universe sets itself, and every key a universe sets is
-      in its effective selection or counts in its place (Annex D case 7): so the keys that drive
-      are those of the universes' own `decisions`;
+    - each chain a key goes through, but for a key that loops (design §4.13 case 10). Every key
+      of an effective selection is one that a universe sets itself, and every key a universe
+      sets is in its effective selection or counts in its place (case 7): so the keys that
+      drive are those of the universes' own `decisions`;
     - and a driven chain, the empty one of the analysis's own file included, followed by a
       declaration of an analysis with no decisions that leads back to no analysis already on it.
 
-    An undetermined analysis's declarations aren't known, so none are driven (Annex D case 4).
+    An undetermined analysis's declarations aren't known, so none are driven (design §4.13 case 4).
     """
     found: dict[Identity, tuple[Chain, ...]] = {}
     for member, _ in stack.determined():
         chains: dict[Chain, None] = {}
         for key in stack.resolutions:
             if key.field == "selection" and key.file == member.identity and looping(key) is None:
-                # OPEN(O18): through the declarations it resolves, whatever its last id names
+                # through the declarations it resolves, whatever its last id names (design
+                # §4.13 case 5)
                 for end in range(1, len(key.chain) + 1):
                     chains[key.chain[:end]] = None
         todo: list[Chain] = [(), *chains]
@@ -329,7 +332,7 @@ def built(chains: tuple[Chain, ...], driver: Identity) -> Mapping[Identity, tupl
     universes sets (§16 *What a universe sets*, *The universe being built*), each with the
     chains that reach it: the driver itself, by the empty chain, and each analysis reached
     through a declaration its universes drive, by each such chain of `chains`, in their order.
-    An undetermined analysis is left out (Annex D case 4)."""
+    An undetermined analysis is left out (design §4.13 case 4)."""
     found: dict[Identity, list[Chain]] = {driver: [()]}
     for chain in chains:
         last = chain[-1]
@@ -344,7 +347,7 @@ def built(chains: tuple[Chain, ...], driver: Identity) -> Mapping[Identity, tupl
 def imports(stack: Stack) -> Mapping[tuple[Identity, str], Element | None]:
     """The universe each import names, by the analysis whose file holds it and its id: one of
     another analysis's universes, found by identity (§12 *Imports*, §16); None where it names
-    nothing (Annex D case 5)."""
+    nothing (design §4.13 case 5)."""
     found: dict[tuple[Identity, str], Element | None] = {}
     for resolution in stack.resolutions:
         if resolution.field == "import":
@@ -360,7 +363,7 @@ def pins(
     imported universes*): the entry of the file's `universes` with its id, a universe or the one
     an import names, or else the universe with its id of the analysis whose element the
     reference names. None where it names none (`UNKNOWN_PIN_UNIVERSE`), or names an import that
-    names nothing, or its reference names nothing (Annex D case 5)."""
+    names nothing, or its reference names nothing (design §4.13 case 5)."""
     found: dict[Resolution, Element | None] = {}
     for resolution in stack.resolutions:
         if resolution.pin is None:
@@ -386,7 +389,7 @@ def per_universe(stack: Stack) -> frozenset[Element]:
     """The outputs built per universe (§13 *Built per universe or built once*): each that lists
     `decisions`, has a `when`, or has an unpinned entry of `inputs` naming an output built per
     universe, through any declaration. Every other output is built once. An entry that names
-    nothing names no output (Annex D case 5)."""
+    nothing names no output (design §4.13 case 5)."""
     found = {
         Element(member.identity, "output", id_)
         for member, analysis in stack.determined()
@@ -405,6 +408,39 @@ def per_universe(stack: Stack) -> frozenset[Element]:
     return frozenset(found)
 
 
+Depends = Mapping[Element, tuple[tuple[Element, Resolution], ...]]
+"""What each output reads through `Output.inputs`: each output an entry names, with the entry."""
+
+
+def depends(stack: Stack) -> Depends:
+    """What each output depends on directly (§10): each output an entry of its `inputs` names,
+    pinned or not, through any declaration, known by its analysis's identity. An entry that
+    names nothing names no output (design §4.13 cases 4 and 5)."""
+    found: dict[Element, list[tuple[Element, Resolution]]] = {}
+    for entry in stack.resolutions:
+        if entry.field == "inputs" and entry.element is not None:
+            if entry.element.kind == "output":
+                assert entry.owner is not None  # the output whose `inputs` holds it
+                found.setdefault(entry.owner, []).append((entry.element, entry))
+    return MappingProxyType({owner: tuple(entries) for owner, entries in found.items()})
+
+
+def cycles(depends: Depends) -> frozenset[Element]:
+    """The outputs that depend on themselves, directly or through others (§10)."""
+    found = set()
+    for start in depends:
+        seen, todo = set(), [read for read, _ in depends[start]]
+        while todo:
+            current = todo.pop()
+            if current == start:
+                found.add(start)
+                break
+            if current not in seen:
+                seen.add(current)
+                todo.extend(read for read, _ in depends.get(current, ()))
+    return frozenset(found)
+
+
 # --- §16 and §18: the universes built, and the planned results ---
 
 
@@ -412,8 +448,8 @@ def per_universe(stack: Stack) -> frozenset[Element]:
 class Planned:
     """A planned result (§18): its output's, in the universe it is built in or, for an output
     built once, once; and, for each of its names, the driven declarations to the output's
-    analysis from the analysis it belongs to, the universe's (§18 *Whose a result is, and its
-    name*)."""
+    analysis from the analysis it belongs to, the universe's (§18 *Which analysis a
+    result belongs to, and its name*)."""
 
     output: Element
     universe: Element | None  # None for an output built once
@@ -469,7 +505,7 @@ def read_in(
     per_universe: frozenset[Element],
 ) -> Element | None:
     """The universe in which an entry of `inputs`, or evidence, that names an output reads it,
-    from a result built in `universe` or once (§13 *Which universe a reference reads*): for an
+    from a result built in `universe` or once (§13 *Pins*): for an
     output built per universe, the one its pin names (`pins`), or else `universe`; None for an
     output built once, whose one result is read pinned or not, and for a pin that names
     nothing."""
@@ -522,8 +558,8 @@ def building(
       and its analysis is built (§20 *Evidence*).
 
     A result is planned in a universe only where its output is active there, which a universe
-    with no effective selection decides for none (Annex D cases 6 and 7), and where its output's
-    analysis is built there. A pin that names no universe builds none (Annex D case 5)."""
+    with no effective selection decides for none (design §4.13 cases 6 and 7), and where its
+    output's analysis is built there. A pin that names no universe builds none (case 5)."""
     root = stack.analysis(stack.root)
     universes: dict[Element, Mapping[Identity, tuple[Chain, ...]]] = {}
     planned: dict[tuple[Element, Element | None], Planned] = {}
@@ -540,7 +576,8 @@ def building(
         named: tuple[Chain, ...] = ((),)  # a result built once is its output's analysis's
         if universe is not None:
             selection = selections[universe]
-            if selection is None or output.analysis not in build(universe):  # OPEN(O20)
+            # Not planned, and nothing further (design §4.13 cases 7 and 12).
+            if selection is None or output.analysis not in build(universe):
                 return
             considered[output, universe] = None
             if selection.active(output) is not True:
@@ -572,7 +609,7 @@ def building(
     every: list[Element | None] = [*own]
     once: list[Element | None] = [None]
     outputs = [Element(stack.root, "output", id_) for id_ in root.outputs]
-    for output in (*outputs, *requested):  # OPEN(O33): one asked for, as the root's own
+    for output in (*outputs, *requested):  # one asked for, as the root's own
         for target in every if output in per_universe else once:
             plan(output, target)
     for entry in stack.resolutions:

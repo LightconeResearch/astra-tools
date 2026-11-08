@@ -1,4 +1,4 @@
-"""§6 Names: `UNRESOLVED_ADDRESS`, in every field §6's table lists, with Annex D cases 4 and 5.
+"""§6 Names: `UNRESOLVED_ADDRESS`, in every field §6's table lists, with design §4.13 cases 4 and 5.
 
 The breaking cases share one stack, whose every address names nothing; the keeping ones another,
 whose every address resolves, through spellings, `self: {path: .}` and `..` too (§15)."""
@@ -161,7 +161,7 @@ def test_every_field_of_sixs_table_breaks_it(broken: api.ValidationReport) -> No
 
 def test_it_is_reported_where_it_is_written(broken: api.ValidationReport) -> None:
     """At the value, or for a key of Universe.decisions at its map, naming the key (design §3,
-    Annex E)."""
+    Annex D)."""
     found = {
         (d.location.pointer, d.location.key): d
         for d in broken.diagnostics
@@ -179,7 +179,7 @@ def test_it_is_reported_where_it_is_written(broken: api.ValidationReport) -> Non
 
 
 def test_an_import_names_another_analysiss_universe(broken: api.ValidationReport) -> None:
-    """§16 *Pins and imported universes*: never an import in its file, nor a universe of the
+    """§12 *Imports*: never an import in its file, nor a universe of the
     importing analysis itself."""
     found = {d.location.pointer: d.message for d in broken.diagnostics}
     assert "`sub` has no universe `sub_v1`" in found["/universes/imp3/universe"]
@@ -205,7 +205,7 @@ def test_every_field_keeps_it_where_its_address_resolves(tmp_path: Path) -> None
 def test_no_address_through_an_undetermined_analysis_is_checked(
     tmp_path: Path, analyses: str, outcome: str | None
 ) -> None:
-    """Annex D case 4: in the files that declare an undetermined analysis, no address through
+    """design §4.13 case 4: in the files that declare an undetermined analysis, no address through
     that declaration is checked; the declaration's own code is reported."""
     text = (
         KEPT.replace(

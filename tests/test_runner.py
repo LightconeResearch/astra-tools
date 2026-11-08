@@ -53,23 +53,45 @@ def commit_of(top: Path, record: str) -> str:
 # --- uncommitted_changes: §21's UNCOMMITTED_CHANGES ---
 
 
-def test_the_records_and_results_a_run_writes_itself_dont_stop_it(main: Path) -> None:
-    """§21: a checkout whose only changes are the records and results the runner writes itself,
-    each result's bytes the recorded ones, can run a recipe; so can one with no change."""
-    results = api.plan(main).results
-    assert uncommitted_changes(main, results) == ()
+def test_the_records_and_results_of_a_run_dont_stop_it(main: Path) -> None:
+    """§21: a checkout whose only changes are the records and results of a run, each result's
+    bytes the recorded ones, can run a recipe; so can one with no change."""
+    assert uncommitted_changes(main) == ()
     build(main)
-    assert uncommitted_changes(main, results) == ()
+    assert uncommitted_changes(main) == ()
+
+
+def test_the_records_and_results_of_any_run_dont_stop_it(main: Path) -> None:
+    """§21: the records and results of any run, not only those of the planned results: here of
+    a universe that is gone, `u3`, and of an output that is gone, `old`, whose format holds a
+    `.`; but not bytes at such a place that no valid record there gives."""
+    build(main)
+    records, results = main / ".astra" / "records", main / "results"
+    for name, universe in (("output1", "u3"), ("old", None)):
+        folder = () if universe is None else (universe,)
+        source = records / "u1" / "output1.json"
+        record = json.loads(source.read_text())
+        record["address"] = "#".join((name, *folder))
+        (records.joinpath(*folder)).mkdir(parents=True, exist_ok=True)
+        records.joinpath(*folder, f"{name}.json").write_text(json.dumps(record))
+        suffix = ".json" if universe else ".tar.gz"
+        results.joinpath(*folder).mkdir(parents=True, exist_ok=True)
+        shutil.copy(results / "u1" / "output1.json", results.joinpath(*folder, name + suffix))
+    assert uncommitted_changes(main) == ()
+    (results / "old.tar.gz").write_text("other\n")
+    (main / "data" / "results").mkdir()
+    (main / "data" / "results" / "x.csv").write_text("not an analysis's\n")
+    assert uncommitted_changes(main) == ("data/results/x.csv", "results/old.tar.gz")
 
 
 def test_a_change_outside_the_records_and_results_stops_a_run(main: Path) -> None:
-    """§21, O4: what `git status` reports, staged or not, tracked or not."""
+    """§21: what `git status` reports, staged or not, tracked or not."""
     build(main)
     (main / "src" / "output1.py").write_text("print('edited')\n")
     (main / "notes.txt").write_text("a note\n")
     (main / "data" / "input2.csv").write_text("2\n")
     git(main, "add", "data/input2.csv")
-    found = uncommitted_changes(main, api.plan(main).results)
+    found = uncommitted_changes(main)
     assert found == ("data/input2.csv", "notes.txt", "src/output1.py")
 
 
@@ -78,13 +100,12 @@ def test_bytes_that_arent_the_recorded_ones_stop_a_run(main: Path) -> None:
     of; a record itself changes nothing a recipe reads, so a change at its place doesn't stop a
     run."""
     build(main)
-    results = api.plan(main).results
     (main / "results" / "output2.csv").write_text("other\n")
     record = main / ".astra" / "records" / "u1" / "output1.json"
     record.write_text(json.dumps(json.loads(record.read_text())))
-    assert uncommitted_changes(main, results) == ("results/output2.csv",)
+    assert uncommitted_changes(main) == ("results/output2.csv",)
     record.write_text("{}")
-    found = uncommitted_changes(main, results)
+    found = uncommitted_changes(main)
     assert found == ("results/output2.csv", "results/u1/output1.json")
 
 
@@ -103,16 +124,16 @@ def with_submodule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_a_change_in_a_submodule_stops_a_run(with_submodule: Path) -> None:
-    """O4: in the checkout and its submodules, each change inside one after its path; the
-    submodule itself where its commit isn't the one the checkout's commit pins."""
+    """§21, submodules included: in the checkout and its submodules, each change inside one
+    after its path; the submodule itself where its commit isn't the one the checkout's commit
+    pins."""
     top = with_submodule
-    results = api.plan(top).results
-    assert uncommitted_changes(top, results) == ()
+    assert uncommitted_changes(top) == ()
     (top / "sub" / "a.csv").write_text("2\n")
     (top / "sub" / "b.csv").write_text("3\n")
-    assert uncommitted_changes(top, results) == ("sub/a.csv", "sub/b.csv")
+    assert uncommitted_changes(top) == ("sub/a.csv", "sub/b.csv")
     git(top / "sub", "commit", "--quiet", "--all", "--message", "a.csv")
-    assert uncommitted_changes(top, results) == ("sub", "sub/b.csv")
+    assert uncommitted_changes(top) == ("sub", "sub/b.csv")
 
 
 # --- Repository.worktree ---
@@ -141,9 +162,9 @@ def test_a_run_in_its_own_checkout_lands_its_results_in_the_main_one(main: Path)
     run = Repository(main).worktree(head(main))
     results = api.plan(run.top).results
     (main / "notes.txt").write_text("an agent keeps editing\n")
-    assert uncommitted_changes(run.top, results) == ()
+    assert uncommitted_changes(run.top) == ()
     build(run.top)
-    assert uncommitted_changes(run.top, results) == ()
+    assert uncommitted_changes(run.top) == ()
     assert {s[0] for s in statuses(api.check(main)).values()} == {"missing"}
 
     landed = land(run.top, main, results)
@@ -207,7 +228,7 @@ def cache_elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
 
 
 def test_land_moves_results_from_another_file_system(main: Path, cache_elsewhere: Path) -> None:
-    """design §4.8, O43: a run's checkout in a cache on another file system lands its results
+    """Design §4.8: a run's checkout in a cache on another file system lands its results
     in the main checkout all the same, where `check` judges them."""
     run = Repository(main).worktree(head(main))
     assert run.top.is_relative_to(cache_elsewhere)

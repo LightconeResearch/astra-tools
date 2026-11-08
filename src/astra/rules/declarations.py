@@ -4,7 +4,7 @@ through no symlink (`MISSING_DECLARED_ANALYSIS`); no output shares its id with a
 its analysis (`CLASHING_RESULT_NAME`).
 
 A declaration whose analysis can't be got isn't checked by `MISSING_DECLARED_ANALYSIS`
-(Annex D case 3): binding gives each declaration one outcome (`astra.stack.Outcome`). With a
+(design §4.13 case 3): binding gives each declaration one outcome (`astra.stack.Outcome`). With a
 `commit`, the folder is read at that commit, and measured from the top of the repository that
 holds it; with a `url`, it is the top of that repository (§17).
 """

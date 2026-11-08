@@ -8,7 +8,7 @@ commit, through a `CommitReader`, in the repository that holds the declaring fil
 read from a remote, from that remote; one with a `url` at the top of that repository, from its
 store in the cache (`sources.remote`). Each file is loaded (`load`) and checked by the contract
 (`contract`); one that breaks a parse or schema rule, or `UNSUPPORTED_SPEC_VERSION`, isn't a
-valid document, its declarations aren't followed and its analysis is undetermined (Annex D
+valid document, its declarations aren't followed and its analysis is undetermined (design §4.13
 cases 1 and 2). Inside an analysis read at a commit, each diagnostic's location carries the
 commit, and the URL it was got from (design §3).
 
@@ -62,7 +62,7 @@ Outcome = Literal["reached", "invalid", "outside", "missing", "absent", "unreach
 """What a declaration reached:
 
 - `reached`: an analysis whose `astra.yaml` is a valid document;
-- `invalid`: an analysis whose file isn't one, so undetermined (Annex D case 2);
+- `invalid`: an analysis whose file isn't one, so undetermined (design §4.13 case 2);
 - `outside`: nothing, since its `path` goes above the top (`DECLARATION_OUTSIDE_REPOSITORY`);
 - `missing`: nothing, since its folder holds no `astra.yaml` file, reached through no symlink
   (`MISSING_DECLARED_ANALYSIS`);
@@ -71,7 +71,7 @@ Outcome = Literal["reached", "invalid", "outside", "missing", "absent", "unreach
 - `unreachable`: nothing, since a commit its analysis is read from can't be got from its
   remote (`REMOTE_UNREACHABLE`).
 
-Every outcome but `reached` leaves the declared analysis undetermined (Annex D cases 3, 4).
+Every outcome but `reached` leaves the declared analysis undetermined (design §4.13 cases 3, 4).
 """
 
 
@@ -131,7 +131,7 @@ then `.` and its `universe`."""
 
 TAKES: Mapping[Field, tuple[Kind, ...]] = MappingProxyType(
     {
-        "inputs": ("input", "output"),  # OPEN(O12): an input first, where both share the id
+        "inputs": ("input", "output"),  # an id both have names nothing (`_resolve`)
         "decisions": ("decision",),
         "when": ("decision",),
         "requires": ("decision",),
@@ -141,7 +141,9 @@ TAKES: Mapping[Field, tuple[Kind, ...]] = MappingProxyType(
         "import": ("universe",),
     }
 )
-"""The kinds of element each field's address resolves to (§6's table)."""
+"""The kinds of element each field's address resolves to (§6's table). An address whose id is
+an element of more than one of them, as an input and an output sharing an id (`AMBIGUOUS_ID`),
+names nothing (design §4.13 case 5)."""
 
 
 @dataclass(frozen=True)
@@ -174,7 +176,7 @@ class Stack:
 
     def analysis(self, identity: Identity) -> model.Analysis:
         """The content of `identity`'s file, which is a valid document: every analysis an
-        address resolves into, or a key drives, is one (Annex D cases 2 and 4)."""
+        address resolves into, or a key drives, is one (design §4.13 cases 2 and 4)."""
         analysis = self.analyses[identity].analysis
         assert analysis is not None
         return analysis
@@ -186,7 +188,7 @@ class Stack:
 
     def determined(self) -> Iterator[tuple[Member, model.Analysis]]:
         """Each analysis whose file is a valid document, with its content: those the validator
-        layer checks (Annex D cases 2 and 4)."""
+        layer checks (design §4.13 cases 2 and 4)."""
         for member in self.analyses.values():
             if member.analysis is not None:
                 yield member, member.analysis
@@ -204,7 +206,7 @@ class Stack:
 class Bound:
     """What binding gives: the stack, and the parse and schema diagnostics of its files. The
     stack is None where the root's file isn't a valid document, and where the root is in no
-    repository, whose declarations aren't followed (Annex D cases 2 and 11)."""
+    repository, whose declarations aren't followed (design §4.13 cases 2 and 11)."""
 
     stack: Stack | None
     diagnostics: tuple[Diagnostic, ...]
@@ -234,7 +236,7 @@ def bind(
 
     def read(place: _Place) -> model.Analysis | None:
         identity = place.identity
-        file = posixpath.join(identity.folder, "astra.yaml")  # OPEN(O14)
+        file = posixpath.join(identity.folder, "astra.yaml")
         document, found = _check(place.reader.read(file), file, contract, catalogue)
         diagnostics.extend(
             replace(d, location=replace(d.location, commit=identity.commit, url=place.url))
@@ -278,7 +280,7 @@ def bind(
 def _check(
     data: bytes, file: str, contract: Contract, catalogue: Catalogue
 ) -> tuple[Document | None, tuple[Diagnostic, ...]]:
-    """The document, and its parse and schema diagnostics (Annex D case 1: a file that can't be
+    """The document, and its parse and schema diagnostics (design §4.13 case 1: a file that can't be
     read is checked no further)."""
     try:
         document = load_yaml(data)
@@ -291,8 +293,8 @@ def _check(
 def _follow(
     remotes: Remotes, owner: _Place, id_: str, declared: model.AnalysisDeclaration
 ) -> tuple[Declaration, _Place | None]:
-    """What a declaration of `owner`'s file reaches, and where that analysis is read (§15 *A
-    declaration by path*, §17, Annex B): by `path` alone, as `owner` is read; with a `commit`,
+    """What a declaration of `owner`'s file reaches, and where that analysis is read (§15, §17,
+    Annex B): by `path` alone, as `owner` is read; with a `commit`,
     the `path` at that commit, in the repository that holds the declaring file or, in a file
     read from a remote, from that remote; with a `url`, the top of that repository at its
     commit. At a commit, a path that crosses a gitlink is read in the submodule's repository,
@@ -431,7 +433,8 @@ def _resolve(
     members: Mapping[Identity, Member], file: Identity, address: Address, kinds: Sequence[Kind]
 ) -> tuple[tuple[Declaration, ...], Element | None, bool]:
     """The chain of declarations `address` goes through from `file`, the element it resolves
-    to, and whether it goes through an undetermined analysis (§6 *Addresses*, Annex D case 4)."""
+    to, and whether it goes through an undetermined analysis (§6 *Addresses*, design §4.13 case
+    4). An id that is an element of more than one of `kinds` resolves to none (case 5)."""
     chain: list[Declaration] = []
     current = file
     for id_ in address.declarations:
@@ -444,10 +447,9 @@ def _resolve(
         current = declaration.reached
     analysis = members[current].analysis
     assert analysis is not None  # a declaration that reaches an invalid file is `invalid`
-    for kind in kinds:
-        if address.id in _elements(analysis, kind):
-            return tuple(chain), Element(current, kind, address.id), False
-    return tuple(chain), None, False
+    found = [kind for kind in kinds if address.id in _elements(analysis, kind)]
+    element = Element(current, found[0], address.id) if len(found) == 1 else None
+    return tuple(chain), element, False
 
 
 def _elements(analysis: model.Analysis, kind: Kind) -> Mapping[str, object]:

@@ -1,16 +1,18 @@
-"""The check report as text: each place of each planned result, as its record's file, with its
-address and statuses, then why, as `line:col level CODE message`, and what each environment
-scheme answered for its record's environment; then the evidence, grouped under the root's
-astra.yaml, as `validate`'s report is grouped by file."""
+"""The check report as text: the errors of an analysis that breaks a `MUST`, as `validate`
+shows them; each place of each planned result, as its record's file, with its address and
+statuses, then why, as `line:col level CODE message`, and what each environment scheme answered
+for its record's environment; then the evidence, grouped under the astra.yaml that holds it,
+the root's first, as `validate`'s report is grouped by file."""
 
 from __future__ import annotations
 
+from itertools import groupby
 from types import MappingProxyType
 
 from rich.text import Text
 
 from astra.check import CheckReport, Reason
-from astra.cli.text import console, rule_line
+from astra.cli.text import by_file, console, file_named, rule_line
 
 _STYLES = MappingProxyType(
     {
@@ -25,6 +27,7 @@ _STYLES = MappingProxyType(
 
 def show(report: CheckReport) -> None:
     out = console()
+    by_file(out, report.errors)
     counts = dict.fromkeys(("unchanged", "stale", "missing", "absent"), 0)
     for checked in report.results:
         commit = checked.result.owner.commit
@@ -49,20 +52,25 @@ def show(report: CheckReport) -> None:
                 out.print(Text(f"  {answer.scheme}: {status.record.environment} {can}"))
                 for held in answer.holds.splitlines():
                     out.print(Text(f"    {held}"))
-    if report.evidence:
-        out.print(Text(report.root, style="bold"))
-    for evidence in report.evidence:
-        if evidence.reasons:
-            for reason in evidence.reasons:
-                out.print(_reason(reason))
-        else:
-            where = evidence.location
-            out.print(f"  {where.line}:{where.column} unchanged `{evidence.artifact}`")
+    for file, grouped in groupby(report.evidence, key=lambda e: file_named(e.location)):
+        out.print(Text(file, style="bold"))
+        for evidence in grouped:
+            if evidence.reasons:
+                for reason in evidence.reasons:
+                    out.print(_reason(reason))
+            else:
+                where = evidence.location
+                out.print(f"  {where.line}:{where.column} unchanged `{evidence.artifact}`")
     results = sum(len(checked.statuses) for checked in report.results)
     at = "" if report.at == "worktree" else f" at {report.at}"
+    invalid = (
+        f"invalid, {len(report.errors)} error(s), so only the results it leaves determined; "
+        if report.errors
+        else ""
+    )
     out.print(
-        f"{report.root}{at}: {results} place(s) of planned results, {counts['unchanged']} "
-        f"unchanged, {counts['stale']} stale, {counts['missing']} missing; "
+        f"{report.root}{at}: {invalid}{results} place(s) of planned results, "
+        f"{counts['unchanged']} unchanged, {counts['stale']} stale, {counts['missing']} missing; "
         f"{counts['absent']} absent"
     )
 

@@ -106,7 +106,7 @@ class History:
         """What the result at `address` was made from, as its record at HEAD gives it, and so
         on down; or, with `used_by`, the planned results whose records at HEAD list it. Raises
         RequestError where no planned result has that address."""
-        # OPEN(O48): HEAD's record, and each entry's version with its hash and size (`_made`).
+        # HEAD's record, and each entry's version with its hash and size (`_made`).
         result, place = self._named(address)
         versions = self._versions(result, place)
         version = versions[0] if versions else None
@@ -122,7 +122,7 @@ class History:
         """The versions of the planned results' records whose `content_hash` is `content_hash`,
         or whose environment's IRI is `environment`, in the plan's order, each result's newest
         first. Raises ValueError unless exactly one of the two is given."""
-        # OPEN(O51): today's planned results' records, by their own hash or IRI, as written.
+        # Today's planned results' records, by their own hash or IRI, as written.
         if (content_hash is None) == (environment is None):
             raise ValueError("give exactly one of `content_hash` and `environment`")
         return tuple(
@@ -155,7 +155,7 @@ class History:
             what = "no record" if record is None else f"no valid record of `{place.address}`"
             raise NotInHistoryError(f"{commit} holds {what} at {place.record}")
         entry = reader.stat(bytes_)
-        if entry is None or entry.kind != "file":  # OPEN(O47): bytes left out of git
+        if entry is None or entry.kind != "file":  # bytes left out of git
             raise NotInHistoryError(
                 f"{commit} holds no file at {place.bytes}: its bytes aren't in git there"
             )
@@ -170,7 +170,7 @@ class History:
         """The planned result whose place has the address `address`, and that place: the
         root's own result first, then the first in the plan's order. Raises RequestError where
         none has it."""
-        # OPEN(O45): an address is resolved against today's plan.
+        # An address is resolved against today's plan.
         found = [
             (result, place)
             for result in self.results
@@ -190,7 +190,7 @@ class History:
         analysis is read at (§17)."""
         key = (result.owner, place.record)
         if key not in self._kept:
-            if result.read_only:  # OPEN(O46): its one version, at the declared commit
+            if result.read_only:  # its one version, at the declared commit
                 assert result.owner.commit is not None
                 reader = self.stack.analyses[result.owner].reader
                 found = read_record(reader, place.record, self._contract)
@@ -214,7 +214,7 @@ class History:
         reads = {read.entry: read for read in result.inputs}
         links = []
         for item in version.record.inputs:
-            read = reads.get(item.entry)  # OPEN(O45): today's plan
+            read = reads.get(item.entry)  # today's plan
             if read is None or read.result is None or read.place is None:
                 path = None if read is None else read.path
                 links.append(Link(item.entry, item.digest, path, None, None, ()))
@@ -258,7 +258,7 @@ class History:
         `listed`, a version of `by`'s record, lists: where the two records are in one
         repository, one committed with `listed` or before it, since a recipe can't have read a
         later run."""
-        # OPEN(O48): no later than the record that lists it, where one repository holds both.
+        # No later than the record that lists it, where one repository holds both.
         repo, _ = self._held(result, place.record)
         lister, _ = self._held(by, listed.place.record)
         bounded = not result.read_only and repo == lister

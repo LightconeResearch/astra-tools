@@ -278,14 +278,14 @@ def test_get_at_a_revision_that_names_no_commit(recorded: Recorded) -> None:
 
 
 def test_an_invalid_analysis_has_no_history(tmp_path: Path) -> None:
-    """As O27 reads it for the plan, and O5 for `check`."""
+    """As for the plan (design §2); `check` gives what statuses it can (design §4.7)."""
     top = repository(tmp_path, {"astra.yaml": MINIMAL.replace("type: metric", "type: plot")})
     with pytest.raises(api.InvalidAnalysisError):
         api.history(top)
 
 
 def test_a_result_of_an_analysis_from_a_commit_has_its_one_version(tmp_path: Path) -> None:
-    """§17: its records are read at the declared commit, which is its one version (O46), and
+    """§17: its records are read at the declared commit, which is its one version, and
     `get` reads at a revision of the repository that holds it."""
     top = repository(tmp_path, {"astra.yaml": MINIMAL, "lib/astra.yaml": LIB})
     build(top, top / "lib")

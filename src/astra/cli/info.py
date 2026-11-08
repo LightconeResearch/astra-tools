@@ -20,4 +20,4 @@ def command(path: Path | None) -> None:
     """
     from astra.cli.text.info import show
 
-    show(read_stack(path))  # OPEN(O22): text alone
+    show(read_stack(path))  # text alone

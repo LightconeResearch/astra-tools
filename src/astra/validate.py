@@ -1,10 +1,11 @@
 """validate(): the validator's report on an analysis (§3, design §4.11).
 
 It binds the stack (`astra.stack`): every `astra.yaml` of it, by the parse and schema rules and
-`UNSUPPORTED_SPEC_VERSION` (§5, Annex A, Annex E). Then it runs the validator rules
-(`astra.rules`) on the stack, or reports `NOT_IN_REPOSITORY` for a root in no repository, whose
-declarations aren't followed (Annex D case 11). The validator codes no check of this build
-reports are listed in the report as `unchecked`.
+astra-tools' `UNSUPPORTED_SPEC_VERSION` (§5, Annex A, Annex D, design §3). Then it runs the
+validator rules (`astra.rules`) on the stack, or reports `NOT_IN_REPOSITORY` for a root in no
+repository, whose declarations aren't followed (design §4.13 case 11), whether or not its file
+is a valid document (case 2). The validator codes no check of this build reports are listed in
+the report as `unchecked`.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ class ValidationReport:
 
     def to_json(self) -> dict[str, Any]:
         """The report as `astra-validation-report/1` (design §4.11)."""
-        # OPEN(O10): the exact JSON form.
+        # The exact JSON form.
         return {
             "shape": SHAPE,
             "root": self.root,
@@ -81,15 +82,14 @@ def validated(
     bound = bind(reader, root, catalogue, remotes)
     found = list(bound.diagnostics)
     if reader.repo is None:
-        # Annex D case 2: a file that isn't a valid document isn't checked by the validator
-        # layer, NOT_IN_REPOSITORY included. OPEN(O6), OPEN(O8)
-        if not found:
-            message = (
-                "the analysis's folder isn't in the working tree of a git repository: "
-                "make one with `git init`, or move the analysis into one"
-            )
-            location = Location(file, "", None, None)
-            found.append(catalogue.diagnostic("NOT_IN_REPOSITORY", message, location))
+        # NOT_IN_REPOSITORY is about the folder, not the file, so it is reported beside the
+        # parse and schema rules and UNSUPPORTED_SPEC_VERSION (design §4.13 case 2).
+        message = (
+            "the analysis's folder isn't in the working tree of a git repository: "
+            "make one with `git init`, or move the analysis into one"
+        )
+        location = Location(file, "", None, None)
+        found.append(catalogue.diagnostic("NOT_IN_REPOSITORY", message, location))
     elif bound.stack is not None:
         found.extend(rules.check(Context(bound.stack, catalogue)))
     # A MUST broken in an analysis from a commit can be found both under this root and as that

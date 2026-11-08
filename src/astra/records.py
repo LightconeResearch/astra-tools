@@ -4,7 +4,7 @@ checkout, and landing what a run in a checkout of its own made in the main one.
 
 A record is read as Annex A says (`load.load_json`) and checked by the record schema its minor
 version picks (`contract.Contract.check_record`): 0.1's, the open one for a greater minor
-version, which ignores the fields it doesn't know, and none below 0.1 (§19, Annex E). One is
+version, which ignores the fields it doesn't know, and none below 0.1 (§19, Annex D). One is
 written atomically, with sorted keys, two-space indentation and a final line break.
 """
 
@@ -14,6 +14,7 @@ import contextlib
 import errno
 import json
 import os
+import posixpath
 import shutil
 import tempfile
 from collections.abc import Iterable, Mapping
@@ -28,10 +29,10 @@ from astra.hashing import Digest, digest, digest_file
 from astra.load import ParseError, load_json
 from astra.sources.git import Repository
 from astra.sources.reader import CommitReader, Reader, WorktreeReader
+from astra.universes import Place
 
 if TYPE_CHECKING:
     from astra.plan import Result
-    from astra.universes import Place
 
 SPEC_VERSION = "0.1.0"
 """The version of the records this astra-tools writes (§5 *Versions*)."""
@@ -173,22 +174,28 @@ def new_record(
     runner: Runner,
     started: datetime | None = None,
     finished: datetime | None = None,
+    got: Mapping[str, str] | None = None,
 ) -> tuple[Record, ...]:
     """The records of `result`'s run (§19, design §4.8), one for each of its places, in their
     order, each with the result's address at that place's name. `checkout` is the top of the
     checkout the recipe ran in, which every path of the plan is measured from: the bytes it made
     are hashed at the first name's default place, where `{output}` put them, and what it read
-    through each entry of its output's `inputs` at that entry's path. `commit` is the commit it
+    through each entry of its output's `inputs` at that entry's path or, for an entry that reads
+    at a commit (`Read.commit`), where `got` says the runner put the bytes it got, as for
+    `plan.render_command`. Raises ValueError where `got` doesn't give one. `commit` is the commit it
     ran from, as §19 defines it: a commit of the repository the record is committed in, the one
     that holds the analysis the result belongs to (`result.owner`), so a submodule's own commit
     for an analysis in a submodule, and the driver's for what a driver's universes build, never
     `result.run_at` (§21 `FALSE_RECORD`). `environment` is the IRI of the environment it ran in,
     and `started` and `finished` when it did. Raises OSError where a file to hash can't be
     read."""
-    made = digest_file(checkout / result.places[0].bytes)  # OPEN(O32): `{output}`, the first name's
-    inputs = []
+    made = digest_file(checkout / result.places[0].bytes)  # `{output}`, the first name's
+    inputs, got = [], got or {}
     for read in result.inputs:
-        found = digest_file(checkout / read.path)
+        if read.commit is not None and read.entry not in got:
+            message = f"`{read.entry}` reads at {read.commit}: `got` gives no place for its bytes"
+            raise ValueError(message)
+        found = digest_file(checkout / (read.path if read.commit is None else got[read.entry]))
         inputs.append(RecordedInput(read.entry, found.content_hash, found.size))
     return tuple(
         Record(
@@ -206,24 +213,46 @@ def new_record(
     )
 
 
-def uncommitted_changes(checkout: Path, results: Iterable[Result]) -> tuple[str, ...]:
+def uncommitted_changes(checkout: Path) -> tuple[str, ...]:
     """What stops a runner running a recipe in `checkout`, the top of a checkout of a commit
     (`UNCOMMITTED_CHANGES`, §21): each path, from its top, that `git status` reports changed in
-    it or in its submodules (`Repository.changes`), but the records and results the runner
-    writes itself, each result's bytes the recorded ones. Those are at the places of `results`,
-    the planned results (`plan.plan`) other than those read through a record (§17): every
-    change at a record's place, and one at a default place where the bytes there are the ones
-    the record at that name's place gives. A change outside `checkout` doesn't stop a run.
-    Raises GitError where git can't read `checkout`, and OSError where a file can't be read."""
-    # OPEN(O4): what counts as a change; OPEN(O40): the places left out are the plan's.
+    it or in its submodules (`Repository.changes`), but the records and results of any run,
+    each result's bytes the recorded ones. Those are at the places §18 gives in the folder of an
+    analysis, one holding an `astra.yaml` file: every change at a record's place,
+    `.astra/records/{universe}/{name}.json` or `.astra/records/{name}.json`, and one at a
+    default place, `results/{universe}/{name}.{format}` or `results/{name}.{format}`, where the
+    bytes there are the ones the valid record at that name's place gives (`_run`). A change
+    outside `checkout` doesn't stop a run. Raises GitError where git can't read `checkout`, and
+    OSError where a file can't be read."""
     reader, contract = WorktreeReader(checkout, None), Contract.load(Catalogue.load())
-    left_out = set()
-    for result in results:
-        for place in () if result.read_only else result.places:
-            left_out.add(place.record)
-            if _recorded(reader, place, contract) is not None:
-                left_out.add(place.bytes)
-    return tuple(path for path in Repository(checkout).changes() if path not in left_out)
+    changes = Repository(checkout).changes()
+    return tuple(path for path in changes if not _run(reader, path, contract))
+
+
+def _run(reader: Reader, path: str, contract: Contract) -> bool:
+    """Whether `path` is a record's place or, holding the recorded bytes, a result's default
+    place, in an analysis's folder (§18 *Where records and bytes go*). A name is ids joined by
+    `.`, which a format can hold too, so each split of a file name is tried."""
+    parts = path.split("/")
+    for size in (1, 2):  # {name}, or {universe}/{name}
+        folder, universe, file = parts[:-size], parts[-size:-1], parts[-1]
+        if folder[-2:] == [".astra", "records"] and file.endswith(".json"):
+            if _analysis(reader, folder[:-2]):
+                return True
+        if folder[-1:] == ["results"] and _analysis(reader, folder[:-1]):
+            for end in (index for index, char in enumerate(file) if char == "."):
+                name, top = file[:end], folder[:-1]
+                record = posixpath.join(*top, ".astra", "records", *universe, f"{name}.json")
+                place = Place(name, "#".join((name, *universe)), record, path)
+                if _recorded(reader, place, contract) is not None:
+                    return True
+    return False
+
+
+def _analysis(reader: Reader, folder: list[str]) -> bool:
+    """Whether `folder`, as path segments from the top, holds an `astra.yaml` file."""
+    entry = reader.stat(posixpath.join(*folder, "astra.yaml"))
+    return entry is not None and entry.kind == "file"
 
 
 def land(run: Path, main: Path, results: Iterable[Result]) -> tuple[Place, ...]:
@@ -238,7 +267,7 @@ def land(run: Path, main: Path, results: Iterable[Result]) -> tuple[Place, ...]:
     place whose record in `main` names a later commit than the run's record is left as it is.
     Raises GitError where git can't read `run`, and OSError where a file can't be read or
     moved."""
-    # OPEN(O40): the places are the plan's; OPEN(O41): finished, and a later commit.
+    # The places are the plan's: finished, and a later commit.
     made = WorktreeReader(run, Repository(run))
     there, contract = WorktreeReader(main, None), Contract.load(Catalogue.load())
     landed = []
@@ -269,7 +298,7 @@ def _move(source: Path, target: Path) -> None:
     except OSError as error:
         if error.errno != errno.EXDEV:
             raise
-    # OPEN(O43): across file systems, a copy renamed into place
+    # Across file systems, a copy renamed into place
     descriptor, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
     os.close(descriptor)
     try:

@@ -1,14 +1,14 @@
 """`astra.yaml` and records, as Annex A reads them (design §4.1).
 
 An `astra.yaml` goes to ruamel.yaml's safe loader, pure Python, with a resolver holding YAML
-1.2.2's core schema table (§10.3.2), so that `2026-10-26` is a string, as Annex A reads it. The
-loader refuses a repeated key (`DUPLICATE_KEY`); every other error it raises is
-`INVALID_SYNTAX`, and so is anything in the loaded value that isn't JSON: a key that isn't a
-string, a number that isn't finite, or a value only another tag than the core schema's makes.
-The composed node tree gives each value its line and column.
+1.2.2's core schema table (§10.3.2), so that `2026-10-26` is a string, as Annex A reads it. Every
+error the loader raises is `INVALID_SYNTAX`, a repeated key included, and so is a file with no
+document or more than one, a top level that isn't a map, and anything in the loaded value that
+isn't JSON: a key that isn't a string, a number that isn't finite, or a value only another tag
+than the core schema's makes. The composed node tree gives each value its line and column.
 
-A record is `json.loads`, with hooks that refuse a repeated name (`DUPLICATE_KEY`) and the
-`NaN` and `Infinity` it would otherwise take (`INVALID_SYNTAX`).
+A record is `json.loads`, with hooks that refuse a repeated name and the `NaN` and `Infinity` it
+would otherwise take, each `INVALID_SYNTAX`.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from ruamel.yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 from ruamel.yaml.resolver import VersionedResolver
 from ruamel.yaml.tag import Tag
 
-CODES = frozenset({"INVALID_SYNTAX", "DUPLICATE_KEY"})
+CODES = frozenset({"INVALID_SYNTAX"})
 """The parse layer's codes, which this module reports."""
 
 _CORE = "tag:yaml.org,2002:"
@@ -102,30 +102,41 @@ def load_yaml(data: bytes) -> Document:
     yaml.Resolver = _CoreSchema
     try:
         tree = yaml.compose(data)
-        value = None if tree is None else yaml.constructor.construct_document(tree)
+        if tree is None:
+            message = "this file holds no YAML document: an astra.yaml is a map"
+            raise ParseError("INVALID_SYNTAX", message)
+        if not isinstance(tree, MappingNode):
+            kind = "list" if isinstance(tree, SequenceNode) else "single value"
+            message = f"the top level is a {kind}: an astra.yaml is a map"
+            line, column = tree.start_mark.line + 1, tree.start_mark.column + 1
+            raise ParseError("INVALID_SYNTAX", message, line, column)
+        value = yaml.constructor.construct_document(tree)
+    except ParseError:
+        raise
     except DuplicateKeyError as error:
         found = re.match(r'found duplicate key "(.*?)" with value', error.problem or "")
         key = f"the key `{found[1]}`" if found else "a key"
-        _fail("DUPLICATE_KEY", f"{key} is twice in one map", error)
+        _fail(f"{key} is twice in one map, and YAML 1.2 allows a key once", error, detail=False)
     except Exception as error:  # every other error the loader raises (design §4.1)
-        _fail("INVALID_SYNTAX", "this isn't YAML 1.2 as Annex A reads it", error)
+        _fail("this isn't YAML 1.2 as Annex A reads it", error)
     document = Document(value, tree)
     _check_json(document, value, [])
     return document
 
 
-def _fail(code: str, summary: str, error: Exception) -> NoReturn:
-    """Raise the ParseError for the loader's `error`, placed at its mark where it has one: a
-    constructor's own error, such as `!!int 1.5`'s ValueError, has none."""
+def _fail(summary: str, error: Exception, detail: bool = True) -> NoReturn:
+    """Raise the INVALID_SYNTAX for the loader's `error`, with its own words where `detail`,
+    placed at its mark where it has one: a constructor's own error, such as `!!int 1.5`'s
+    ValueError, has none."""
     if isinstance(error, MarkedYAMLError):
-        detail = " ".join(part for part in (error.context, error.problem) if part)
+        words = " ".join(part for part in (error.context, error.problem) if part)
         mark = error.problem_mark or error.context_mark
     else:
-        detail, mark = str(error).splitlines()[0], None
-    message = f"{summary}: {detail}" if code == "INVALID_SYNTAX" else summary
+        words, mark = str(error).splitlines()[0], None
+    message = f"{summary}: {words}" if detail else summary
     if mark is None:
-        raise ParseError(code, message) from None
-    raise ParseError(code, message, mark.line + 1, mark.column + 1) from None
+        raise ParseError("INVALID_SYNTAX", message) from None
+    raise ParseError("INVALID_SYNTAX", message, mark.line + 1, mark.column + 1) from None
 
 
 def _check_json(document: Document, value: Any, path: list[str | int]) -> None:
@@ -165,8 +176,8 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     names: dict[str, Any] = {}
     for name, value in pairs:
         if name in names:
-            message = f"the name {json.dumps(name)} is twice in one object"
-            raise ParseError("DUPLICATE_KEY", message)
+            message = f"the name {json.dumps(name)} is twice in one object: a record has it once"
+            raise ParseError("INVALID_SYNTAX", message)
         names[name] = value
     return names
 

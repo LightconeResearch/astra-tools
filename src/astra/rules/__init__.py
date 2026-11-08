@@ -53,5 +53,9 @@ CODES = frozenset(code for module in MODULES for code in module.CODES)
 
 
 def check(context: Context) -> list[Diagnostic]:
-    """Every diagnostic of every rule module."""
-    return [diagnostic for module in MODULES for diagnostic in module.check(context)]
+    """Every diagnostic of every rule module. A `MUST` this root's pass finds in the files of
+    an analysis from a commit, which isn't among those it breaks as its own root there, has the
+    declarations that lead to it as related places (`commits.related`, design §3)."""
+    judged = list(commits.check(context))
+    found = [d for module in MODULES if module is not commits for d in module.check(context)]
+    return [*commits.related(context, found, set(judged)), *judged]

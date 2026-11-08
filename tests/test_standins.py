@@ -1,4 +1,4 @@
-"""Stand-ins (§7, Annex B *Stand-ins*, design §4.5): each built-in one recognised from what its
+"""Stand-ins (§7, design §4.5): each built-in one recognised from what its
 tool keeps in a file's place, committed in a real repository, and another package's, registered
 in the entry-point group `astra.standins` (design §4.10)."""
 

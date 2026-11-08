@@ -1,7 +1,7 @@
 """What every validator rule is a function of (design §4.4).
 
 A `Context` holds the Stack and what `universes.py` derives from it, each computed once, as a
-`cached_property` of the Context, and the predicates of Annex D that the rules consult before
+`cached_property` of the Context, and the predicates of design §4.13 that the rules consult before
 reporting: a rule on an undetermined subject isn't reported anywhere.
 """
 
@@ -48,7 +48,7 @@ class Context:
 
     @cached_property
     def selections(self) -> Mapping[Element, Selection | None]:
-        """Every universe's effective selection (§12), None where it has none (Annex D
+        """Every universe's effective selection (§12), None where it has none (design §4.13
         case 7)."""
         return universes.selections(self.stack, self.written)
 
@@ -73,6 +73,16 @@ class Context:
         return universes.per_universe(self.stack)
 
     @cached_property
+    def depends(self) -> universes.Depends:
+        """What each output depends on directly (§10)."""
+        return universes.depends(self.stack)
+
+    @cached_property
+    def cycles(self) -> frozenset[Element]:
+        """The outputs that depend on themselves (§10)."""
+        return universes.cycles(self.depends)
+
+    @cached_property
     def written(self) -> Mapping[Element, tuple[Resolution, ...]]:
         """The addresses each decision and output writes."""
         return universes.written(self.stack)
@@ -84,16 +94,21 @@ class Context:
             self.stack, self.written, self.selections, self.driven, self.pins, self.per_universe
         )
 
-    # --- Annex D ---
+    # --- design §4.13 ---
 
     def names_nothing(self, resolution: Resolution) -> bool:
-        """Annex D cases 4 and 5: an address that doesn't resolve, or that goes through a
+        """design §4.13 cases 4 and 5: an address that doesn't resolve, or that goes through a
         declaration whose analysis is undetermined, names nothing, and no rule is checked on
         what it would name."""
         return resolution.element is None
 
+    def on_cycle(self, element: Element | None) -> bool:
+        """design §4.13 case 13: whether `element` is an output on a cycle, on whose results'
+        places, and on what reads it, no rule but `OUTPUT_CYCLE` is checked."""
+        return element in self.cycles
+
     def activity(self, universe: Element, element: Element) -> bool | None:
-        """Annex D cases 6 and 7: whether a decision or an output is active in `universe`
+        """design §4.13 cases 6 and 7: whether a decision or an output is active in `universe`
         (§9); None where its activity is undetermined, or the universe has no effective
         selection."""
         selection = self.selections[universe]

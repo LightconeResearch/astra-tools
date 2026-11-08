@@ -36,7 +36,7 @@ astra universe list [PATH]        # the analysis's universes and imports
 astra universe show U [PATH]      # one universe's effective selection
 astra cache path                  # where fetched commits are kept; ASTRA_CACHE_DIR moves it
 astra cache clear                 # delete what astra keeps there
-astra rules                       # the rules of the ASTRA specification, by layer
+astra rules                       # the rules of the ASTRA specification by layer, then astra-tools' own
 astra rules MISSING_DECISION      # one rule in full
 astra schema show NAME            # a JSON Schema of astra-spec's, verbatim: analysis, provenance, provenance.open
 astra schema export DIR           # write the three as DIR/NAME.schema.json

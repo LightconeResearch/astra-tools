@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from astra import contract, load, rules, validate
-from astra.diagnostics import Catalogue, Location
+from astra.diagnostics import OWN, Catalogue, Location
 
 AT = Location("astra.yaml", "", None, None)
 
@@ -31,11 +31,24 @@ def test_the_schema_layer_is_what_the_error_map_gives() -> None:
     assert set(catalogue.errors.values()) == set(catalogue.codes("schema"))
 
 
-def test_the_other_declared_codes_are_the_catalogues() -> None:
+def test_the_other_declared_codes_are_the_catalogues_or_astra_tools() -> None:
     catalogue = Catalogue.load()
-    assert {catalogue.rules[code].layer for code in contract.CODES} == {"validator", "check"}
-    assert {catalogue.rules[code].layer for code in validate.CODES} == {"validator"}
-    assert {catalogue.rules[code].layer for code in rules.CODES} == {"validator"}
+    assert {catalogue.rule(code).layer for code in contract.CODES} == {"validator", "check"}
+    assert {catalogue.rule(code).layer for code in validate.CODES} == {"validator"}
+    assert {catalogue.rule(code).layer for code in rules.CODES} == {"validator"}
+
+
+def test_astra_tools_own_codes_are_none_of_rules_json() -> None:
+    """Design §3: astra-tools' own three codes, beside rules.json's, which has none of them."""
+    catalogue = Catalogue.load()
+    assert set(OWN) == {"UNSUPPORTED_SPEC_VERSION", "REMOTE_UNREACHABLE", "COMMIT_NOT_ANCESTOR"}
+    assert not set(OWN) & set(catalogue.rules)
+    assert [catalogue.level(code) for code in OWN] == ["error", "error", "warning"]
+
+
+def test_every_code_astra_tools_has_of_its_own_is_checked() -> None:
+    """Each of astra-tools' own codes is declared by a check, as rules.json's are."""
+    assert set(OWN) <= contract.CODES | validate.CODES | rules.CODES
 
 
 def test_no_two_checks_declare_one_code() -> None:

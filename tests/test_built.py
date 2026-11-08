@@ -1,5 +1,5 @@
 """§16's rules on the universe being built, `NOT_BUILT_IN_UNIVERSE` and `UNDRIVEN_DECLARATION`,
-and `RESULT_IN_TWO_PLACES` (§16, §18), with Annex D cases 5, 6 and 7.
+and `RESULT_IN_TWO_PLACES` (§16, §18), with design §4.13 cases 5, 6 and 7.
 
 The stacks are §16's: the root drives §15's `subanalysis`, which consumes the root's `decision1`
 through `parent: {path: ..}`, and `stage`, which declares `inner` and a second `inner_undriven`
@@ -41,7 +41,7 @@ outputs:
     recipe:
       command: python make.py '{decisions.decision1}' '{decisions.parent.decision1}' '{output}'
 """
-"""§15's `subanalysis`, which consumes its parent's `decision1` (§16, rule 1)."""
+"""§15's `subanalysis`, which consumes its parent's `decision1` (§16 *The universe being built*)."""
 
 INNER = """\
 spec_version: "0.1.0"
@@ -205,7 +205,7 @@ universes:
 """§16's reads through undriven declarations, uses of `other`'s output and decision in the
 root's universes, in each place a use can be written, and `u3`'s key `inner.d`, which drives the
 root's `inner` beside `stage.inner` (§18). `output8`'s activity is undetermined, since `other`'s
-`d` is unset, and `u4` has no effective selection (Annex D cases 6 and 7)."""
+`d` is unset, and `u4` has no effective selection (design §4.13 cases 6 and 7)."""
 
 
 def files(root: str, stage: str) -> dict[str, str]:
@@ -239,7 +239,7 @@ def test_reads_through_driven_declarations_keep_both_rules(kept: api.ValidationR
     `output6` reads their outputs built per universe without a pin, or pinned to `u1`; it reads
     `other`'s in `other`'s own `v1`, where `other` is the driver; and `subanalysis` consumes
     the root's `decision1` as `parent.decision1`, since the analysis whose universe is being
-    built is always built in it (rule 1)."""
+    built is always built in it (§16 *The universe being built*)."""
     assert kept.diagnostics == ()
 
 
@@ -269,8 +269,8 @@ def test_each_use_of_an_analysis_not_built_breaks_both_rules_in_the_drivers_file
     root's file its output read without a pin or pinned to `u1`, its decision listed by a
     planned result's output, tested by `output8`'s `when` (whose result would be planned if the
     `when` held), and by a decision's `when` and a constraint break both rules; in `stage`'s
-    file, rule 1 alone holds them. Reads through driven declarations, and `other`'s output in
-    its own `v1`, break neither."""
+    file, NOT_BUILT_IN_UNIVERSE alone holds them. Reads through driven declarations, and
+    `other`'s output in its own `v1`, break neither."""
     uses = [
         ("astra.yaml", "/decisions/decision1/options/a/incompatible_with/0"),
         ("astra.yaml", "/decisions/decision2/when/0"),
@@ -320,7 +320,7 @@ def test_a_result_reached_through_two_driven_chains_breaks_result_in_two_places(
 def test_nothing_is_checked_where_annex_d_leaves_it_undetermined(
     broken: api.ValidationReport,
 ) -> None:
-    """Annex D: no rule on the universe being built in `u4`, which has no effective selection
+    """design §4.13: no rule on the universe being built in `u4`, which has no effective selection
     (case 7), nor for what `output8` reads, whose activity is undetermined (case 6), though its
     `when` is checked; nor through `nothere`, which names nothing (case 5)."""
     ours = [
@@ -377,7 +377,7 @@ def test_an_earlier_commits_result_is_read_through_an_import(tmp_path: Path) -> 
     """§17 *Using one*: where `previous` names the analysis's own folder at a commit and both
     have a `u1`, `previous.output1#u1` names the analysis's own `u1`, which doesn't build
     `previous`, so it breaks `UNDRIVEN_DECLARATION` and `NOT_BUILT_IN_UNIVERSE`, and plans
-    nothing more (design §5, O20); with the import, `previous.output1#previous_u1` reads
+    nothing more (design §4.13 case 12); with the import, `previous.output1#previous_u1` reads
     `output1` in `previous`'s own `u1`."""
     top = repository(tmp_path, {"astra.yaml": PREVIOUS, "data/input1.csv": "1\n"})
     commit = git(top, "rev-parse", "HEAD").strip()

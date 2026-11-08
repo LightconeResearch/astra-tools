@@ -1,5 +1,5 @@
 """§8 Decisions and options: `UNKNOWN_OPTION`, in conditions, option references and universes'
-own selections, with Annex D cases 4, 5 and 10."""
+own selections, with design §4.13 cases 4, 5 and 10."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def unknown(report: api.ValidationReport) -> list[str]:
 
 def test_an_option_its_decision_lacks_breaks_unknown_option(broken: api.ValidationReport) -> None:
     """§8: in a constraint, through a declaration too; in a condition, `~` or not; and in a
-    universe's own selection, derived or not, reported at the option selected. Annex D case
+    universe's own selection, derived or not, reported at the option selected. design §4.13 case
     10: the key `self.decision1` loops, and still names its decision."""
     assert unknown(broken) == [
         "/decisions/decision1/options/a/requires/0",
@@ -95,7 +95,7 @@ def test_an_option_its_decision_lacks_breaks_unknown_option(broken: api.Validati
 def test_nothing_under_an_address_that_names_nothing_is_checked(
     broken: api.ValidationReport,
 ) -> None:
-    """Annex D case 5: `decision9` names nothing, so `decision9.c` and `decision9: c` aren't
+    """design §4.13 case 5: `decision9` names nothing, so `decision9.c` and `decision9: c` aren't
     checked for their option; case 4: nor is `bad.decision1.z`, through an undetermined
     analysis."""
     assert not any("decision9" in pointer or "bad" in pointer for pointer in unknown(broken))

@@ -3,8 +3,8 @@
 `Analysis.from_json` makes one from the JSON value of a document the contract accepted, so
 every field has the type its schema gives it. Each class has the fields of its schema class,
 named as the schema names them. An optional field left out is None; a list or a map left out
-is empty, which the schema allows for neither, so the two never mean different things (§5
-*Values*). Maps keep their entries in the file's order, which carries no meaning (§6).
+is empty, which the schema allows for neither, so the two never mean different things (§5).
+Maps keep their entries in the file's order, which carries no meaning (§6).
 """
 
 from __future__ import annotations

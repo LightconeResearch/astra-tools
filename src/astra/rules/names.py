@@ -2,8 +2,10 @@
 field takes (`UNRESOLVED_ADDRESS`).
 
 Binding has resolved every address of every valid file (`astra.stack`); an address through a
-declaration whose analysis is undetermined isn't checked (Annex D case 4), and one that names
-nothing names nothing for every other rule (Annex D case 5).
+declaration whose analysis is undetermined isn't checked (design §4.13 case 4), and one that names
+nothing names nothing for every other rule (design §4.13 case 5). An entry of `inputs` whose id is
+both an input and an output names nothing too (case 5), but breaks `AMBIGUOUS_ID`, not this
+rule.
 """
 
 from __future__ import annotations
@@ -20,7 +22,19 @@ CODES = frozenset({"UNRESOLVED_ADDRESS"})
 def check(context: Context) -> Iterator[Diagnostic]:
     for resolution in context.stack.resolutions:
         if resolution.element is None and not resolution.undetermined:
-            yield _unresolved(context, resolution)
+            if not _ambiguous(context, resolution):
+                yield _unresolved(context, resolution)
+
+
+def _ambiguous(context: Context, resolution: Resolution) -> bool:
+    """Whether an entry of `inputs` reaches, through all its declarations, an analysis where its
+    id is both an input and an output (`AMBIGUOUS_ID`)."""
+    if resolution.field != "inputs" or len(resolution.chain) < len(resolution.address.declarations):
+        return False
+    reached = resolution.chain[-1].reached if resolution.chain else resolution.file
+    assert reached is not None  # every declaration of a full chain reached its analysis
+    analysis, id_ = context.stack.analysis(reached), resolution.address.id
+    return id_ in analysis.inputs and id_ in analysis.outputs
 
 
 def _unresolved(context: Context, resolution: Resolution) -> Diagnostic:

@@ -1,5 +1,5 @@
 """Binding (design §4.4): every analysis of the stack read once, by its identity (§17
-*Identity*); each declaration's outcome (§15, Annex B, Annex D cases 1–3); and each address
+*Identity*); each declaration's outcome (§15, Annex B, design §4.13 cases 1–3); and each address
 resolved through its chain of declarations (§6 *Addresses*, §15)."""
 
 from __future__ import annotations
@@ -124,7 +124,7 @@ def test_self_names_the_analysis_itself(tmp_path: Path) -> None:
 def test_a_declaration_by_path_reaches_an_analysis_or_says_why_not(
     tmp_path: Path, path: str, outcome: str
 ) -> None:
-    """§15 *A declaration by path*, Annex B: above the top, nothing; a folder with no
+    """§15 *The rules*, Annex B: above the top, nothing; a folder with no
     astra.yaml file, or one reached through a symlink, nothing."""
     top = repository(
         tmp_path,
@@ -137,7 +137,7 @@ def test_a_declaration_by_path_reaches_an_analysis_or_says_why_not(
 
 
 def test_a_commit_that_cant_be_got_leaves_its_analysis_undetermined(tmp_path: Path) -> None:
-    """§17, Annex D case 3: a commit the repository hasn't, and one no remote gives; nothing
+    """§17, design §4.13 case 3: a commit the repository hasn't, and one no remote gives; nothing
     through them is resolved."""
     commit = "0" * 40
     previous = f"{{path: ., commit: '{commit}'}}"
@@ -155,13 +155,13 @@ def test_a_commit_that_cant_be_got_leaves_its_analysis_undetermined(tmp_path: Pa
     [
         (SUB + "name: x\n", "UNKNOWN_FIELD"),
         (SUB.replace("0.1.0", "0.2.0"), "UNSUPPORTED_SPEC_VERSION"),
-        (SUB + "outputs: {}\n", "DUPLICATE_KEY"),
+        (SUB + "outputs: {}\n", "INVALID_SYNTAX"),
     ],
 )
 def test_an_invalid_file_is_reported_and_its_analysis_is_undetermined(
     tmp_path: Path, text: str, code: str
 ) -> None:
-    """Annex D cases 1 and 2: a declared file that breaks a parse or schema rule, or
+    """design §4.13 cases 1 and 2: a declared file that breaks a parse or schema rule, or
     UNSUPPORTED_SPEC_VERSION, is reported in its own file, and its declarations aren't
     followed: `sub`'s `..` isn't read."""
     top = repository(

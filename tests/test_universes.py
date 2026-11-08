@@ -1,6 +1,6 @@
 """§12 Universes: effective selections, the activity of §9 in them, and `UNKNOWN_DERIVED_FROM`,
 `DERIVED_FROM_CYCLE`, `MISSING_REQUIRED_OPTION`, `INCOMPATIBLE_OPTIONS`,
-`EXCLUDED_OPTION_SELECTED` and `INACTIVE_DECISION`, with Annex D cases 6 and 7 and design §5's
+`EXCLUDED_OPTION_SELECTED` and `INACTIVE_DECISION`, with design §4.13 cases 6 and 7 and design §5's
 O16.
 
 The stacks are §12's: §8's decisions, §9's `decision3`, and §15's `subanalysis`, which the root's
@@ -272,7 +272,7 @@ def test_each_rule_is_broken_where_twelves_text_says(broken_report: api.Validati
 def test_an_inherited_selection_is_reported_at_derived_from(
     broken_report: api.ValidationReport,
 ) -> None:
-    """OPEN(O17): `inherits` inherits `decision1: b` from `requires`; the places where that key
+    """Design §3: `inherits` inherits `decision1: b` from `requires`; the places where that key
     and its `requires` are written are related."""
     (diagnostic,) = [
         d for d in broken_report.diagnostics if d.location.pointer.startswith("/universes/inherits")
@@ -288,7 +288,7 @@ def test_an_inherited_selection_is_reported_at_derived_from(
 def test_a_universe_with_no_effective_selection_has_its_own_decisions_checked(
     broken: Path, broken_report: api.ValidationReport
 ) -> None:
-    """Annex D case 7: `unknown`, `from_import`, the loop and `reaches`, which only reaches it,
+    """design §4.13 case 7: `unknown`, `from_import`, the loop and `reaches`, which only reaches it,
     have none, so `unknown`'s `decision3` isn't INACTIVE_DECISION nor its `decision2`
     MISSING_DECISION; UNRESOLVED_ADDRESS is still checked on its own `decisions`."""
     found = effective(broken)
@@ -308,7 +308,7 @@ def test_a_universe_with_no_effective_selection_has_its_own_decisions_checked(
 def test_an_undetermined_activity_checks_no_rule_on_it(
     broken: Path, broken_report: api.ValidationReport
 ) -> None:
-    """Annex D case 6: in `unset` `decision1` is unset (MISSING_DECISION), and in
+    """design §4.13 case 6: in `unset` `decision1` is unset (MISSING_DECISION), and in
     `unknown_option` set to an option that names nothing, so `decision3`'s `when` is
     undetermined: setting it isn't INACTIVE_DECISION, and in `both_unset`, which leaves it unset
     too, it isn't MISSING_DECISION; nor is `output4` active or inactive."""
@@ -403,11 +403,11 @@ and are the only ones through `subanalysis` and `again`, two declarations of one
 def test_a_universe_with_no_effective_selection_checks_and_drives_by_its_own_keys(
     tmp_path: Path,
 ) -> None:
-    """Annex D case 7: `unknown` has no effective selection, but UNKNOWN_OPTION (`decision2: z`),
-    DUPLICATE_ELEMENT (`again.decision1` spells `subanalysis.decision1`) and LOOPING_KEY
-    (`self.decision1`) are still checked on its own `decisions`; and driving counts them, so
-    the root's universes drive `subanalysis` and `again`, and `u1`, which leaves `subanalysis`'s
-    `decision1` unset, breaks MISSING_DECISION."""
+    """design §4.13 case 7: `unknown` has no effective selection, but UNKNOWN_OPTION
+    (`decision2: z`), DUPLICATE_ELEMENT (`again.decision1` spells `subanalysis.decision1`) and
+    LOOPING_KEY (`self.decision1`) are still checked on its own `decisions`; and driving counts
+    them, so the root's universes drive `subanalysis` and `again`, and `u1`, which leaves
+    `subanalysis`'s `decision1` unset, breaks MISSING_DECISION."""
     top = repository(tmp_path, {**FILES, "astra.yaml": NO_SELECTION})
     report = api.validate(top)
     assert sorted((d.code, d.location.pointer, d.location.key) for d in report.diagnostics) == [
@@ -429,7 +429,7 @@ def test_a_universe_with_no_effective_selection_checks_and_drives_by_its_own_key
 
 
 def test_step_3_doesnt_drop_a_decision_whose_activity_is_undetermined(broken: Path) -> None:
-    """Annex D case 6: `keeps` sets `decision1` to an option that names nothing, so the
+    """design §4.13 case 6: `keeps` sets `decision1` to an option that names nothing, so the
     `decision3: a` it inherits from u2 stays."""
     assert selected(effective(broken)[universe("keeps")]) == {
         "decision1": "z",

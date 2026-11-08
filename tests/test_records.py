@@ -1,5 +1,5 @@
 """Records, read as Annex A says and checked by the record schema their minor version picks
-(§3, §5 *Versions*, §20, Annex E); and `records`: reading one at a place, writing one, and
+(§3, §5 *Versions*, §20, Annex D); and `records`: reading one at a place, writing one, and
 making a result's records from its run (§19, design §4.7, §4.8)."""
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def test_a_record_of_0_1_is_read_by_the_closed_schema(contract: Contract) -> Non
 
 
 def test_a_record_of_a_later_minor_is_read_by_the_open_schema(contract: Contract) -> None:
-    """It ignores the fields that version adds, and is checked for the rest (Annex E)."""
+    """It ignores the fields that version adds, and is checked for the rest (Annex D)."""
     later = {**RECORD, "spec_version": "0.2.0", "extra": 1}
     assert check(contract, later) == []
     del later["size"]
@@ -65,20 +65,21 @@ def test_a_malformed_version_is_read_by_the_0_1_schema(contract: Contract) -> No
 
 
 @pytest.mark.parametrize(
-    "text, code",
-    [
-        ('{"size": 1, "size": 2}', "DUPLICATE_KEY"),
-        ('{"size": 1, "\\u0073ize": 2}', "DUPLICATE_KEY"),
-        ('{"size": NaN}', "INVALID_SYNTAX"),
-        ('{"size": -Infinity}', "INVALID_SYNTAX"),
-        ("size: 1", "INVALID_SYNTAX"),
-    ],
+    "text",
+    ['{"size": 1, "size": 2}', '{"size": 1, "\\u0073ize": 2}', '{"size": NaN}', "size: 1"],
 )
-def test_a_record_that_isnt_json_breaks_a_parse_rule(text: str, code: str) -> None:
-    """Annex A: RFC 8259 JSON text, with distinct names."""
+def test_a_record_that_isnt_json_breaks_invalid_syntax(text: str) -> None:
+    """§5, Annex A: RFC 8259 JSON text, in which no object has two equal names; and no `NaN`,
+    which `json.loads` would take (design §4.1)."""
     with pytest.raises(ParseError) as raised:
         load_json(text.encode())
-    assert raised.value.code == code
+    assert raised.value.code == "INVALID_SYNTAX"
+
+
+def test_a_repeated_name_is_named() -> None:
+    """§5: a repeated name is INVALID_SYNTAX, whose message names it (design §4.1)."""
+    with pytest.raises(ParseError, match='the name "size" is twice'):
+        load_json(b'{"size": 1, "size": 2}')
 
 
 def test_a_record_is_utf_8() -> None:
@@ -137,8 +138,8 @@ def test_a_later_minor_versions_fields_are_left_out_of_the_record(contract: Cont
 
 def test_new_record_fills_in_each_names_record(tmp_path: Path, contract: Contract) -> None:
     """§19, design §4.8: the hash and size of the bytes made, at the first name's default place
-    (O32), and of what each entry read, the commit, environment, runner and times; and §18: each
-    name's record has the result's address at that name."""
+    , and of what each entry read, the commit, environment, runner and times; and §18: each
+     name's record has the result's address at that name."""
     files = {"astra.yaml": PAIR, "stage/astra.yaml": STAGE, "stage/inner/astra.yaml": INNER}
     top = repository(tmp_path, files)
     commit = git(top, "rev-parse", "HEAD").strip()

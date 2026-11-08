@@ -2,8 +2,8 @@
 universe's own selection is one of its decision's options (`UNKNOWN_OPTION`).
 
 Binding has resolved each address to its decision (`astra.stack`). Under an address that names
-nothing, no option is checked (Annex D case 5); a key that loops still names its decision, and
-its option is checked (Annex D case 10).
+nothing, no option is checked (design §4.13 case 5); a key that loops still names its decision, and
+its option is checked (design §4.13 case 10).
 """
 
 from __future__ import annotations

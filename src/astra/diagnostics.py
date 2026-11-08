@@ -1,8 +1,9 @@
 """Diagnostics, and the rule catalogue they take their levels from (design §3).
 
-The catalogue is astra-spec's `rules.json` (Annex E), read at run time from the namespace
+The catalogue is astra-spec's `rules.json` (Annex D), read at run time from the namespace
 package `astra.schema`: every rule's code, layer, level and statement, and the code of each
-JSON Schema error. A `MUST` broken is an error and a `SHOULD` a warning, in every layer (§3).
+JSON Schema error. Beside it are astra-tools' own three codes (`OWN`, design §3). A `MUST`
+broken is an error and a `SHOULD` a warning, in every layer (§3).
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ class Location:
     pointer: str  # JSON Pointer into it; "" for the whole file
     line: int | None
     column: int | None
-    key: str | None = None  # the map key or field the diagnostic names (Annex E)
+    key: str | None = None  # the map key or field the diagnostic names (Annex D)
     commit: str | None = None  # set when the file was read at a commit
     url: str | None = None  # set when it came from a remote
 
@@ -52,13 +53,49 @@ class Rule:
     layer: str  # parse, schema, validator, check or runner
     level: str  # MUST or SHOULD
     statement: str
-    source: str  # the section whose table states it, as "§7 Inputs"
+    source: str  # the section whose table states it, as "§7 Inputs", or "astra-tools"
     status: str | None = None  # a check rule's status when broken
+
+
+OWN: Mapping[str, Rule] = MappingProxyType(
+    {
+        rule.code: rule
+        for rule in (
+            Rule(
+                "UNSUPPORTED_SPEC_VERSION",
+                "validator",
+                "MUST",
+                "Every `astra.yaml` of the stack states a `spec_version` whose minor version "
+                "astra-tools has the schema of (0.1)",
+                "astra-tools",
+            ),
+            Rule(
+                "REMOTE_UNREACHABLE",
+                "validator",
+                "MUST",
+                "Every commit the stack gets from a remote (§17) can be got",
+                "astra-tools",
+            ),
+            Rule(
+                "COMMIT_NOT_ANCESTOR",
+                "validator",
+                "SHOULD",
+                "A declaration with a `path` and a `commit` names, in the repository that holds "
+                "the declaring file, an ancestor of the commit the declaration is in or, read in "
+                "the working tree, HEAD or an ancestor of it",
+                "astra-tools",
+            ),
+        )
+    }
+)
+"""astra-tools' own codes, which the specification left to tools, with their layer, level and
+statement (design §3): the first two are errors, since without them the stack can't be read."""
 
 
 @dataclass(frozen=True)
 class Catalogue:
-    """`rules.json`: the rules by code, in the specification's order, and the error map."""
+    """`rules.json`: the rules by code, in the specification's order, and the error map; and,
+    after them, astra-tools' own (`OWN`)."""
 
     rules: Mapping[str, Rule]
     errors: Mapping[str, str]  # absolute keyword location -> code
@@ -82,17 +119,22 @@ class Catalogue:
         }
         return cls(MappingProxyType(rules), MappingProxyType(data["errors"]), data["$comment"])
 
+    def find(self, code: str) -> Rule | None:
+        """The rule `code` names, in `rules.json` or among astra-tools' own; None if neither."""
+        return self.rules.get(code) or OWN.get(code)
+
     def rule(self, code: str) -> Rule:
-        """The rule `code` names. A code astra-tools reports that isn't in the catalogue is a
-        bug: astra-tools and astra-spec disagree."""
-        rule = self.rules.get(code)
+        """The rule `code` names. A code astra-tools reports that is neither in the catalogue
+        nor its own is a bug: astra-tools and astra-spec disagree."""
+        rule = self.find(code)
         if rule is None:
             raise LookupError(f"{code} isn't in astra-spec's rules.json ({self.version})")
         return rule
 
     def codes(self, layer: str) -> tuple[str, ...]:
-        """The codes of `layer`'s rules, in the specification's order."""
-        return tuple(code for code, rule in self.rules.items() if rule.layer == layer)
+        """The codes of `layer`'s rules, in the specification's order, then astra-tools' own."""
+        rules = [*self.rules.values(), *OWN.values()]
+        return tuple(rule.code for rule in rules if rule.layer == layer)
 
     def level(self, code: str) -> Level:
         """The level of `code`: an error for a `MUST`, a warning for a `SHOULD` (§3)."""

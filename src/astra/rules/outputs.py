@@ -4,7 +4,9 @@ depends on itself, directly or through others (`OUTPUT_CYCLE`).
 An output depends on each output an entry of its `inputs` resolves to, pinned or not, through
 any declaration. Outputs are known by their analysis's identity (§17), so two spellings of one
 output, and a declaration back through `..`, reach one output (§15). An address that names
-nothing, or goes through an undetermined analysis, depends on nothing (Annex D cases 4, 5).
+nothing, or goes through an undetermined analysis, depends on nothing (design §4.13 cases 4, 5).
+For an output on a cycle, no other rule on its results' places, or on what reads it, is checked
+(case 13, `Context.on_cycle`): the breach is reported as `OUTPUT_CYCLE` alone.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from collections.abc import Iterator, Mapping, Sequence
 
 from astra.diagnostics import Diagnostic
 from astra.rules.context import Context
-from astra.stack import Element, Resolution
+from astra.stack import Element
 
 CODES = frozenset({"AMBIGUOUS_ID", "OUTPUT_CYCLE"})
 
@@ -38,16 +40,8 @@ def _ambiguous(context: Context) -> Iterator[Diagnostic]:
 
 def _cycles(context: Context) -> Iterator[Diagnostic]:
     """`OUTPUT_CYCLE` at each entry of `inputs` that lies on a cycle: the output it names
-    leads back to the output that lists it."""
-    reads: dict[Element, list[tuple[Element, Resolution]]] = {}
-    for resolution in context.stack.resolutions:
-        if resolution.field != "inputs" or context.names_nothing(resolution):
-            continue
-        element = resolution.element
-        assert element is not None
-        if element.kind == "output":
-            assert resolution.owner is not None  # the output whose `inputs` holds it
-            reads.setdefault(resolution.owner, []).append((element, resolution))
+    leads back to the output that lists it (`Context.depends`)."""
+    reads = context.depends
     graph = {owner: [element for element, _ in entries] for owner, entries in reads.items()}
     for owner, entries in reads.items():
         for element, entry in entries:

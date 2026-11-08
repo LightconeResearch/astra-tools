@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import subprocess
+import tempfile
 from collections.abc import Callable, Iterator, Mapping
 from importlib.resources import files
 from pathlib import Path
@@ -124,18 +125,27 @@ def build(
     as a runner would but without running a recipe: each planned result it doesn't read through
     a record (§17), in the plan's order, gets the bytes `made` gives it at each of its default
     places, and a record from `records.new_record` at each of its places, naming `commit`
-    (HEAD by default) as the commit its recipe ran from (§18, §19). Nothing is committed. Gives
-    the plan's results."""
+    (HEAD by default) as the commit its recipe ran from (§18, §19). What an entry reads at a
+    commit is got through `api.history`, outside the checkout. Nothing is committed. Gives the
+    plan's results."""
     commit = commit or git(top, "rev-parse", "HEAD").strip()
     results = api.plan(folder or top).results
+    kept = Path(tempfile.mkdtemp(prefix="got-"))
     for result in results:
         if result.read_only:
             continue
         for place in result.places:
             (top / place.bytes).parent.mkdir(parents=True, exist_ok=True)
             (top / place.bytes).write_bytes(made(result))
+        got = {}
+        for read in result.inputs:
+            if read.commit is not None and read.place is not None:
+                data = api.history(folder or top).get(read.place.address, read.commit)
+                path = kept / str(len(got))
+                path.write_bytes(data)
+                got[read.entry] = str(path)
         records = new_record(
-            result, checkout=top, commit=commit, environment=ENVIRONMENT, runner=RUNNER
+            result, checkout=top, commit=commit, environment=ENVIRONMENT, runner=RUNNER, got=got
         )
         for place, record in zip(result.places, records, strict=True):
             write_record(top / place.record, record)

@@ -27,7 +27,7 @@ def command(universe: str, path: Path | None, as_json: bool) -> None:
     with environment():
         try:
             found = api.view(universe, path)
-        except api.InvalidAnalysisError as error:  # OPEN(O27)
+        except api.InvalidAnalysisError as error:
             write_report(error.report, as_json)
             raise click.exceptions.Exit(FAILED) from None
         except api.RequestError as error:

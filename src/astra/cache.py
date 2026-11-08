@@ -84,7 +84,7 @@ def clear() -> Path:
     then deleted, so that no process reads half of one; anything else in the folder is left
     alone. Gives the cache's folder. Raises CacheError where it can't be cleared."""
     folder = root()
-    for namespace in NAMESPACES:  # OPEN(O25): only what astra-tools keeps there
+    for namespace in NAMESPACES:  # only what astra-tools keeps there
         kept = folder / namespace
         if not kept.is_dir():
             continue

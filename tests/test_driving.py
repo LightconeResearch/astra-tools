@@ -1,5 +1,5 @@
 """§16 Driving and consuming, the rules on selections: which declarations are driven, and
-`DUPLICATE_ELEMENT`, `LOOPING_KEY`, `MISSING_DECISION` and `UNKNOWN_PIN_UNIVERSE`, with Annex D
+`DUPLICATE_ELEMENT`, `LOOPING_KEY`, `MISSING_DECISION` and `UNKNOWN_PIN_UNIVERSE`, with design §4.13
 cases 4, 5 and 10; and the universe each pin and import names.
 
 The first stacks are §16's `stage`, which declares `inner`, `again: {path: .}` and
@@ -234,7 +234,7 @@ def test_the_analyses_built_in_a_universe_are_known_by_identity(kept: Path) -> N
 
 
 def test_a_key_that_loops_drives_nothing(broken: Path) -> None:
-    """Annex D case 10: `stage2.again.d` loops, so it drives neither `stage2` nor `again`."""
+    """design §4.13 case 10: `stage2.again.d` loops, so it drives neither `stage2` nor `again`."""
     found = chains(bound(broken))
     assert ("stage2",) not in found
     assert ("stage2", "again") not in found
@@ -315,7 +315,7 @@ def test_missing_decision_names_each_decision_unset(broken_report: api.Validatio
 def test_nothing_through_an_undetermined_analysis_or_a_name_that_names_nothing(
     broken_report: api.ValidationReport,
 ) -> None:
-    """Annex D cases 4, 5 and 10: `bad.parent.decision1` is judged up to `bad`, whose file is
+    """design §4.13 cases 4, 5 and 10: `bad.parent.decision1` is judged up to `bad`, whose file is
     invalid, and `stage.nothere.parent.decision1` up to `nothere`, which `stage` doesn't
     declare: neither loops; no decision of `bad` is missing; the second names nothing."""
     reported = {
@@ -468,7 +468,8 @@ def test_a_pin_that_names_no_universe_breaks_unknown_pin_universe(pinning: Path)
     """§16: neither the file nor the element's analysis has the universe, as for an element of
     the file's own analysis; an import in the other analysis's file isn't one of its universes;
     and evidence pins as `Output.inputs` does (§14). A reference that names nothing isn't
-    checked (Annex D case 5), nor a pin naming the file's entry, an import that names nothing."""
+    checked (design §4.13 case 5), nor a pin naming the file's entry, an import that names
+    nothing."""
     report = api.validate(pinning)
     pinned = [
         (d.location.pointer, d.level)

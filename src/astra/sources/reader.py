@@ -134,7 +134,7 @@ class WorktreeReader:
                     entries[entry.name] = "symlink"
                 elif entry.is_dir(follow_symlinks=False):
                     gitlink = os.path.lexists(os.path.join(entry.path, ".git"))
-                    entries[entry.name] = "gitlink" if gitlink else "folder"  # OPEN(O13)
+                    entries[entry.name] = "gitlink" if gitlink else "folder"
                 elif entry.is_file(follow_symlinks=False):
                     entries[entry.name] = "file"
         return entries
@@ -149,7 +149,7 @@ _KINDS: Mapping[str, Kind] = MappingProxyType(
 
 
 class UnreachableError(Exception):
-    """A commit that can't be got from its remote (§17 *Getting a commit from a remote*)."""
+    """A commit that can't be got from its remote (§17 *Reading one*)."""
 
     def __init__(self, url: str | None, commit: str) -> None:
         super().__init__(f"{commit} can't be got from {url or 'a submodule with no URL'}")
@@ -172,10 +172,12 @@ class CommitReader:
     analyses from a commit, local or from a remote (§17). Each file is the blob git stores
     (Annex B *Bytes*).
 
-    A path that crosses a gitlink goes on into the submodule, at the commit the gitlink pins,
-    got from the URL that this commit's `.gitmodules` gives it, a relative one resolved against
-    the remote this commit was got from or, for a local one, its repository's default remote,
-    or else its folder, as git resolves it (Annex B *A gitlink's commit*)."""
+    A path that crosses a gitlink goes on into the submodule, at the commit the gitlink pins:
+    read in the submodule's own repository where it is checked out in this repository's working
+    tree and holds that commit (§17), and otherwise got from the URL that this
+    commit's `.gitmodules` gives it, a relative one resolved against the remote this commit was
+    got from or, for a local one, its repository's default remote, or else its folder, as git
+    resolves it (Annex B *A gitlink's commit*)."""
 
     def __init__(self, repo: Repository, commit: str, url: str | None, remotes: Remotes) -> None:
         self.repo = repo  # the local repository, or the store of `url`
@@ -228,7 +230,7 @@ class CommitReader:
         got."""
         try:
             return self._walk(path, cross=True)
-        except UnreachableError:  # OPEN(O21)
+        except UnreachableError:  # no file is got there, so none is named
             return None
 
     def _walk(self, path: str, *, cross: bool) -> _Found | None:
@@ -277,16 +279,24 @@ class CommitReader:
         commit it pins. Raises UnreachableError where that commit can't be got."""
         if gitlink.path not in self._submodules:
             url = self._urls().get(gitlink.path)
-            repo = None if url is None else self.remotes.get(url, gitlink.oid)
+            local = self._checkout(gitlink.path)
+            repo = self.remotes.get(url, gitlink.oid, local)
             self._submodules[gitlink.path] = (
                 UnreachableError(url, gitlink.oid)
-                if url is None or repo is None
-                else CommitReader(repo, gitlink.oid, url, self.remotes)
+                if repo is None
+                else CommitReader(repo, gitlink.oid, None if repo is local else url, self.remotes)
             )
         found = self._submodules[gitlink.path]
         if isinstance(found, UnreachableError):
             raise UnreachableError(found.url, found.commit)
         return found._root()
+
+    def _checkout(self, path: str) -> Repository | None:
+        """The submodule's own repository, where the gitlink at `path` is checked out in the
+        working tree of this commit's repository; None where it isn't, as in a remote's store,
+        which has no working tree."""
+        folder = self.repo.top / path
+        return Repository(folder) if (folder / ".git").exists() else None
 
     def _urls(self) -> dict[str, str]:
         """Each submodule's URL, resolved, by its path, as this commit's `.gitmodules` gives."""

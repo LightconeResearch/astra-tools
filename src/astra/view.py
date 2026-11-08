@@ -56,7 +56,7 @@ class UniverseView:
 
     def to_json(self) -> dict[str, Any]:
         """The view as `astra-universe-view/1` (design §4.11)."""
-        # OPEN(O29): the exact JSON form.
+        # The exact JSON form.
         return {
             "shape": SHAPE,
             "root": self.root,
@@ -99,7 +99,7 @@ def view(stack: Stack, universe: str) -> UniverseView:
     context = Context(stack, Catalogue.load())
     element = root_universe(stack, universe)
     selection = context.selections[element]
-    assert selection is not None  # every universe of a valid stack has one (Annex D case 7)
+    assert selection is not None  # every universe of a valid stack has one (design §4.13 case 7)
     built = context.building.universes[element]
     analyses: list[AnalysisView] = []
     for member, analysis in stack.determined():

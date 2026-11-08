@@ -25,7 +25,7 @@ def list_(path: Path | None) -> None:
     from astra.cli.text.universe import show_universes
 
     stack = read_stack(path)
-    show_universes(stack.analysis(stack.root))  # OPEN(O22): text alone
+    show_universes(stack.analysis(stack.root))  # text alone
 
 
 @command.command("show")
@@ -49,7 +49,7 @@ def show(universe: str, path: Path | None) -> None:
         raise click.BadParameter(str(error), param_hint="UNIVERSE") from None
     found = universes.selections(stack, universes.written(stack))
     selection = found[element]
-    if selection is None:  # Annex D case 7; OPEN(O23)
+    if selection is None:  # design §4.13 case 7
         click.echo(
             f"astra: `{universe}` has no effective selection, since its `derived_from` names no "
             "universe of the analysis, or its chain loops or reaches one that has none: "
@@ -58,4 +58,4 @@ def show(universe: str, path: Path | None) -> None:
         )
         raise click.exceptions.Exit(FAILED)
     derived_from = stack.analysis(stack.root).universes[universe].derived_from
-    show_selection(selection, derived_from)  # OPEN(O22): text alone
+    show_selection(selection, derived_from)  # text alone

@@ -1,5 +1,5 @@
 """§13 Pins, and outputs built per universe or once: which outputs are built per universe, and
-`PIN_INACTIVE` and `INPUT_NOT_BUILT`, with Annex D cases 5, 6 and 7.
+`PIN_INACTIVE` and `INPUT_NOT_BUILT`, with design §4.13 cases 5, 6 and 7.
 
 The stacks are §2's worked example with §9's `output4`, which is active only where `decision1.b`
 is selected: a keeping one, whose `output6` reads `output4` only where it is active, and a
@@ -106,7 +106,7 @@ universes:
 """,
 )
 """§13's `output4#u1`, in `inputs` and in evidence (§14), and `output8`, planned in `u1`, `u2`
-and `u4`, reading `output4` without a pin; `u3` has no effective selection (Annex D case 7) and
+and `u4`, reading `output4` without a pin; `u3` has no effective selection (design §4.13 case 7) and
 `u4` leaves `decision1` unset, so `output4`'s activity there is undetermined (case 6); `u9`
 names no universe (case 5)."""
 
@@ -143,7 +143,7 @@ def test_outputs_built_per_universe_and_once(kept: Path) -> None:
 
 
 def test_a_stack_whose_pins_and_reads_are_active_keeps_both_rules(kept: Path) -> None:
-    """§13 *Which universe a reference reads*: `output6` is planned only in `u2`, where
+    """§13 *Pins*: `output6` is planned only in `u2`, where
     `output4` is active, and pins it there; a pin on an input names a universe and changes
     nothing else."""
     assert found(kept) == []
@@ -154,7 +154,7 @@ def test_a_pinned_output_inactive_where_it_is_pinned_breaks_pin_inactive(broken:
     """§13: where `output4` has `when: [decision1.b]`, `output4#u1` breaks `PIN_INACTIVE`, since
     `u1` selects `decision1: a`; evidence pins as `Output.inputs` does (§14). A pin naming a
     universe with no effective selection, or one where `output4`'s activity is undetermined,
-    or naming no universe, isn't checked (Annex D cases 5, 6 and 7)."""
+    or naming no universe, isn't checked (design §4.13 cases 5, 6 and 7)."""
     pinned = [pointer for code, pointer in found(broken) if code == "PIN_INACTIVE"]
     assert pinned == ["/outputs/output7/inputs/0", "/findings/insight1/evidence/0/artifact"]
     message = next(d.message for d in api.validate(broken).diagnostics if d.code == "PIN_INACTIVE")
@@ -166,7 +166,7 @@ def test_an_unpinned_read_of_an_inactive_output_breaks_input_not_built(broken: P
     """§13: an output with a result planned in `u1` that reads `output4` without a pin breaks
     `INPUT_NOT_BUILT`, once, in `u1` alone: not in `u2`, where `output4` is active, nor in
     `u4`, where its activity is undetermined, nor in `u3`, which has no effective selection
-    (Annex D cases 6 and 7)."""
+    (design §4.13 cases 6 and 7)."""
     report = api.validate(broken)
     breaking = [d for d in report.diagnostics if d.code == "INPUT_NOT_BUILT"]
     assert [(d.level, d.location.pointer) for d in breaking] == [

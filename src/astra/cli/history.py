@@ -38,7 +38,7 @@ def _answering(hint: str) -> Iterator[None]:
     with environment():
         try:
             yield
-        except api.InvalidAnalysisError as error:  # OPEN(O27)
+        except api.InvalidAnalysisError as error:
             write_report(error.report, False)
             raise click.exceptions.Exit(FAILED) from None
         except api.RequestError as error:
@@ -64,9 +64,9 @@ def timeline(address: str, path: Path | None) -> None:
 
     with _answering("ADDR"):
         versions = api.history(path).timeline(address)
-    if not versions:  # OPEN(O50)
+    if not versions:
         _missing(f"no record of `{address}` is in HEAD's history")
-    show_versions(versions)  # OPEN(O50): text alone
+    show_versions(versions)  # text alone
 
 
 @command.command("lineage")
@@ -84,9 +84,9 @@ def lineage(address: str, path: Path | None, used_by: bool) -> None:
 
     with _answering("ADDR"):
         found = api.history(path).lineage(address, used_by=used_by)
-    if found.version is None:  # OPEN(O50)
+    if found.version is None:
         _missing(f"no record of `{address}` is in HEAD's history")
-    show_lineage(found, used_by)  # OPEN(O50): text alone
+    show_lineage(found, used_by)  # text alone
     if not isinstance(found.version.record, Record):
         raise click.exceptions.Exit(FAILED)
 
@@ -105,9 +105,9 @@ def find(path: Path | None, content_hash: str | None, iri: str | None) -> None:
         raise click.UsageError("give one of --hash H and --environment IRI")
     with _answering("--hash"):
         versions = api.history(path).find(content_hash=content_hash, environment=iri)
-    if not versions:  # OPEN(O50)
+    if not versions:
         _missing(f"no version of a planned result's record has {content_hash or iri}")
-    show_versions(versions)  # OPEN(O50): text alone
+    show_versions(versions)  # text alone
 
 
 @command.command("get")

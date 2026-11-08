@@ -1,5 +1,5 @@
 """§10 Outputs: `AMBIGUOUS_ID` and `OUTPUT_CYCLE`, through any declaration, by identity (§15,
-§17), with Annex D cases 4 and 5."""
+§17), with design §4.13 cases 4 and 5."""
 
 from __future__ import annotations
 
@@ -49,6 +49,27 @@ def test_an_input_and_an_output_sharing_an_id_break_ambiguous_id(tmp_path: Path)
     ]
     related = next(d for d in report.diagnostics if d.code == "AMBIGUOUS_ID").related
     assert [(r.pointer, r.key, r.line) for r in related] == [("/inputs", "data1", 3)]
+
+
+def test_an_entry_naming_a_shared_id_names_nothing(tmp_path: Path) -> None:
+    """Design §4.13 case 5: an entry of `inputs` whose id is both an input and an
+    output there names nothing, through a declaration or not, so no rule is checked on what it
+    would name: no OUTPUT_CYCLE, which `data1` reading itself would break, and no
+    UNRESOLVED_ADDRESS, since it isn't unresolved but ambiguous."""
+    shared = 'spec_version: "0.1.0"\ninputs:\n  data1: {path: data1.csv}\n'
+    root = 'spec_version: "0.1.0"\nanalyses: {sub: {path: sub}}\n'
+    files = {
+        "astra.yaml": root + outputs({"result": "[sub.data1]"}),
+        "sub/astra.yaml": shared + outputs({"data1": "[data1]"}),
+        "sub/data1.csv": "1\n",
+    }
+    top = repository(tmp_path, files)
+    report = api.validate(top)
+    assert [d.code for d in report.diagnostics] == ["AMBIGUOUS_ID"]
+    stack = api.bind(top).stack
+    assert stack is not None
+    entries = [r for r in stack.resolutions if r.field == "inputs"]
+    assert [(r.written, r.element) for r in entries] == [("sub.data1", None), ("data1", None)]
 
 
 def test_ids_of_other_kinds_or_analyses_may_be_the_same(tmp_path: Path) -> None:
@@ -124,13 +145,105 @@ def test_an_output_depending_on_itself_breaks_output_cycle(cycles: api.Validatio
 
 
 def test_an_output_on_no_cycle_keeps_it(cycles: api.ValidationReport) -> None:
-    """§10: `fine` reads an output on a cycle, and isn't on it; Annex D case 5: `nothere.x`
+    """§10: `fine` reads an output on a cycle, and isn't on it; design §4.13 case 5: `nothere.x`
     names nothing; case 4: `bad`'s `lower` would lead back to `hidden`, but `bad` is
     undetermined, so nothing through it is checked."""
     pointers = [pointer for _, pointer, _ in found(cycles, "OUTPUT_CYCLE")]
     assert not any("/fine/" in pointer or "/hidden/" in pointer for pointer in pointers)
     in_bad = [d.code for d in cycles.diagnostics if d.location.file == "bad/astra.yaml"]
     assert in_bad == ["UNKNOWN_FIELD"]
+
+
+ON_A_CYCLE = """\
+spec_version: "0.1.0"
+decisions:
+  d:
+    options: {a: {}, b: {}}
+analyses:
+  sub: {path: sub}
+outputs:
+  reader:
+    type: metric
+    format: json
+    inputs: [first, first#u1, sub.lower, sub.lower#u1]
+    recipe:
+      command: python make.py {inputs} '{output}'
+  first:
+    type: metric
+    format: json
+    when: [d.a]
+    inputs: [second]
+    recipe:
+      command: python make.py {inputs} '{output}'
+  second:
+    type: metric
+    format: json
+    inputs: [first]
+    recipe:
+      command: python make.py {inputs} '{output}'
+universes:
+  u1:
+    decisions: {d: b}
+"""
+"""`first` and `second` read each other, and `first` isn't active in `u1`; `reader` reads
+`first` in `u1`, unpinned and pinned to it, and `sub`'s `lower`, which is on a cycle in `sub`,
+in `u1`, which doesn't drive `sub`."""
+
+LOOPING = """\
+spec_version: "0.1.0"
+decisions:
+  e:
+    options: {a: {}, b: {}}
+outputs:
+  lower:
+    type: metric
+    format: json
+    decisions: [e]
+    inputs: [upper]
+    recipe:
+      command: python make.py {inputs} '{decisions.e}' '{output}'
+  upper:
+    type: metric
+    format: json
+    inputs: [lower]
+    recipe:
+      command: python make.py {inputs} '{output}'
+"""
+"""An analysis whose `lower` and `upper` read each other, `lower` built per universe."""
+
+
+def test_no_rule_on_what_reads_an_output_on_a_cycle_is_checked(tmp_path: Path) -> None:
+    """Design §4.13 case 13: for an output on a cycle, whether it is built per universe can
+    turn on the cycle, so no rule on what reads it is checked: no INPUT_NOT_BUILT where
+    `reader` and `second` read `first` in `u1`, no PIN_INACTIVE for `first#u1`, and no
+    NOT_BUILT_IN_UNIVERSE or UNDRIVEN_DECLARATION for `sub.lower`. The breach is reported as
+    OUTPUT_CYCLE alone."""
+    files = {"astra.yaml": ON_A_CYCLE, "sub/astra.yaml": LOOPING}
+    report = api.validate(repository(tmp_path, files))
+    assert [(d.code, d.location.file, d.location.pointer) for d in report.diagnostics] == [
+        ("OUTPUT_CYCLE", "astra.yaml", "/outputs/first/inputs/0"),
+        ("OUTPUT_CYCLE", "astra.yaml", "/outputs/second/inputs/0"),
+        ("OUTPUT_CYCLE", "sub/astra.yaml", "/outputs/lower/inputs/0"),
+        ("OUTPUT_CYCLE", "sub/astra.yaml", "/outputs/upper/inputs/0"),
+    ]
+
+
+def test_no_rule_on_the_places_of_an_outputs_results_on_a_cycle_is_checked(
+    tmp_path: Path,
+) -> None:
+    """Design §4.13 case 13: `inner`'s `lower`, on a cycle, is read in `u1` and `u2`, which
+    drive two chains to `inner` between them, but its result isn't RESULT_IN_TWO_PLACES."""
+    root = MINIMAL + (
+        "analyses:\n  stage: {path: stage}\n  inner: {path: stage/inner}\n"
+        "universes:\n  u1: {decisions: {stage.inner.e: a}}\n  u2: {decisions: {inner.e: b}}\n"
+    )
+    files = {
+        "astra.yaml": root.replace("    recipe:", "    inputs: [inner.lower]\n    recipe:", 1),
+        "stage/astra.yaml": MINIMAL + "analyses: {inner: {path: inner}}\n",
+        "stage/inner/astra.yaml": LOOPING,
+    }
+    report = api.validate(repository(tmp_path, files))
+    assert {d.code for d in report.diagnostics} == {"OUTPUT_CYCLE"}
 
 
 def test_outputs_reading_others_in_order_keep_it(tmp_path: Path) -> None:

@@ -1,5 +1,5 @@
 """§7 Inputs: `MISSING_INPUT_FILE`, `INPUT_NOT_TRACKED`, `INPUT_IN_ANOTHER_ANALYSIS` and
-`RESERVED_PATH` (with §5 *The folder*), read as Annex B says, and Annex D case 8.
+`RESERVED_PATH` (with §5 *The folder*), read as Annex B says, and design §4.13 case 8.
 
 The breaking cases share one stack, each of whose inputs breaks one rule or two; the keeping
 ones another, whose every input is one file, tracked, inside its own analysis: as a file, staged,
@@ -82,10 +82,11 @@ def broken(tmp_path_factory: pytest.TempPathFactory) -> api.ValidationReport:
 
 def test_a_path_naming_no_file_breaks_missing_input_file(broken: api.ValidationReport) -> None:
     """§7, Annex B: nothing there, a folder, a symlink (never followed, and no stand-in), a
-    path through a symlinked folder, a submodule's gitlink, and a path above the top."""
+    path through a symlinked folder, and a submodule's gitlink. Design §4.13, *Added since*: a
+    path above the top isn't checked by MISSING_INPUT_FILE."""
     assert found(broken, "MISSING_INPUT_FILE") == [
         ("astra.yaml", f"/inputs/{id_}/path")
-        for id_ in ("gone", "folder", "linked", "through", "module", "above")
+        for id_ in ("gone", "folder", "linked", "through", "module")
     ]
     assert all(d.level == "error" for d in broken.diagnostics)
 
@@ -93,7 +94,7 @@ def test_a_path_naming_no_file_breaks_missing_input_file(broken: api.ValidationR
 def test_a_file_not_in_the_index_breaks_input_not_tracked(broken: api.ValidationReport) -> None:
     """Annex B *Tracked*: untracked, ignored, inside a plain data submodule, or with a DVC
     stand-in that isn't tracked either; and in a submodule analysis, a file its own index
-    lacks. Annex D case 8: no input that names no file is checked."""
+    lacks. design §4.13 case 8: no input that names no file is checked."""
     assert found(broken, "INPUT_NOT_TRACKED") == [
         *(
             ("astra.yaml", f"/inputs/{id_}/path")
@@ -107,7 +108,8 @@ def test_a_file_outside_its_analysis_breaks_input_in_another_analysis(
     broken: api.ValidationReport,
 ) -> None:
     """§7: a file above the analysis's folder, and files inside `sub`, a folder below it that
-    holds an astra.yaml file of its own."""
+    holds an astra.yaml file of its own. Annex B: `above`, whose `..` has no segment before it,
+    goes above the top, and so outside the analysis's folder."""
     assert found(broken, "INPUT_IN_ANOTHER_ANALYSIS") == [
         ("astra.yaml", f"/inputs/{id_}/path") for id_ in ("above", "nested", "theirs")
     ]
@@ -184,7 +186,7 @@ def test_a_tracked_file_inside_its_analysis_keeps_every_rule(kept: api.Validatio
 def test_a_stand_in_keeps_missing_input_file_and_input_not_tracked(
     kept: api.ValidationReport,
 ) -> None:
-    """§7, Annex B *Stand-ins*: a git-annex symlink into annex/objects/, committed; a DVC file
+    """§7, Annex B *Symlinks*: a git-annex symlink into annex/objects/, committed; a DVC file
     beside a path that names nothing, or an ignored file. A Git LFS pointer is a file kept at
     the path, so it keeps both rules as any file does."""
     pointers = {f"/inputs/{id_}/path" for id_ in ("annexed", "dvc", "pulled")}

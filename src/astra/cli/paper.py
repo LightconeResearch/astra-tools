@@ -26,7 +26,7 @@ def command() -> None:
     warning, never an error. These commands need the extra [evidence]:
     pip install 'astra-tools[evidence]'.
     """
-    # OPEN(O58): text alone, with no --json.
+    # Text alone, with no --json.
 
 
 @contextlib.contextmanager
@@ -48,7 +48,7 @@ def _evidence() -> Iterator[None]:
     with environment():
         try:
             yield
-        except api.InvalidAnalysisError as error:  # OPEN(O27)
+        except api.InvalidAnalysisError as error:
             write_report(error.report, False)
             raise click.exceptions.Exit(FAILED) from None
         except PaperError as error:

@@ -287,15 +287,15 @@ def test_a_pin_names_a_universe_of_the_analysis_whose_element_it_reads(
     ]
 
 
-def test_a_pin_to_another_analysiss_universe_is_held_by_the_first_rule_alone(
+def test_a_pin_to_another_analysiss_universe_is_held_by_not_built_in_universe_alone(
     reading_lib: Path,
 ) -> None:
-    """§16: a pin that names another analysis's universe is not in the driver's file, so only
-    rule 1 holds it. The root's universes drive nothing, yet its pins through `stage.lib` break
-    no rule; `stage.stage_out#lib_v1` breaks NOT_BUILT_IN_UNIVERSE alone, since `lib`'s `v1`
-    doesn't build `stage`. In `lib`'s own `v1`, which doesn't drive `parent`, `lib`'s `out`
-    consumes `parent.d` where `stage` isn't built, in the file of the analysis whose universe
-    it is: both rules."""
+    """§16 *Pins and imported universes*: a pin that names another analysis's universe is not in the
+    driver's file, so only NOT_BUILT_IN_UNIVERSE holds it. The root's universes drive nothing, yet
+    its pins through `stage.lib` break no rule; `stage.stage_out#lib_v1` breaks
+    NOT_BUILT_IN_UNIVERSE alone, since `lib`'s `v1` doesn't build `stage`. In `lib`'s own `v1`,
+    which doesn't drive `parent`, `lib`'s `out` consumes `parent.d` where `stage` isn't built, in
+    the file of the analysis whose universe it is: both rules."""
     report = api.validate(reading_lib)
     assert [(d.code, d.location.file, d.location.pointer) for d in report.diagnostics] == [
         ("NOT_BUILT_IN_UNIVERSE", "astra.yaml", "/outputs/compared/inputs/2"),

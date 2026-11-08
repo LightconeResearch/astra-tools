@@ -40,7 +40,8 @@ class Address:
 
 @dataclass(frozen=True)
 class Reference:
-    """An address, which may be followed by a pin, `#` and a universe's id (§13 *Pins*)."""
+    """An address, which may be followed by a pin, `#` and a universe's id (§6 *The forms of a
+    name*, §13)."""
 
     address: Address
     pin: str | None = None

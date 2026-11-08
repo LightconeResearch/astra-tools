@@ -48,7 +48,7 @@ def test_lies_inside() -> None:
 
 
 def test_two_names_that_differ_in_case_are_two_paths(tmp_path: Path) -> None:
-    """Annex B *Paths*: `data/A.csv` and `data/a.csv` name two files."""
+    """Annex B *What a path names*: `data/A.csv` and `data/a.csv` name two files."""
     top = repository(tmp_path, {"data/a.csv": "1\n", "data/A.csv": "2\n"})
     tree = WorktreeReader(top, Repository(top))
     assert tree.read("data/A.csv") != tree.read("data/a.csv")

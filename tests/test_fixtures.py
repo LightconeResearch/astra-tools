@@ -1,6 +1,6 @@
 """astra-spec's fixtures (`tests/data/`): each invalid one gives exactly the code and pointer its
 header names, and the `# also:` one where it has one; each valid one gives nothing (§5, Annex A,
-Annex E). An `astra.yaml` is validated in a git repository, and a record checked by the contract.
+Annex D). An `astra.yaml` is validated in a git repository, and a record checked by the contract.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def found(path: Path, repository: Path, contract: Contract) -> set[tuple[str, st
         return {
             (d.location.pointer, d.code)
             for d in report.diagnostics
-            if contract.catalogue.rules[d.code].layer in layers
+            if contract.catalogue.rule(d.code).layer in layers
             or d.code == "UNSUPPORTED_SPEC_VERSION"
         }
     try:

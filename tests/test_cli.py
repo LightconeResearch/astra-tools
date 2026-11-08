@@ -135,6 +135,22 @@ def test_rules_lists_every_rule_by_layer() -> None:
     assert result.stdout.index("validator") < result.stdout.index("NOT_IN_REPOSITORY")
 
 
+def test_rules_lists_astra_tools_own_codes_as_its_own() -> None:
+    """Design §3: after rules.json's, astra-tools' own three, under a heading of their own."""
+    last = json.loads((SCHEMAS / "rules.json").read_text("utf-8"))["rules"][-1]["code"]
+    stdout = astra("rules").stdout
+    own = stdout.index("validator, astra-tools' own")
+    assert own > stdout.index(f"  {last} ")
+    for code, level in (
+        ("UNSUPPORTED_SPEC_VERSION", "MUST"),
+        ("REMOTE_UNREACHABLE", "MUST"),
+        ("COMMIT_NOT_ANCESTOR", "SHOULD"),
+    ):
+        assert stdout.index(f"  {code} {level} ") > own
+    shown = astra("rules", "remote_unreachable")
+    assert shown.stdout.splitlines()[:2] == ["REMOTE_UNREACHABLE", "validator, MUST, astra-tools"]
+
+
 def test_rules_shows_one_rule_whatever_its_case() -> None:
     result = astra("rules", "absent_result")
     assert result.exit_code == 0

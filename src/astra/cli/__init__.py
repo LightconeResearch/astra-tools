@@ -105,7 +105,7 @@ def read_stack(path: Path | None) -> Stack:
 
     with environment():
         bound = api.bind(path)
-    if bound.stack is None:  # OPEN(O23)
+    if bound.stack is None:
         folder = "." if path is None else str(path)
         click.echo(
             "astra: the analysis's astra.yaml isn't a valid document, or isn't in a git "

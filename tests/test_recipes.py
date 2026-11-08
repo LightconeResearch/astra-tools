@@ -65,7 +65,8 @@ BREAKING = {
 """§11's examples of a placeholder naming an entry the output doesn't list, one of none of the
 forms, and a stray brace; an entry not as written, its spelling or its pin changed; `{{`
 read first from the left, leaving a stray `}`; a placeholder ending at the next `}`, a `{`
-inside it; and §13's `{decisions.<entry>}` in an output built once, which lists none."""
+inside it; and a `{decisions.<entry>}` in an output that lists no decisions (§11 *The command as
+a template*)."""
 
 
 @pytest.fixture(scope="module")

@@ -21,7 +21,7 @@ def test_an_address_is_its_declarations_then_its_element() -> None:
 
 
 def test_a_reference_may_end_in_a_pin() -> None:
-    """§13 *Pins*: `output1#u1`."""
+    """§6 *The forms of a name*, §13: `output1#u1`."""
     reference = parse_reference("subanalysis.output1#u1")
     assert (reference.address, reference.pin) == (Address(("subanalysis", "output1")), "u1")
     assert parse_reference("output1").pin is None

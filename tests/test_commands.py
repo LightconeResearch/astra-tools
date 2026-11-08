@@ -110,7 +110,7 @@ def test_info_shows_each_analysis_of_the_stack_in_brief(tmp_path: Path) -> None:
 
 
 def test_info_with_no_stack_to_show_exits_1(tmp_path: Path, outside: Path) -> None:
-    """O23: a root whose file isn't a valid document, or in no repository, has no stack."""
+    """A root whose file isn't a valid document, or in no repository, has no stack."""
     for folder in (analysis(git_init(tmp_path / "repo"), MINIMAL + "name: x\n"), analysis(outside)):
         result = astra("info", str(folder))
         assert result.exit_code == 1
@@ -161,7 +161,7 @@ universes:
     analysis: subanalysis
     universe: v1
 """
-"""§12's three universes and its import, and one with no effective selection (Annex D
+"""§12's three universes and its import, and one with no effective selection (design §4.13
 case 7)."""
 
 
@@ -216,7 +216,7 @@ def test_universe_show_gives_the_effective_selection(
 
 
 def test_universe_show_of_a_universe_with_no_effective_selection_exits_1(universes: Path) -> None:
-    """Annex D case 7, O23."""
+    """design §4.13 case 7, and design §4.12."""
     result = astra("universe", "show", "u4", str(universes))
     assert result.exit_code == 1
     assert "no effective selection" in result.stderr
@@ -246,7 +246,7 @@ def test_init_makes_an_analysis_in_a_new_repository_that_validates(tmp_path: Pat
 
 
 def test_init_inside_a_working_tree_makes_no_repository(tmp_path: Path) -> None:
-    """O24: the analysis is in the repository that holds its folder."""
+    """The analysis is in the repository that holds its folder."""
     top = git_init(tmp_path)
     assert api.init(top / "stage") == (top / "stage" / "astra.yaml", False)
     assert not (top / "stage" / ".git").exists()
@@ -276,7 +276,7 @@ def test_cache_path_prints_the_cache_folder(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_cache_clear_deletes_only_what_astra_keeps(tmp_path: Path) -> None:
-    """O25: the remote stores and the validity of analyses from a commit, and nothing else in
+    """The remote stores and the validity of analyses from a commit, and nothing else in
     the folder."""
     cache.put("validity", "key", b"value")
     (cache.root() / "remotes" / "store").mkdir(parents=True)

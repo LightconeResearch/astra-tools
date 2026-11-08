@@ -179,7 +179,7 @@ def test_the_view_in_u2(top: Path) -> None:
 
 
 def test_the_view_as_astra_universe_view_1(top: Path) -> None:
-    """O29: each analysis with its fields as its file writes them."""
+    """Each analysis with its fields as its file writes them."""
     shape = api.view("u1", top).to_json()
     assert [shape[key] for key in ("shape", "root", "universe")] == [
         "astra-universe-view/1",
@@ -269,7 +269,7 @@ def test_astra_view_of_a_universe_the_root_hasnt_is_a_usage_error(top: Path, uni
 
 
 def test_an_invalid_analysis_has_no_view(tmp_path: Path) -> None:
-    """O27: `astra view` prints the validation report, as `astra validate` does, and exits 1."""
+    """`astra view` prints the validation report, as `astra validate` does, and exits 1."""
     files = {"astra.yaml": ROOT.replace("decision3: a, ", ""), "data/input1.csv": "1\n"}
     files |= {"subanalysis/astra.yaml": SUBANALYSIS, "other/astra.yaml": OTHER}
     folder = repository(tmp_path, files)

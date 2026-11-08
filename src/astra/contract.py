@@ -1,20 +1,22 @@
-"""The schema layer: astra-spec's JSON Schemas, and the code of each error (Annex E, design §4.2).
+"""The schema layer: astra-spec's JSON Schemas, and the code of each error (Annex D, design §4.2).
 
 `analysis.schema.json` is the contract of an `astra.yaml` and `provenance.schema.json` that of a
 record: a document breaks no schema rule exactly when a JSON Schema draft 2019-09 validator
 reports no error for it. jsonschema's `Draft201909Validator` checks it here, with one keyword
 replaced: `pattern`, whose `$` matches only at the end, as ECMA-262's does (design §4.1).
 
-`spec_version` is read first (§5 *Versions*, Annex D case 1). An `astra.yaml` whose well-formed
-version is outside 0.1 is `UNSUPPORTED_SPEC_VERSION`, and the schema isn't run; a missing or
-malformed one is read by the 0.1 schema, which reports it. A record of a greater minor version
-is read by the open schema, and one below 0.1.0 has no schema (`INVALID_RECORD`, §20).
+Each file is read by the schema of the minor version it states (§5 *Versions*), so
+`spec_version` is read first. An `astra.yaml` whose well-formed version is outside 0.1 is
+astra-tools' `UNSUPPORTED_SPEC_VERSION` (design §3), and the schema isn't run; a missing or
+malformed one is read by the 0.1 schema, which reports it (design §4.13 case 1). A record of a
+greater minor version is read by the open schema, and one below 0.1.0 has no schema
+(`INVALID_RECORD`, §20).
 
 Each error that makes the document fail is mapped to its code through `rules.json`'s `errors`,
 by its absolute keyword location: the schema's `$id`, `#`, the JSON Pointer of the subschema
 holding the keyword, found in an index of the schema by object identity, and the keyword. Those
 are the errors jsonschema gives: none inside an `if` or a `not`, and a failing `oneOf` as one
-error, at the place and with the code of its branches' (Annex E).
+error, at the place and with the code of its branches' (Annex D).
 """
 
 from __future__ import annotations
@@ -44,7 +46,8 @@ SUPPORTED = (0, 1)
 """The minor version this astra-tools has the schemas of."""
 
 CODES = frozenset({"UNSUPPORTED_SPEC_VERSION", "INVALID_RECORD"})
-"""The codes reported here beside the schema layer's, which `rules.json`'s errors give."""
+"""The codes reported here beside the schema layer's, which `rules.json`'s errors give: one of
+astra-tools' own (design §3), and a check rule."""
 
 _VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 """A well-formed `spec_version` (§5 *Versions*)."""
@@ -215,7 +218,7 @@ def _fields(names: Iterable[str]) -> str:
 
 def _explained(error: ValidationError, on_key: bool) -> list[tuple[str | None, str]]:
     """Each `(key, message)` the error gives: one per unknown field, naming it, and one for an
-    error on a map's key, naming the key (Annex E); otherwise one, naming no key."""
+    error on a map's key, naming the key (Annex D); otherwise one, naming no key."""
     keyword, value, expected = (
         error.validator,
         cast(Any, error.instance),

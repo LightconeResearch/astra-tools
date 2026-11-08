@@ -130,7 +130,7 @@ class Repository:
         """The commits along HEAD's history that change what is at `path`, from the top of the
         working tree, newest first, as `git log -- <path>` lists them: every ancestor of HEAD,
         through git's default simplification of merges; none while HEAD has no commit."""
-        # OPEN(O44): which history is read.
+        # Which history is read.
         if self.head() is None:
             return ()
         result = _git("-C", str(self.top), "log", "--format=%H", "HEAD", "--", f":(literal){path}")
@@ -163,7 +163,7 @@ class Repository:
         untracked, renames as two paths; and, in each checked-out submodule that has changes of
         its own, each of those, after the submodule's path. A submodule is a change itself only
         where git reports more than its content changed: its commit, say."""
-        # OPEN(O4): what git reports as a change, in the checkout and its submodules.
+        # What git reports as a change, in the checkout and its submodules (§21).
         result = _git(
             "-C", str(self.top), "status", "--porcelain=v2", "--untracked-files=all",
             "--no-renames", "--ignore-submodules=none", "-z",

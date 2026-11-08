@@ -6,7 +6,7 @@ its analysis's universes drive (`MISSING_DECISION`); and every pin names a unive
 
 Every universe of every analysis of the stack is checked, a driven analysis's own included
 (§16 *What a validator checks*). A universe with no effective selection is checked by the first
-two on its own `decisions`, and not by `MISSING_DECISION` (Annex D case 7), which isn't checked
+two on its own `decisions`, and not by `MISSING_DECISION` (design §4.13 case 7), which isn't checked
 either for a decision whose activity is undetermined (case 6), or of an undetermined analysis
 (case 4). A key or a reference that names nothing is checked by none (case 5), but for
 `LOOPING_KEY`, judged on its declarations as far as they resolve (case 10).
@@ -17,7 +17,7 @@ universes drive the use's chain of declarations (`UNDRIVEN_DECLARATION`); and no
 has two names (`RESULT_IN_TWO_PLACES`, §18). They hold only in the universes built, and for an
 output only where its result is planned or, for its `when`, would be if the `when` held
 (`universes.building`), so not in a universe with no effective selection, nor through an
-element whose activity is undetermined (Annex D cases 6 and 7).
+element whose activity is undetermined (design §4.13 cases 6 and 7).
 """
 
 from __future__ import annotations
@@ -121,7 +121,7 @@ def _missing(
     through the first chain that reaches it."""
     name = selection.universe
     pointer = ("universes", name.id, "decisions") if universe.decisions else ("universes", name.id)
-    location = context.at(name.analysis, pointer)  # OPEN(O17)
+    location = context.at(name.analysis, pointer)  # design §3
     for identity, chains in building.items():
         chain = chains[0]
         for id_ in context.stack.analysis(identity).decisions:
@@ -145,7 +145,7 @@ def _pins(context: Context) -> Iterator[Diagnostic]:
     stack = context.stack
     for resolution in stack.resolutions:
         pin, element = resolution.pin, resolution.element
-        if pin is None or element is None:  # Annex D case 5
+        if pin is None or element is None:  # design §4.13 case 5
             continue
         if pin in stack.analysis(resolution.file).universes or context.pins[resolution] is not None:
             continue
@@ -171,7 +171,8 @@ that hold it, in the order reached."""
 
 
 def _uses(context: Context) -> Uses:
-    """Where the rules on the universe being built apply (§16 *The universe being built*):
+    """Where the rules on the universe being built apply (`NOT_BUILT_IN_UNIVERSE` and
+    `UNDRIVEN_DECLARATION`, §16 *The rules*):
 
     - in the universe a result is planned in, what its output reads without a pin that is built
       per universe, and the decisions it lists;
@@ -182,13 +183,13 @@ def _uses(context: Context) -> Uses:
     - in each analysis built in a universe built, what its decisions' `when` and its options'
       constraints test.
 
-    Not in a universe with no effective selection (Annex D case 7), and not for an address that
-    names nothing (case 5)."""
+    Not in a universe with no effective selection (design §4.13 case 7), not for an address that
+    names nothing (case 5), and not for one that names an output on a cycle (case 13)."""
     found: dict[Resolution, dict[Element, None]] = {}
 
     def use(entry: Resolution, universe: Element | None) -> None:
         if universe is not None and entry.element is not None:
-            if context.selections[universe] is not None:
+            if context.selections[universe] is not None and not context.on_cycle(entry.element):
                 found.setdefault(entry, {})[universe] = None
 
     building, per_universe = context.building, context.per_universe
@@ -219,8 +220,8 @@ def _used(entry: Resolution) -> str:
 
 
 def _not_built(context: Context, uses: Uses) -> Iterator[Diagnostic]:
-    """Each use whose element's analysis isn't built in a universe built that holds it: rule 1
-    of §16 *The universe being built*."""
+    """Each use whose element's analysis isn't built in a universe built that holds it:
+    `NOT_BUILT_IN_UNIVERSE` (§16 *The universe being built*)."""
     for entry, universes in uses.items():
         element = entry.element
         assert element is not None
@@ -242,9 +243,9 @@ def _not_built(context: Context, uses: Uses) -> Iterator[Diagnostic]:
 
 def _undriven(context: Context, uses: Uses) -> Iterator[Diagnostic]:
     """Each use of another analysis's element, in the file of the analysis whose universe holds
-    it, whose chain of declarations that file's universes don't drive: rule 2 of §16 *The
-    universe being built*. An address through a declaration back to its file's own analysis
-    names one of its own elements, and consumes nothing (§15)."""
+    it, whose chain of declarations that file's universes don't drive: `UNDRIVEN_DECLARATION`
+    (§16 *The universe being built*). An address through a declaration back to its file's own
+    analysis names one of its own elements, and consumes nothing (§15)."""
     for entry, universes in uses.items():
         element = entry.element
         assert element is not None
@@ -271,11 +272,11 @@ def _undriven(context: Context, uses: Uses) -> Iterator[Diagnostic]:
 def _two_places(context: Context) -> Iterator[Diagnostic]:
     """For each pair of a planned result's names, a warning at the first declaration of each of
     their chains that the other doesn't go through, in the file that holds it, with the other as
-    a related place (§18 *Whose a result is, and its name*): one for all the universes the pair
-    names one result in."""
+    a related place (§18 *Which analysis a result belongs to, and its name*): one for all the
+    universes the pair names one result in. Not for an output on a cycle (design §4.13 case 13)."""
     pairs: dict[tuple[str, Chain, str, Chain, str], list[Element]] = {}
     for planned in context.building.planned.values():
-        if planned.universe is not None:
+        if planned.universe is not None and not context.on_cycle(planned.output):  # case 13
             named = list(zip(planned.chains, planned.names, strict=True))
             for index, (chain, name) in enumerate(named):
                 for other, other_name in named[index + 1 :]:

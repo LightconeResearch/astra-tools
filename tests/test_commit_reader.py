@@ -32,8 +32,8 @@ def tree(tmp_path_factory: pytest.TempPathFactory) -> tuple[CommitReader, Path]:
 
 
 def test_a_path_names_the_entry_of_the_commits_tree(tree: tuple[CommitReader, Path]) -> None:
-    """Annex B *Entries*, *Bytes*: the commit's tree, not the working tree; names that differ in
-    case are two paths."""
+    """Annex B *What a path names*, *Bytes*: the commit's tree, not the working tree; names
+    that differ in case are two paths."""
     reader, _ = tree
     assert reader.stat("data") == Entry("folder")
     assert (reader.read("data/a.csv"), reader.read("data/A.csv")) == (b"1\n", b"2\n")

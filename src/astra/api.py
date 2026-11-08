@@ -58,8 +58,8 @@ class NoAnalysisError(Exception):
 
 
 class InvalidAnalysisError(Exception):
-    """The analysis breaks a `MUST`, so it has no plan, no view and no statuses: `report` says
-    where."""
+    """The analysis breaks a `MUST`, so it has no plan, no view, no history and no papers:
+    `report` says where. `check` gives what statuses it can instead (design §4.7)."""
 
     def __init__(self, report: ValidationReport) -> None:
         super().__init__(f"{report.root} breaks a MUST: `astra validate` says where")
@@ -124,12 +124,18 @@ def check(
     and its evidence's, all of them or those `universes` and `outputs` narrow it to
     (`check.check`). With `at`, a revision of the repository that holds the analysis (a commit,
     a branch, a tag), the analysis is checked as it is at that commit, with its records and
-    bytes read there. Raises InvalidAnalysisError where the analysis breaks a `MUST`,
-    RequestError where `at` names no commit or a universe or an output asked for isn't there,
-    and otherwise as `validate` does."""
+    bytes read there. Where the analysis breaks a `MUST`, the report holds the errors, and only
+    the results whose planning is determined (design §4.13 case 12) get statuses: none where the
+    root's file isn't a valid document or it is in no repository. Raises RequestError where `at`
+    names no commit or a universe or an output asked for isn't there, and otherwise as
+    `validate` does."""
     remotes = Remotes()
-    stack = _valid(path, at, remotes)  # OPEN(O5): no statuses on an invalid analysis
-    return check_stack(stack, universes, outputs, remotes)
+    reader, report, stack = _read(path, at, remotes)
+    errors = tuple(diagnostic for diagnostic in report.diagnostics if diagnostic.level == "error")
+    if stack is None:  # no result's planning is determined (design §4.13 case 12)
+        commit = reader.commit if isinstance(reader, CommitReader) else "worktree"
+        return CheckReport(report.root, commit, (), (), errors)
+    return check_stack(stack, universes, outputs, remotes, errors)
 
 
 def history(path: str | os.PathLike[str] | None = None) -> History:
@@ -138,7 +144,7 @@ def history(path: str | os.PathLike[str] | None = None) -> History:
     each query is one call of what this gives, `timeline`, `lineage`, `find` or `get`
     (`history.History`). Raises InvalidAnalysisError where the analysis breaks a `MUST`, and
     otherwise as `validate` does."""
-    # OPEN(O49): the form of the public API.
+    # The form of the public API.
     remotes = Remotes()
     return History(_valid(path, None, remotes), remotes)
 
@@ -148,7 +154,7 @@ def papers(path: str | os.PathLike[str] | None = None) -> tuple[Cited, ...]:
     `validate` reads it, at each version it cites, once, and whether the cache holds its paper
     (design §6 *Phase 5*). Raises ImportError where the extra `[evidence]` isn't installed,
     InvalidAnalysisError where the analysis breaks a `MUST`, and otherwise as `validate` does."""
-    from astra.evidence.papers import cited  # OPEN(O58): the extra's API
+    from astra.evidence.papers import cited  # the extra's API
 
     return cited(_valid(path))
 
@@ -158,7 +164,7 @@ def quotes(path: str | os.PathLike[str] | None = None) -> tuple[Diagnostic, ...]
     `path` takes from works it cites by DOI, read as `validate` reads it (`evidence.quotes`): a
     paper not in the cache, or a quote not found in it. Raises `evidence.papers.PaperError`
     where a paper the cache holds can't be read, and otherwise as `papers` does."""
-    from astra.evidence.quotes import verify  # OPEN(O58)
+    from astra.evidence.quotes import verify
 
     return verify(_valid(path))
 
@@ -167,9 +173,22 @@ def _valid(
     path: str | os.PathLike[str] | None, at: str | None = None, remotes: Remotes | None = None
 ) -> Stack:
     """The stack whose root is the analysis in `path`, read in the working tree or at the
-    revision `at`, where it is valid (§3). Raises RequestError where `at` names no commit."""
+    revision `at`, where it is valid (§3). Raises InvalidAnalysisError where it isn't, and
+    RequestError where `at` names no commit."""
+    _, report, stack = _read(path, at, remotes or Remotes())
+    if not report.valid:  # no plan and no view of an invalid analysis
+        raise InvalidAnalysisError(report)
+    assert stack is not None  # a valid analysis has a stack
+    return stack
+
+
+def _read(
+    path: str | os.PathLike[str] | None, at: str | None, remotes: Remotes
+) -> tuple[Reader, ValidationReport, Stack | None]:
+    """The reader of the analysis in `path`, in the working tree or at the revision `at`, its
+    validation report, and the stack it judged (`validate.validated`). Raises RequestError
+    where `at` names no commit."""
     reader, root = _root(path)
-    remotes = remotes or Remotes()
     if at is not None and reader.repo is not None:
         commit = reader.repo.commit(at)
         if commit is None:
@@ -179,10 +198,7 @@ def _valid(
         if entry is None or entry.kind != "file":
             raise NoAnalysisError(f"{root or '.'} has no astra.yaml file at {commit}")
     report, stack = validated(reader, root, remotes)
-    if not report.valid:  # OPEN(O27): no plan and no view of an invalid analysis
-        raise InvalidAnalysisError(report)
-    assert stack is not None  # a valid analysis has a stack
-    return stack
+    return reader, report, stack
 
 
 MINIMAL = """\
@@ -210,7 +226,7 @@ def init(path: str | os.PathLike[str] | None = None) -> tuple[Path, bool]:
     if os.path.lexists(file):
         raise FileExistsError(f"{folder} has an astra.yaml already: give a folder without one")
     folder.mkdir(parents=True, exist_ok=True)
-    made = Repository.discover(folder) is None  # OPEN(O24): none inside a working tree
+    made = Repository.discover(folder) is None  # none inside a working tree
     if made:
         Repository.init(folder)
     descriptor, temporary = tempfile.mkstemp(prefix=".astra.yaml.", dir=folder)
@@ -234,12 +250,12 @@ def _root(path: str | os.PathLike[str] | None) -> tuple[Reader, str]:
     repo = Repository.discover(folder)
     reader: Reader
     if repo is None:
-        # OPEN(O9): outside a repository, a file's path is from the analysis's folder.
+        # Outside a repository, a file's path is from the analysis's folder.
         reader, root = WorktreeReader(folder, None), ""
     else:
         reader = WorktreeReader(repo.top, repo)
         root = "/".join(folder.resolve().relative_to(repo.top).parts)
     entry = reader.stat(posixpath.join(root, "astra.yaml"))
-    if entry is None or entry.kind != "file":  # OPEN(O11): a symlink isn't one
+    if entry is None or entry.kind != "file":  # a symlink isn't one
         raise NoAnalysisError(f"{folder} has no astra.yaml file: give the folder of an analysis")
     return reader, root
