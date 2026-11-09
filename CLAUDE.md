@@ -20,9 +20,12 @@ Both packages share the `astra` namespace (PEP 420). There is **no** `src/astra/
 
 ## Design
 
-- `design/2026-11-07-v0.1-tooling-design.md` is the design (cite it as *design §n*). Its
-  specification is astra-spec's `docs/specification.md` at the pinned commit (cite it as *§n*
-  or *Annex X*). §1's principles bind every change; §5's table holds the open questions, each
+- `design/2026-11-07-v0.1-tooling-design.md` is the design (cite it as *design §n*). A *§n* or
+  *Annex X* in code, tests and the design refers to the long version of astra-spec's
+  `docs/specification.md`, at astra-spec's tag `v0.1-long-spec`. The specification at the
+  pinned commit is the short one, whose sections are Elements, Results, Rules and Schema
+  files. Design §1's
+  principles bind every change; §5's table holds the open questions, each
   marked `# OPEN(<id>)` in the one place that keeps its reading; §6 gives each phase's brief.
 - Cite the design and the spec in code and docstrings, never decision numbers.
 - A question about the spec's meaning that neither the spec nor the design answers: take the

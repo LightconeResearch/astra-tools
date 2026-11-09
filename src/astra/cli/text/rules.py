@@ -34,7 +34,8 @@ def _section(out: Console, heading: str, rules: Iterable[Rule]) -> None:
 def show_rule(rule: Rule) -> None:
     out = console()
     out.print(Text(rule.code, style="bold"))
-    out.print(Text(f"{rule.layer}, {rule.level}, {rule.source}"))
+    where = f"{rule.layer}, {rule.level}"
+    out.print(Text(where if rule.source is None else f"{where}, {rule.source}"))
     out.print(Text(rule.statement))
     if rule.status is not None:
         out.print(Text(f"Status when broken: {rule.status}"))

@@ -154,10 +154,7 @@ def test_rules_lists_astra_tools_own_codes_as_its_own() -> None:
 def test_rules_shows_one_rule_whatever_its_case() -> None:
     result = astra("rules", "absent_result")
     assert result.exit_code == 0
-    assert result.stdout.splitlines()[:2] == [
-        "ABSENT_RESULT",
-        "check, SHOULD, §20 Checking results",
-    ]
+    assert result.stdout.splitlines()[:2] == ["ABSENT_RESULT", "check, SHOULD"]
     assert "Status when broken: `absent`" in result.stdout
     assert astra("rules", "NO_SUCH_RULE").exit_code == 2
 

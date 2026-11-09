@@ -12,7 +12,7 @@ records, and `astra` reads them.
 
 - **PATH** is an analysis's folder, the current folder by default. Nothing is searched for: the
   analysis is the `astra.yaml` in that folder, the root of its
-  [stack](https://astra-spec.org/0.1/specification/#15-declared-analyses).
+  [stack](https://astra-spec.org/0.1/specification/#rules).
 - **Exit codes:**
     - 0 when the command answers;
     - 1 when the analysis breaks a `MUST`, a planned result isn't `unchanged`, or what was
@@ -21,7 +21,7 @@ records, and `astra` reads them.
       installed, a paper that can't be got, a folder that can't be written, git or the cache
       unusable), or an internal error.
 - **Output.** Problems are grouped by file, one per line, as `line:col level CODE message`. Each
-  code is a rule of the specification, listed on [All rules](https://astra-spec.org/0.1/rules/),
+  code is a rule of the specification, listed under [Rules](https://astra-spec.org/0.1/specification/#rules),
   or one of astra-tools' own three, which `astra rules` lists. `astra paper verify` adds two
   warnings of its own. `NO_COLOR` turns colour off.
 - **JSON.** `validate`, `plan`, `view` and `check` take `--json`. Each JSON document names its
@@ -88,7 +88,7 @@ astra validate [PATH] [--json] [--offline]
 ```
 
 Checks every parse, schema and validator rule
-([§4](https://astra-spec.org/0.1/specification/#4-conformance)) over the whole stack: the
+([Rules](https://astra-spec.org/0.1/specification/#rules)) over the whole stack: the
 analysis in PATH and every analysis it declares, at their commits. It reads no results; `astra
 check` does. Exits 0 when the analysis is valid and 1 when it breaks a `MUST`. A `SHOULD`
 that is broken is a warning and doesn't change the exit code.
@@ -140,7 +140,7 @@ astra universe show UNIVERSE [PATH]
 
 `list` names the analysis's universes, and the universes it imports from other analyses.
 `show` gives a universe's effective selection
-([§12](https://astra-spec.org/0.1/specification/#12-universes)): each decision with the option
+([Elements](https://astra-spec.org/0.1/specification/#elements)): each decision with the option
 selected, and, where the option is inherited through `derived_from`, the universe it comes from.
 
 ```console
@@ -156,12 +156,12 @@ astra plan [PATH] [--json] [--notes]
 ```
 
 Lists every planned result, each after what it reads. For each result it shows where its record
-and its bytes go ([§18](https://astra-spec.org/0.1/specification/#18-results-and-where-they-go)),
+and its bytes go ([Results](https://astra-spec.org/0.1/specification/#results)),
 the folder its recipe runs in, the container and resources the recipe asks for, if any, and its
 command with the placeholders filled in
-([§11](https://astra-spec.org/0.1/specification/#11-recipes)). A result that belongs to an
+([Elements](https://astra-spec.org/0.1/specification/#elements)). A result that belongs to an
 analysis from a commit isn't built here: it is read through its record at that commit
-([§17](https://astra-spec.org/0.1/specification/#17-analyses-from-another-commit-or-repository)).
+([Results](https://astra-spec.org/0.1/specification/#results)).
 
 | Option | Meaning |
 |---|---|
@@ -218,7 +218,7 @@ astra view UNIVERSE [PATH] [--json]
 
 Shows the analysis as it is in UNIVERSE. For each analysis of the stack, it gives whether that
 analysis is built in UNIVERSE
-([§16](https://astra-spec.org/0.1/specification/#16-driving-and-consuming)), the option selected
+([Elements](https://astra-spec.org/0.1/specification/#elements)), the option selected
 for each decision, and each output's result and where it goes, or why it has none. `--json`
 prints it as `astra-universe-view/1`. Exits 2 where the analysis has no universe UNIVERSE.
 
@@ -240,7 +240,7 @@ astra check [PATH] [--at REV] [--json]
 ```
 
 Checks each planned result's record and bytes, at each of its places
-([§20](https://astra-spec.org/0.1/specification/#20-checking-results)):
+([Results](https://astra-spec.org/0.1/specification/#results)):
 
 - the record is `unchanged`, `stale` (something it was made from has changed since) or `missing`;
 - the bytes are `present` (the ones the record gives, at their default place) or `absent`.
@@ -271,7 +271,7 @@ astra.yaml: 4 place(s) of planned results, 2 unchanged, 2 stale, 0 missing; 0 ab
 ```
 
 An input whose content is kept outside git, behind a stand-in
-([§7](https://astra-spec.org/0.1/specification/#7-inputs)), is compared by the hash the stand-in
+([Elements](https://astra-spec.org/0.1/specification/#elements)), is compared by the hash the stand-in
 gives. astra-tools recognises Git LFS pointers, git-annex links and DVC files, and fetches none
 of them. Other packages, a runner say, can add their own stand-ins through the entry-point group
 `astra.standins`.
@@ -326,13 +326,14 @@ astra rules [CODE]
 
 Without CODE, lists every rule of the specification by layer, with its code, level and
 statement, and then astra-tools' own three. With CODE, in any case, shows that rule, with its
-section and, for a check rule, its status when broken.
+layer and level (and astra-tools, for astra-tools' own) and, for a check rule, its status when
+broken.
 
 ```console
 $ astra rules MISSING_INPUT_FILE
 MISSING_INPUT_FILE
-validator, MUST, §7 Inputs
-An input's `path` names a file (not a symlink, folder or gitlink), or something the validator recognises as a stand-in for one
+validator, MUST
+An input's `path` names a file (no symlink, folder or gitlink) or a stand-in
 ```
 
 ## `astra spec`
@@ -374,7 +375,7 @@ astra paper verify [PATH]
 ```
 
 Keeps the papers that an analysis's evidence cites by DOI in the cache, and seeks its quotes in
-them ([§14](https://astra-spec.org/0.1/specification/#14-insights-and-evidence)). A quote is
+them ([Elements](https://astra-spec.org/0.1/specification/#elements)). A quote is
 sought within the page its location gives (`page=6`), or in the whole text. A paper not in the
 cache (`EVIDENCE_PAPER_MISSING`), or a quote not found (`EVIDENCE_QUOTE_NOT_FOUND`), is a
 warning, never an error. Needs the `[evidence]` extra

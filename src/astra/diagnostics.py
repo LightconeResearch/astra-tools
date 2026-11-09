@@ -53,7 +53,7 @@ class Rule:
     layer: str  # parse, schema, validator, check or runner
     level: str  # MUST or SHOULD
     statement: str
-    source: str  # the section whose table states it, as "§7 Inputs", or "astra-tools"
+    source: str | None = None  # "astra-tools" for astra-tools' own; rules.json gives none
     status: str | None = None  # a check rule's status when broken
 
 
@@ -112,7 +112,7 @@ class Catalogue:
                 rule["layer"],
                 rule["level"],
                 rule["statement"],
-                rule["source"],
+                rule.get("source"),
                 rule.get("status"),
             )
             for rule in data["rules"]
