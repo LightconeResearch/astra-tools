@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 astra-tools is the validator, the checker and a runner's building blocks for ASTRA v0.1
-analyses. It reads only `0.1.x` files; older files need astra-tools 0.2.18.
+analyses. It reads only `0.1.x` files; older files need its 0.2 line (`astra-tools<0.3`).
 
 - **astra-spec** ([separate repo](https://github.com/LightconeResearch/astra-spec)) owns the
   specification. astra-tools installs it from `../astra-spec-pinned`, a worktree of
@@ -72,6 +72,9 @@ src/astra/                no __init__.py: astra-spec owns astra.schema
   cli/                    one module per command, loaded lazily; rich only in cli/text/
   reference.py            `astra spec`, through LinkML (extra [reference])
   evidence/               papers by DOI and quotes sought in them (extra [evidence])
+docs/
+  cli.md                  the CLI reference, shown on astra-spec.org at /cli/
+  installation.md         installing astra-tools, shown on astra-spec.org at /installation/
 ```
 
 ## Global constraints
@@ -102,34 +105,44 @@ src/astra/                no __init__.py: astra-spec owns astra.schema
   an exit code. When a rule isn't checked is astra-tools' own policy, design §4.13.
 - Never modify `../astra-spec` or `../astra-spec-pinned` (move the pin only by checking out
   another commit there).
+- `docs/cli.md` and `docs/installation.md` are the pages astra-spec.org shows for astra-tools:
+  its docs build copies them from this repository. A change to a command, an option or an extra
+  changes them in the same commit. `tests/test_cli_docs.py` checks that every command,
+  subcommand and option has its place in `docs/cli.md`. Their links into the specification are
+  full URLs, `https://astra-spec.org/0.1/...`, so that they work here too.
+- `README.md` is also the PyPI page, fixed at each upload. Its links are full URLs, since
+  relative ones break on PyPI.
 
 ## Development
 
 astra-spec is an **editable** path source (`[tool.uv.sources]`) pointing at
-`../astra-spec-pinned`: a git worktree of `../astra-spec` detached at one commit. The pin is
-this commit, which `git -C ../astra-spec-pinned rev-parse HEAD` must print:
-
-    6c0ddb40e01d136aba63a5c3cc7c67533b9812f8
-
-`uv.lock` records only the path, so this line is the record of which spec each astra-tools
-commit was tested against. On a new machine:
+`../astra-spec-pinned`: a git worktree of `../astra-spec` detached at one commit, the pin.
+`astra-spec.pin`, at the top of this repository, holds the pin's full commit id on one line, and
+`git -C ../astra-spec-pinned rev-parse HEAD` must print the same. `uv.lock` records only the
+path, so `astra-spec.pin` is the record of which spec each astra-tools commit was tested
+against. CI and the release workflow check astra-spec out at that commit, so it must be on
+GitHub. On a new machine:
 
 ```bash
-git -C ../astra-spec worktree add --detach ../astra-spec-pinned 6c0ddb40e01d136aba63a5c3cc7c67533b9812f8
-uv sync                                  # the venv, with the dev group and the [reference] extra
+git -C ../astra-spec worktree add --detach ../astra-spec-pinned "$(cat astra-spec.pin)"
+uv sync                                  # the venv, with the dev group and both extras
 uv run --frozen pytest -q -p no:cacheprovider
 uv run --frozen mypy --strict src/
 uv run --frozen ruff check src/ tests/
 uv run --frozen ruff format --check src/ tests/
 ```
 
-To move the pin, check out another commit there and reinstall, and edit the hash above in the
-same commit:
+To move the pin, write another commit's full id into `astra-spec.pin`, in the same commit as the
+changes that follow it, then check that commit out there and reinstall:
 
 ```bash
-git -C ../astra-spec-pinned checkout --detach <commit>
+git -C ../astra-spec-pinned checkout --detach "$(cat astra-spec.pin)"
 uv sync --reinstall-package astra-spec
 ```
+
+A release pins the commit of an astra-spec tag that its dependency on astra-spec accepts
+(`v0.1.0rc1` for `astra-spec==0.1.0rc1`). The release workflow fails otherwise, and publishes
+nothing.
 
 Two environment variables matter: `ASTRA_CACHE_DIR` moves the cache (it must be absolute; the
 tests point it at a temporary directory of their own), and `ASTRA_DEBUG`, when non-empty, prints
