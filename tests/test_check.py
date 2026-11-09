@@ -25,7 +25,7 @@ from astra.check import CODES, CheckReport
 from astra.cli import main
 from astra.diagnostics import Catalogue
 from astra.records import new_record, write_record
-from tests.conftest import ENVIRONMENT, MINIMAL, RUNNER, SPEC, build, git, repository
+from tests.conftest import DOCUMENTS, ENVIRONMENT, MINIMAL, RUNNER, build, git, repository
 from tests.test_plan import FROM_COMMIT as DRIVING
 from tests.test_plan import INNER, LIB, PAIR, STAGE
 from tests.test_planned import ROOT, SUBANALYSIS
@@ -150,8 +150,8 @@ def test_a_record_missing_at_one_place_makes_that_result_missing(worked: Path) -
 # --- INVALID_RECORD, and astra-spec's record fixtures ---
 
 
-INVALID = sorted((SPEC / "tests" / "data" / "invalid").glob("ProvenanceRecord-*.json"))
-VALID = sorted((SPEC / "tests" / "data" / "valid").glob("ProvenanceRecord-*.json"))
+INVALID = sorted((DOCUMENTS / "invalid").glob("ProvenanceRecord-*.json"))
+VALID = sorted((DOCUMENTS / "valid").glob("ProvenanceRecord-*.json"))
 
 
 def header(fixture: Path) -> str:
@@ -162,7 +162,7 @@ def header(fixture: Path) -> str:
 
 @pytest.mark.parametrize("fixture", INVALID, ids=lambda path: path.stem)
 def test_an_invalid_record_fixture_leaves_its_result_missing(worked: Path, fixture: Path) -> None:
-    """§3, §20 *The rules*: a record that breaks a parse or schema rule leaves its result
+    """§4, §20 *The rules*: a record that breaks a parse or schema rule leaves its result
     `missing`, under INVALID_RECORD with the code it breaks as the reason, and isn't checked by
     MISPLACED_RECORD or MISSING_RECORD_INPUTS (design §4.13 case 9)."""
     shutil.copy(fixture, worked / ".astra" / "records" / "output2.json")
@@ -187,7 +187,7 @@ def test_a_valid_record_fixture_breaks_no_parse_or_schema_rule(worked: Path, fix
 
 def test_a_record_of_a_later_minor_version_is_read_by_the_open_schema(worked: Path) -> None:
     """§19, Annex D: a field it doesn't know is ignored in a record of a greater minor version,
-    and is UNKNOWN_FIELD in one of 0.1; a record below 0.1 has no schema (§3)."""
+    and is UNKNOWN_FIELD in one of 0.1; a record below 0.1 has no schema (§4)."""
     path = worked / ".astra" / "records" / "output2.json"
     rewrite(path, lambda value: value.update(spec_version="0.2.0", later=1))
     assert statuses(api.check(worked))["output2"] == ("unchanged", "present")

@@ -173,7 +173,7 @@ def _valid(
     path: str | os.PathLike[str] | None, at: str | None = None, remotes: Remotes | None = None
 ) -> Stack:
     """The stack whose root is the analysis in `path`, read in the working tree or at the
-    revision `at`, where it is valid (§3). Raises InvalidAnalysisError where it isn't, and
+    revision `at`, where it is valid (§4). Raises InvalidAnalysisError where it isn't, and
     RequestError where `at` names no commit."""
     _, report, stack = _read(path, at, remotes or Remotes())
     if not report.valid:  # no plan and no view of an invalid analysis

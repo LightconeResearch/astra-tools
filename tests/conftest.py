@@ -17,8 +17,11 @@ from astra.plan import Result
 from astra.records import Runner, new_record, write_record
 
 SPEC = Path(str(files("astra.schema") / "generated")).parents[3]
-"""The astra-spec the installed `astra.schema` comes from: its fixtures (`tests/data/`) and its
-`examples/` are the oracle (design §1, principle 6)."""
+"""The astra-spec the installed `astra.schema` comes from: its conformance suite (`conformance/`)
+and its `examples/` are the oracle (design §1, principle 6)."""
+
+DOCUMENTS = SPEC / "conformance" / "documents"
+"""The conformance suite's documents: `valid/`, `invalid/`, and `when/invalid/`."""
 
 MINIMAL = """\
 spec_version: "0.1.0"

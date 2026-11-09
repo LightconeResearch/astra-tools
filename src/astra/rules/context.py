@@ -29,7 +29,7 @@ class Context:
     def diagnostic(
         self, code: str, message: str, location: Location, related: Iterable[Location] = ()
     ) -> Diagnostic:
-        """A diagnostic for `code`, at its rule's level (§3)."""
+        """A diagnostic for `code`, at its rule's level (§4)."""
         return self.catalogue.diagnostic(code, message, location, related)
 
     def named(self, universes: Iterable[Element], file: Identity) -> str:

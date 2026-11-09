@@ -1,5 +1,5 @@
 """The field reference behind `astra spec`: the classes, enums and types of ASTRA's files, read
-from astra-spec's LinkML sources through linkml-runtime, the extra `[reference]` (§4 *Fields*,
+from astra-spec's LinkML sources through linkml-runtime, the extra `[reference]` (§3 *Fields*,
 Annex D). Their descriptions are the normative definitions of the fields.
 """
 

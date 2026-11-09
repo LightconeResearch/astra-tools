@@ -1,6 +1,7 @@
-"""astra-spec's fixtures (`tests/data/`): each invalid one gives exactly the code and pointer its
-header names, and the `# also:` one where it has one; each valid one gives nothing (§5, Annex A,
-Annex D). An `astra.yaml` is validated in a git repository, and a record checked by the contract.
+"""astra-spec's conformance documents (`conformance/documents/`): each invalid one gives exactly
+the code and pointer its header names, and the `# also:` one where it has one; each valid one
+gives nothing (§5, Annex A, Annex D). An `astra.yaml` is validated in a git repository, and a
+record checked by the contract.
 """
 
 from __future__ import annotations
@@ -14,13 +15,17 @@ from astra import api
 from astra.contract import Contract
 from astra.diagnostics import Catalogue
 from astra.load import ParseError, load_json
-from tests.conftest import SPEC, git_init
-
-DATA = SPEC / "tests" / "data"
+from tests.conftest import DOCUMENTS, git_init
 
 
 def fixtures(kind: str) -> list[Path]:
-    return sorted([*(DATA / kind).glob("*.yaml"), *(DATA / kind).glob("*.json")])
+    """The documents of `kind`, `valid` or `invalid`, with those of `when/<kind>/`: the invalid
+    documents whose break is in a `when`."""
+    return sorted(
+        path
+        for folder in (DOCUMENTS / kind, DOCUMENTS / "when" / kind)
+        for path in [*folder.glob("*.yaml"), *folder.glob("*.json")]
+    )
 
 
 def expected(path: Path) -> set[tuple[str, str]]:
@@ -62,7 +67,7 @@ def contract() -> Contract:
 
 def found(path: Path, repository: Path, contract: Contract) -> set[tuple[str, str]]:
     """The parse and schema diagnostics, and UNSUPPORTED_SPEC_VERSION, that the fixture gives:
-    those that decide whether a document is valid (§3). A fixture is one document, and the
+    those that decide whether a document is valid (§4). A fixture is one document, and the
     validator rules it breaks, such as a declaration of a folder that isn't there, are no part
     of its point."""
     if path.suffix == ".yaml":

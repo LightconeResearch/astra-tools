@@ -22,7 +22,7 @@ from astra import api
 from astra.cli import main
 from astra.diagnostics import Catalogue, Diagnostic, json_pointer
 from astra.evidence import papers, quotes
-from tests.conftest import MINIMAL, SPEC, repository
+from tests.conftest import DOCUMENTS, MINIMAL, repository
 
 
 def pdf(*pages: tuple[str, ...]) -> bytes:
@@ -192,7 +192,7 @@ def test_the_warnings_are_astra_tools_own(verified: Mapping[str, Diagnostic]) ->
 def test_astra_specs_insights_fixture(tmp_path: Path) -> None:
     """astra-spec's `Analysis-006-insights.yaml` cites three works by DOI, the first at version 2
     with a quote on page 6 (`page=6&search=…`)."""
-    fixture = SPEC / "tests" / "data" / "valid" / "Analysis-006-insights.yaml"
+    fixture = DOCUMENTS / "valid" / "Analysis-006-insights.yaml"
     top = repository(tmp_path, {"astra.yaml": fixture.read_bytes()})
     assert [(work.doi, work.version, work.cached) for work in api.papers(top)] == [
         (DOI, 2, False),

@@ -3,7 +3,7 @@
 The catalogue is astra-spec's `rules.json` (Annex D), read at run time from the namespace
 package `astra.schema`: every rule's code, layer, level and statement, and the code of each
 JSON Schema error. Beside it are astra-tools' own three codes (`OWN`, design §3). A `MUST`
-broken is an error and a `SHOULD` a warning, in every layer (§3).
+broken is an error and a `SHOULD` a warning, in every layer (§4).
 """
 
 from __future__ import annotations
@@ -137,13 +137,13 @@ class Catalogue:
         return tuple(rule.code for rule in rules if rule.layer == layer)
 
     def level(self, code: str) -> Level:
-        """The level of `code`: an error for a `MUST`, a warning for a `SHOULD` (§3)."""
+        """The level of `code`: an error for a `MUST`, a warning for a `SHOULD` (§4)."""
         return "error" if self.rule(code).level == "MUST" else "warning"
 
     def diagnostic(
         self, code: str, message: str, location: Location, related: Iterable[Location] = ()
     ) -> Diagnostic:
-        """A diagnostic for `code`, at the level its rule's `MUST` or `SHOULD` gives (§3)."""
+        """A diagnostic for `code`, at the level its rule's `MUST` or `SHOULD` gives (§4)."""
         return Diagnostic(code, self.level(code), message, location, tuple(related))
 
 

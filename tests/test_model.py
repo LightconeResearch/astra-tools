@@ -11,7 +11,7 @@ import pytest
 from astra import model
 from astra.contract import schema_file
 from astra.load import load_yaml
-from tests.conftest import SPEC
+from tests.conftest import DOCUMENTS
 
 CLASSES = {
     model.Analysis: None,  # the schema's root
@@ -54,7 +54,7 @@ def test_its_fields_are_its_schema_classs(cls: type) -> None:
 def test_an_analysis_is_read_whole() -> None:
     """astra-spec's fixture of the core fields: inputs, outputs with references and conditions,
     decisions with constraints."""
-    text = (SPEC / "tests" / "data" / "valid" / "Analysis-002-core.yaml").read_bytes()
+    text = (DOCUMENTS / "valid" / "Analysis-002-core.yaml").read_bytes()
     analysis = model.Analysis.from_json(load_yaml(text).value)
     assert analysis.inputs["catalog"].path == "data/catalog.csv"
     estimates = analysis.outputs["estimates"]
@@ -69,7 +69,7 @@ def test_an_analysis_is_read_whole() -> None:
 
 def test_an_import_selects_nothing() -> None:
     """§12 *Imports*: astra-spec's fixture of universes, whose `stage_alone` imports."""
-    text = (SPEC / "tests" / "data" / "valid" / "Analysis-004-universes.yaml").read_bytes()
+    text = (DOCUMENTS / "valid" / "Analysis-004-universes.yaml").read_bytes()
     universes = model.Analysis.from_json(load_yaml(text).value).universes
     assert universes["stage_alone"].is_import
     assert universes["stage_alone"].decisions == {}

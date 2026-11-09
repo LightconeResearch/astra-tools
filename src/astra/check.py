@@ -281,7 +281,7 @@ class _Checker:
     def reason(
         self, code: str, message: str, location: Location, breaks: str | None = None
     ) -> Reason:
-        """`code` broken, at the level its rule's `MUST` or `SHOULD` gives (§3)."""
+        """`code` broken, at the level its rule's `MUST` or `SHOULD` gives (§4)."""
         return Reason(code, self.catalogue.level(code), message, location, breaks)
 
     def place(

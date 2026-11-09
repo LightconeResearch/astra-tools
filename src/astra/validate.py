@@ -1,4 +1,4 @@
-"""validate(): the validator's report on an analysis (§3, design §4.11).
+"""validate(): the validator's report on an analysis (§4, design §4.11).
 
 It binds the stack (`astra.stack`): every `astra.yaml` of it, by the parse and schema rules and
 astra-tools' `UNSUPPORTED_SPEC_VERSION` (§5, Annex A, Annex D, design §3). Then it runs the
@@ -37,7 +37,7 @@ class ValidationReport:
 
     @property
     def valid(self) -> bool:
-        """True when no `MUST` is broken: warnings and `unchecked` notwithstanding (§3)."""
+        """True when no `MUST` is broken: warnings and `unchecked` notwithstanding (§4)."""
         return all(diagnostic.level != "error" for diagnostic in self.diagnostics)
 
     def to_json(self) -> dict[str, Any]:

@@ -88,7 +88,7 @@ astra validate [PATH] [--json] [--offline]
 ```
 
 Checks every parse, schema and validator rule
-([§3](https://astra-spec.org/0.1/specification/#3-conformance)) over the whole stack: the
+([§4](https://astra-spec.org/0.1/specification/#4-conformance)) over the whole stack: the
 analysis in PATH and every analysis it declares, at their commits. It reads no results; `astra
 check` does. Exits 0 when the analysis is valid and 1 when it breaks a `MUST`. A `SHOULD`
 that is broken is a warning and doesn't change the exit code.

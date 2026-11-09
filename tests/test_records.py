@@ -1,5 +1,5 @@
 """Records, read as Annex A says and checked by the record schema their minor version picks
-(§3, §5 *Versions*, §20, Annex D); and `records`: reading one at a place, writing one, and
+(§4, §5 *Versions*, §20, Annex D); and `records`: reading one at a place, writing one, and
 making a result's records from its run (§19, design §4.7, §4.8)."""
 
 from __future__ import annotations
@@ -18,12 +18,10 @@ from astra.hashing import digest_bytes
 from astra.load import ParseError, load_json
 from astra.records import Record, RecordedInput, Runner, new_record, read_record, write_record
 from astra.sources.reader import WorktreeReader
-from tests.conftest import RUNNER, SPEC, git, repository
+from tests.conftest import DOCUMENTS, RUNNER, git, repository
 from tests.test_plan import INNER, PAIR, STAGE
 
-RECORD = json.loads(
-    (SPEC / "tests" / "data" / "valid" / "ProvenanceRecord-001-full.json").read_text("utf-8")
-)
+RECORD = json.loads((DOCUMENTS / "valid" / "ProvenanceRecord-001-full.json").read_text("utf-8"))
 """A valid record of 0.1, astra-spec's fixture."""
 
 
@@ -53,7 +51,7 @@ def test_a_record_of_a_later_minor_is_read_by_the_open_schema(contract: Contract
 
 
 def test_a_record_below_0_1_has_no_schema(contract: Contract) -> None:
-    """Records begin at 0.1.0 (§3): INVALID_RECORD, at its version (§20)."""
+    """Records begin at 0.1.0 (§4): INVALID_RECORD, at its version (§20)."""
     old = {**RECORD, "spec_version": "0.0.9", "extra": 1}
     assert check(contract, old) == [("INVALID_RECORD", "/spec_version", None)]
 
