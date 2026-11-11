@@ -337,7 +337,8 @@ universes:
   u2: {decisions: {decision1: b}}
 """
 """A root whose universes drive `stage`, which has no decisions to set, and set no key
-through `stage.lone`, so they don't drive `lone` (§16)."""
+through `stage.lone`; nothing they plan uses `lone`'s decision, so they drive `lone` too, with
+nothing to set (§16; Elements)."""
 
 READS_LONE = """\
 spec_version: "0.1.0"
@@ -370,23 +371,24 @@ outputs:
 
 
 def test_an_output_asked_for_with_no_result_to_give_is_a_request_error(tmp_path: Path) -> None:
-    """design §4.6, §16 *The universe being built*: the root's universes drive `stage`, but not
-    `lone`, which `stage` declares. `stage.lone.out` has no result in them, and `stage.reader`,
-    built in each, reads `lone.out` where it isn't built. Nothing planned reads either, so the
-    stack breaks no rule."""
+    """design §4.6, §16 *The universe being built*: the root's universes drive `stage` and,
+    through it, `lone`, as nothing they plan uses `lone`'s `d` (Elements), so they set it
+    nowhere. `stage.lone.out` lists `d`, and `stage.reader`, built in each, reads `lone.out`:
+    asked for, either would use `d` where it isn't set (Results *uses*). Nothing planned reads
+    either, so the stack breaks no rule."""
     files = {"astra.yaml": UNDRIVEN, "stage/astra.yaml": READS_LONE, "lone/astra.yaml": LONE}
     top = repository(tmp_path, files)
     assert api.validate(top).diagnostics == ()
     with pytest.raises(
         api.RequestError,
-        match="`stage.lone.out` has no result in the root's universes: its analysis isn't built "
-        "there",
+        match="^`stage.lone.out` can't be built on request in `u1`: it, or what it reads, uses "
+        "`stage.lone.d`, which",
     ):
         api.plan(top, outputs=["stage.lone.out"])
     with pytest.raises(
         api.RequestError,
-        match="`reader` can't be built on request: `lone.out` reads a result that isn't built "
-        "there",
+        match="^`stage.reader` can't be built on request in `u1`: it, or what it reads, uses "
+        "`stage.lone.d`, which",
     ):
         api.plan(top, outputs=["stage.reader"])
 
@@ -618,8 +620,10 @@ def test_the_plan_as_astra_plan_1(worked: Path) -> None:
             }
         ],
         "inputs": [
-            {"entry": "output1#u1", "path": "results/u1/output1.json", "commit": None, "result": 0},
-            {"entry": "output1#u2", "path": "results/u2/output1.json", "commit": None, "result": 1},
+            {"entry": "output1#u1", "path": "results/u1/output1.json", "commit": None, "result": 0,
+             "via": []},
+            {"entry": "output1#u2", "path": "results/u2/output1.json", "commit": None, "result": 1,
+             "via": []},
         ],
         "decisions": {},
         "command": (
@@ -754,6 +758,9 @@ def test_the_plan_notes_a_pin_that_names_another_analysiss_universe_by_the_fallb
         },
         "results": [],
         "built": True,
+        "universes": [],
+        "switch": None,
+        "option": None,
     }
     where = f"astra.yaml:{note.location.line}:{note.location.column}"
     assert f"note {where} {note.message}" in astra("plan", str(pinning), "--notes").stdout
@@ -1007,47 +1014,48 @@ outputs:
       command: python ../pinned.py '{inputs.paper.result#u1}' '{output}'
 """,
 }
-"""`sub` reads from the analysis above it, which has decisions its universes don't set, so it
-doesn't build it; it builds `inner`, which has none, and plans none of its outputs. Both pin
-`paper.result#u1` by the fallback, and only `sub`'s pin is read through. A command of each
-climbs out of its folder."""
+"""`sub` reads from the analysis above it, none of whose decisions a universe of `sub` uses (it
+has none), so it has nothing to set and `sub` builds it without a key (Elements). It also builds
+`inner`, which has no decisions, and plans none of `inner`'s outputs. Both pin `paper.result#u1`
+by the fallback, and only `sub`'s pin is read through. A command of each climbs out of its
+folder."""
 
 
 def test_the_plan_notes_say_whether_they_concern_what_the_root_builds(tmp_path: Path) -> None:
     """design §4.6: a fallback pin concerns what the root builds where a planned result reads
     through it, and an output with no planned result, or a command naming a path outside its
     analysis, where its analysis is the root or one the root drives. `astra plan` counts and
-    lists those, and gives the whole stack's count of each kind on a line of its own; the JSON
-    lists every note, with `built`."""
+    lists those, and gives the whole stack's count of a kind on a line of its own where it is
+    more (here, the fallback pins); the JSON lists every note, with `built`."""
     sub = repository(tmp_path, BUILDS) / "sub"
     plan = api.plan(sub)
     found = [(note.kind, note.location and note.location.file, note.built) for note in plan.notes]
     assert found == [
         ("fallback_pin", "sub/astra.yaml", True),
         ("fallback_pin", "sub/inner/astra.yaml", False),
-        ("unplanned", "astra.yaml", False),
+        ("unplanned", "astra.yaml", True),
         ("unplanned", "sub/inner/astra.yaml", True),
-        ("outside_folder", "astra.yaml", False),
+        ("outside_folder", "astra.yaml", True),
         ("outside_folder", "sub/inner/astra.yaml", True),
     ]
     lines = astra("plan", str(sub), "--notes").stdout.splitlines()
     listed = [line for line in lines if line.startswith("note ")]
     assert [line.split(" ", 2)[1].split(":")[0] for line in listed] == [
         "sub/astra.yaml",
+        "astra.yaml",
         "sub/inner/astra.yaml",
+        "astra.yaml",
         "sub/inner/astra.yaml",
     ]
-    assert lines[-7:] == [
+    assert lines[-5:] == [
         f"{len(plan.results)} planned result(s), and notes, none of them a breach:",
         "  1 pin(s) rely on the fallback (§16)",
         "  2 pin(s) in the whole stack rely on the fallback (§16)",
-        "  1 output(s) have no planned result",
-        "  2 output(s) in the whole stack have no planned result",
-        "  1 command(s) name a path outside their analysis (CODE_OUTSIDE_ANALYSIS)",
-        "  2 command(s) in the whole stack name a path outside their analysis",
+        "  2 output(s) have no planned result",
+        "  2 command(s) name a path outside their analysis (CODE_OUTSIDE_ANALYSIS)",
     ]
     shaped = json.loads(astra("plan", str(sub), "--json").stdout)["notes"]
-    assert [note["built"] for note in shaped] == [True, False, False, True, False, True]
+    assert [note["built"] for note in shaped] == [True, False, True, True, True, True]
 
 
 def test_astra_plan_counts_the_notes_by_kind_and_lists_them_on_request(tmp_path: Path) -> None:

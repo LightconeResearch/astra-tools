@@ -178,7 +178,7 @@ def test_spec_lists_the_classes_enums_and_types() -> None:
 @pytest.mark.parametrize(
     "term, line",
     [
-        ("Output.format", "  format (string, required) "),
+        ("Output.id", "  id (id, required) "),
         ("output", "Output (class)"),
         ("commit", "AnalysisDeclaration (class)"),
         ("spec_version", "Pattern: ^(0|[1-9][0-9]*)"),

@@ -1,10 +1,12 @@
 """view(): the stack as it is in one universe of the root, for UIs (§12, §16, §18; design §4.6).
 
 Each analysis of the stack, the root first, with its fields as its `astra.yaml` writes them and
-whether it is built in the universe (§16 *The universe being built*); each of its decisions and
-the option the universe selects for it (§12); and each of its outputs and its planned result
-there, with its places (§18): its result in the universe, or its one result where it is built
-once. Like the plan, the view is made only of a valid stack (`api.view`).
+whether it is built in the universe (§16 *The universe being built*); each of its decisions, the
+option the universe selects for it (§12) and whether the universe uses it, with the root driving
+(Results *uses*); and each of its outputs, whether it is built there (Results *built*), the case
+it takes there for a switch (Elements *takes*), and its planned result there, with its places
+(§18): its result in the universe, or its one result where it is built once. Like the plan, the
+view is made only of a valid stack (`api.view`).
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from typing import Any
 from astra.diagnostics import Catalogue
 from astra.plan import root_universe
 from astra.rules.context import Context
-from astra.stack import Element, Member, Stack
+from astra.stack import Element, Kind, Member, Stack
 from astra.universes import Place, Planned, places
 
 SHAPE = "astra-universe-view/1"
@@ -25,12 +27,19 @@ SHAPE = "astra-universe-view/1"
 
 @dataclass(frozen=True)
 class DecisionView:
+    used: bool | None  # whether the universe uses it, with the root driving (Results *uses*);
+    # None where that turns on a switch that is undetermined (design §4.13 case 6)
     selected: str | None  # the option the universe selects; None where it selects none
 
 
 @dataclass(frozen=True)
 class OutputView:
-    result: Planned | None  # its planned result in the universe, or once; None where none is
+    built: bool | None  # whether it is built in the universe (Results *built*), as an output built
+    # once always is; None where that is undetermined (design §4.13 case 6)
+    takes: str | None  # for a switch, the case it takes there, as written; None where it takes
+    # none, and for an output other than a switch (Elements *takes*)
+    result: Planned | None  # its planned result in the universe, or once; None where none is, as
+    # for a switch, which has no result
     places: tuple[Place, ...]  # the result's, one for each of its names
 
 
@@ -70,7 +79,10 @@ def _analysis(analysis: AnalysisView) -> dict[str, Any]:
         "built": analysis.built,
         "fields": member.document.value,
         "decisions": {id_: asdict(decision) for id_, decision in analysis.decisions.items()},
-        "outputs": {id_: {"result": _result(output)} for id_, output in analysis.outputs.items()},
+        "outputs": {
+            id_: {"built": output.built, "takes": output.takes, "result": _result(output)}
+            for id_, output in analysis.outputs.items()
+        },
     }
 
 
@@ -94,20 +106,30 @@ def view(stack: Stack, universe: str) -> UniverseView:
     selection = context.selections[element]
     assert selection is not None  # every universe of a valid stack has one (design §4.13 case 7)
     built = context.building.universes[element]
+    run = context.building.run  # the root's
+    used = run.used.get(element, frozenset())
+    maybe = run.maybe.get(element, frozenset())
+    meaning = context.meaning
     analyses: list[AnalysisView] = []
     for member, analysis in stack.determined():
         decisions: dict[str, DecisionView] = {}
         for id_ in analysis.decisions:
             decision = Element(member.identity, "decision", id_)
             selected = min(selection.options(decision), default=None)
-            decisions[id_] = DecisionView(selected)
+            uses = True if decision in used else None if decision in maybe else False
+            decisions[id_] = DecisionView(uses, selected)
         outputs: dict[str, OutputView] = {}
-        for id_ in analysis.outputs:
-            output = Element(member.identity, "output", id_)
-            at = element if output in context.per_universe else None
+        for id_, written in analysis.outputs.items():
+            kind: Kind = "switch" if written.is_switch else "output"
+            output = Element(member.identity, kind, id_)
+            at = element if kind == "switch" or output in context.per_universe else None
+            takes = None
+            if kind == "switch":
+                taken = meaning.taken(output, element)
+                takes = None if taken is None or taken.case is None else taken.case.written
             result = context.building.planned.get((output, at))
             found = () if result is None else places(stack, result)
-            outputs[id_] = OutputView(result, found)
+            outputs[id_] = OutputView(meaning.built(output, at), takes, result, found)
         analyses.append(
             AnalysisView(
                 member,

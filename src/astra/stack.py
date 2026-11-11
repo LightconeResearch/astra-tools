@@ -14,8 +14,10 @@ commit, and the URL it was got from (design §3).
 
 Each declaration keeps what it reached, or why it reached nothing. Every address of every valid
 file is then resolved through its chain of declarations (§15) to an element, an analysis's
-identity, a kind and an id, or to nothing. Binding reports nothing about addresses or
-declarations: the rules do (`astra.rules`).
+identity, a kind and an id, or to nothing. A switch is an element of its own kind, and its
+addresses, its `switch` and its cases by option, are also kept by switch (`Stack.switches`;
+Elements *switch*). Binding reports nothing about addresses or declarations: the rules do
+(`astra.rules`).
 """
 
 from __future__ import annotations
@@ -100,7 +102,10 @@ class Member:
     url: str | None = None  # the remote its commit was got from, if any
 
 
-Kind = Literal["input", "output", "decision", "universe"]
+Kind = Literal["input", "output", "switch", "decision", "universe"]
+"""An element's kind. A switch is an entry of `outputs` (Elements *switch*), but never of kind
+`output`, as an import is never of kind `universe`: what wants a result, a record or a place
+meets no switch, and each field that takes an output takes a switch too (`TAKES`)."""
 
 
 @dataclass(frozen=True)
@@ -116,30 +121,35 @@ class Element:
 Field = Literal[
     "inputs",
     "decisions",
+    "switch",
+    "case",
     "requires",
     "incompatible_with",
     "selection",
     "artifact",
     "import",
 ]
-"""Where an address is written (§6 *Addresses*): `Output.inputs`; `Output.decisions`;
-`Option.requires` and `Option.incompatible_with`; a key of `Universe.decisions` (`selection`);
-`Evidence.artifact`; and an import's `analysis` then `.` and its `universe`."""
+"""Where an address is written (§6 *Addresses*): `Output.inputs`; `Output.decisions`; `switch`,
+a switch's `switch`; `case`, a value of a switch's `cases`; `Option.requires` and
+`Option.incompatible_with`; a key of `Universe.decisions` (`selection`); `Evidence.artifact`;
+and an import's `analysis` then `.` and its `universe`."""
 
 TAKES: Mapping[Field, tuple[Kind, ...]] = MappingProxyType(
     {
-        "inputs": ("input", "output"),  # an id both have names nothing (`_resolve`)
+        "inputs": ("input", "output", "switch"),  # an id two kinds share names nothing
         "decisions": ("decision",),
+        "switch": ("decision",),
+        "case": ("input", "output", "switch"),
         "requires": ("decision",),
         "incompatible_with": ("decision",),
         "selection": ("decision",),
-        "artifact": ("output",),
+        "artifact": ("output", "switch"),
         "import": ("universe",),
     }
 )
-"""The kinds of element each field's address resolves to (§6's table). An address whose id is
-an element of more than one of them, as an input and an output sharing an id (`AMBIGUOUS_ID`),
-names nothing (design §4.13 case 5)."""
+"""The kinds of element each field's address resolves to (§6's table; Rules
+`UNRESOLVED_ADDRESS`). An address whose id is an element of more than one of them, as an input
+and an output or a switch sharing an id (`AMBIGUOUS_ID`), names nothing (design §4.13 case 5)."""
 
 
 @dataclass(frozen=True)
@@ -147,18 +157,28 @@ class Resolution:
     """One address as written, and what it resolves to."""
 
     file: Identity  # the analysis whose astra.yaml writes it, where it is read (§6)
-    owner: Element | None  # the output, decision or entry of `universes` it is written in; None
-    # for evidence
+    owner: Element | None  # the output, switch, decision or entry of `universes` it is written
+    # in; None for evidence
     field: Field
     pointer: Pointer  # where it is written; for a key of Universe.decisions, the map
     key: str | None  # the key of Universe.decisions; otherwise None
     written: str  # the value as written; for an import, `analysis.universe`
     address: Address  # without a pin or an option (§6)
     pin: str | None  # a reference's pin
-    option: str | None  # the option a constraint or a selection names
+    option: str | None  # the option a constraint or a selection names or, for a case, the option
+    # it is keyed by
     chain: tuple[Declaration, ...]  # the declarations it goes through, as far as they resolve
     element: Element | None  # None where it names nothing
     undetermined: bool  # it goes through a declaration whose analysis is undetermined
+
+
+@dataclass(frozen=True)
+class Switch:
+    """A switch's addresses as resolved (Elements *switch*): its `switch`, and its `cases` by
+    option."""
+
+    decision: Resolution  # field "switch"
+    cases: Mapping[str, Resolution]  # field "case", by the option id each is keyed by
 
 
 @dataclass(frozen=True)
@@ -168,6 +188,8 @@ class Stack:
     root: Identity
     analyses: Mapping[Identity, Member]  # in the order they were reached, the root first
     resolutions: tuple[Resolution, ...]  # every address of every valid file
+    switches: Mapping[Element, Switch]  # every switch of every valid file, as `resolutions`
+    # orders them
 
     def analysis(self, identity: Identity) -> model.Analysis:
         """The content of `identity`'s file, which is a valid document: every analysis an
@@ -269,7 +291,8 @@ def bind(
         if member.analysis is not None
         for resolution in _resolutions(members, member.identity, member.analysis)
     )
-    return Bound(Stack(top.identity, MappingProxyType(members), resolutions), tuple(diagnostics))
+    stack = Stack(top.identity, MappingProxyType(members), resolutions, _switches(resolutions))
+    return Bound(stack, tuple(diagnostics))
 
 
 def _check(
@@ -378,6 +401,18 @@ def _resolutions(
 
     for id_, output in analysis.outputs.items():
         at: Pointer = ("outputs", id_)
+        if output.switch is not None:  # its `switch`, then its cases in the file's order
+            owner = Element(file, "switch", id_)
+            pointer = (*at, "switch")
+            yield resolve(owner, "switch", pointer, output.switch, parse_address(output.switch))
+            for option_id, text in output.cases.items():
+                reference = parse_reference(text)
+                pointer = (*at, "cases", option_id)
+                yield resolve(
+                    owner, "case", pointer, text, reference.address, pin=reference.pin,
+                    option=option_id,
+                )  # fmt: skip
+            continue
         owner = Element(file, "output", id_)
         for index, text in enumerate(output.inputs):
             reference = parse_reference(text)
@@ -437,11 +472,31 @@ def _resolve(
     return tuple(chain), element, False
 
 
+def _switches(resolutions: Sequence[Resolution]) -> Mapping[Element, Switch]:
+    """Each switch, with its `switch` and its cases as resolved: a switch's `switch` comes before
+    its cases in `resolutions` (`_resolutions`)."""
+    decisions: dict[Element, Resolution] = {}
+    cases: dict[Element, dict[str, Resolution]] = {}
+    for resolution in resolutions:
+        owner, option = resolution.owner, resolution.option
+        if resolution.field == "switch":
+            assert owner is not None  # the switch it is written in
+            decisions[owner], cases[owner] = resolution, {}
+        elif resolution.field == "case":
+            assert owner is not None and option is not None  # a case is keyed by an option
+            cases[owner][option] = resolution
+    return MappingProxyType(
+        {owner: Switch(found, MappingProxyType(cases[owner])) for owner, found in decisions.items()}
+    )
+
+
 def _elements(analysis: model.Analysis, kind: Kind) -> Mapping[str, object]:
     if kind == "input":
         return analysis.inputs
     if kind == "output":
-        return analysis.outputs
+        return {id_: o for id_, o in analysis.outputs.items() if not o.is_switch}
+    if kind == "switch":
+        return {id_: o for id_, o in analysis.outputs.items() if o.is_switch}
     if kind == "decision":
         return analysis.decisions
     return {id_: u for id_, u in analysis.universes.items() if not u.is_import}

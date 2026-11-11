@@ -115,7 +115,8 @@ astra info [PATH]
 ```
 
 Shows each analysis of the stack, the root first, with its declarations, inputs, outputs,
-decisions and universes. It checks nothing, and prints text only.
+decisions and universes. A switch shows the decision it switches on and its cases. It checks
+nothing, and prints text only.
 
 ```console
 $ astra info
@@ -201,6 +202,8 @@ The notes point out things that are valid but easy to miss. None of them is a br
   that id;
 - a result with two names;
 - an output with no planned result;
+- an output that isn't built in some universe, because a switch it reads has no case there for
+  the option selected ([Elements](https://astra-spec.org/0.1/specification/#elements));
 - results that are one computation in several universes;
 - a command that names a path outside its analysis's folder, or inside a folder below it that
   holds an analysis of its own.
@@ -218,9 +221,11 @@ astra view UNIVERSE [PATH] [--json]
 
 Shows the analysis as it is in UNIVERSE. For each analysis of the stack, it gives whether that
 analysis is built in UNIVERSE
-([Elements](https://astra-spec.org/0.1/specification/#elements)), the option selected
-for each decision, and each output's result and where it goes, or that it has none. `--json`
-prints it as `astra-universe-view/1`. Exits 2 where the analysis has no universe UNIVERSE.
+([Elements](https://astra-spec.org/0.1/specification/#elements)); the option selected for each
+decision, or that the universe doesn't use it
+([Results](https://astra-spec.org/0.1/specification/#results)); each output's result and where
+it goes, or why it has none; and the case each switch takes. `--json` prints it as
+`astra-universe-view/1`. Exits 2 where the analysis has no universe UNIVERSE.
 
 ```console
 $ astra view huber

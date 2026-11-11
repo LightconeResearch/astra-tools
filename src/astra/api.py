@@ -101,7 +101,8 @@ def plan(
     it, in an order a runner can build them in (§18, design §4.6): all of them, or those
     `universes` and `outputs` ask for (`plan.plan`). Raises InvalidAnalysisError where the
     analysis breaks a `MUST`, RequestError where a universe or an output asked for isn't there,
-    and otherwise as `validate` does."""
+    or is a switch (Elements *switch*), or an output asked for can't be built there, and
+    otherwise as `validate` does."""
     return plan_stack(_valid(path), universes, outputs)
 
 
@@ -127,8 +128,8 @@ def check(
     bytes read there. Where the analysis breaks a `MUST`, the report holds the errors, and only
     the results whose planning is determined (design §4.13 case 12) get statuses: none where the
     root's file isn't a valid document or it is in no repository. Raises RequestError where `at`
-    names no commit or a universe or an output asked for isn't there, and otherwise as
-    `validate` does."""
+    names no commit or a universe or an output asked for isn't there, or is a switch, and
+    otherwise as `validate` does."""
     remotes = Remotes()
     reader, report, stack = _read(path, at, remotes)
     errors = tuple(diagnostic for diagnostic in report.diagnostics if diagnostic.level == "error")

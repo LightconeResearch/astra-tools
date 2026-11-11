@@ -172,8 +172,9 @@ outputs:
     type: metric
     format: json
     inputs: [second]
+    decisions: [d]
     recipe:
-      command: python make.py {inputs} '{output}'
+      command: python make.py {inputs} '{decisions.d}' '{output}'
   second:
     type: metric
     format: json
@@ -184,8 +185,9 @@ universes:
   u1:
     decisions: {d: b}
 """
-"""`first` and `second` read each other; `reader` reads `first`, unpinned and pinned to `u1`, and
-`sub`'s `lower`, which is on a cycle in `sub`, in `u1`, which doesn't drive `sub`."""
+"""`first` and `second` read each other, `first` made with `d`; `reader` reads `first`, unpinned
+and pinned to `u1`, and `sub`'s `lower`, which is on a cycle in `sub`, in `u1`, which doesn't
+drive `sub`."""
 
 LOOPING = """\
 spec_version: "0.1.0"

@@ -1,12 +1,14 @@
-"""§10 Outputs: an input and an output never share an id (`AMBIGUOUS_ID`), and no output
-depends on itself, directly or through others (`OUTPUT_CYCLE`).
+"""§10 Outputs: an input and an output never share an id (`AMBIGUOUS_ID`), and no output, a
+switch included, reads itself through `inputs` and `cases`, directly or not, pinned or not
+(`OUTPUT_CYCLE`).
 
-An output depends on each output an entry of its `inputs` resolves to, pinned or not, through
-any declaration. Outputs are known by their analysis's identity (§17), so two spellings of one
+An output depends on each output or switch an entry of its `inputs` resolves to, and a switch on
+each that one of its cases resolves to, taken or not, pinned or not, through any declaration
+(Elements *switch*). Outputs are known by their analysis's identity (§17), so two spellings of one
 output, and a declaration back through `..`, reach one output (§15). An address that names
 nothing, or goes through an undetermined analysis, depends on nothing (design §4.13 cases 4, 5).
-For an output on a cycle, no other rule on its results' places, or on what reads it, is checked
-(case 13, `Context.on_cycle`): the breach is reported as `OUTPUT_CYCLE` alone.
+For an output or a switch on a cycle, no other rule on its results' places, or on what reads it,
+is checked (case 13, `Context.on_cycle`): the breach is reported as `OUTPUT_CYCLE` alone.
 """
 
 from __future__ import annotations
@@ -39,8 +41,8 @@ def _ambiguous(context: Context) -> Iterator[Diagnostic]:
 
 
 def _cycles(context: Context) -> Iterator[Diagnostic]:
-    """`OUTPUT_CYCLE` at each entry of `inputs` that lies on a cycle: the output it names
-    leads back to the output that lists it (`Context.depends`)."""
+    """`OUTPUT_CYCLE` at each entry of `inputs`, and each case, that lies on a cycle: the output
+    or switch it names leads back to the one that writes it (`Context.depends`)."""
     reads = context.depends
     graph = {owner: [element for element, _ in entries] for owner, entries in reads.items()}
     for owner, entries in reads.items():
@@ -56,8 +58,8 @@ def _cycles(context: Context) -> Iterator[Diagnostic]:
 def _path(
     graph: Mapping[Element, Sequence[Element]], start: Element, end: Element
 ) -> list[Element] | None:
-    """The shortest path of outputs from `start` to `end`, both included; None if there is
-    none."""
+    """The shortest path of outputs and switches from `start` to `end`, both included; None if
+    there is none."""
     before: dict[Element, Element | None] = {start: None}
     todo = [start]
     while todo:

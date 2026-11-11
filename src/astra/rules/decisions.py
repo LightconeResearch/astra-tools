@@ -1,9 +1,11 @@
-"""§8 Decisions and options: every option named by an option reference or a universe's own
-selection is one of its decision's options (`UNKNOWN_OPTION`).
+"""§8 Decisions and options: every option named by an option reference, a universe's own
+selection or a key of a switch's `cases` is one of its decision's options (`UNKNOWN_OPTION`).
 
 Binding has resolved each address to its decision (`astra.stack`). Under an address that names
 nothing, no option is checked (design §4.13 case 5); a key that loops still names its decision, and
-its option is checked (design §4.13 case 10).
+its option is checked (design §4.13 case 10). A key of `cases` names an option of the decision its
+switch's `switch` names, and is reported at the key (Elements *switch*); under a `switch` that names
+nothing, no key is checked (case 5).
 """
 
 from __future__ import annotations
@@ -19,16 +21,29 @@ CODES = frozenset({"UNKNOWN_OPTION"})
 
 def check(context: Context) -> Iterator[Diagnostic]:
     for resolution in context.stack.resolutions:
-        element, option = resolution.element, resolution.option
-        if option is None or context.names_nothing(resolution):
+        option, owner = resolution.option, resolution.owner
+        if option is None:
             continue
-        assert element is not None
-        known = options(context.stack, element)
+        decision, pointer, key = resolution, resolution.pointer, None
+        if resolution.field == "case":  # the switch's decision's option, at the key
+            assert owner is not None  # the switch whose `cases` holds it
+            decision, pointer, key = context.stack.switches[owner].decision, pointer[:-1], option
+        elif resolution.key is not None:  # a selection: its value, the option, is at its key
+            pointer = (*pointer, resolution.key)
+        if context.names_nothing(decision):
+            continue
+        assert decision.element is not None
+        known = options(context.stack, decision.element)
         if option in known:
             continue
-        pointer = resolution.pointer
-        if resolution.key is not None:  # a selection: its value, the option, is at its key
-            pointer = (*pointer, resolution.key)
         listed = ", ".join(f"`{id_}`" for id_ in known)
-        message = f"`{resolution.address}` has no option `{option}`: its options are {listed}"
-        yield context.diagnostic("UNKNOWN_OPTION", message, context.at(resolution.file, pointer))
+        if resolution.field == "case":
+            assert owner is not None
+            message = (
+                f"`{owner.id}` switches on `{decision.address}`, which has no option `{option}` "
+                f"to key a case: its options are {listed}"
+            )
+        else:
+            message = f"`{resolution.address}` has no option `{option}`: its options are {listed}"
+        location = context.at(resolution.file, pointer, key)
+        yield context.diagnostic("UNKNOWN_OPTION", message, location)

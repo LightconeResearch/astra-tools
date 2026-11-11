@@ -33,6 +33,10 @@ outputs:
 READING = OUTPUT.replace("    recipe:", "    inputs: [input1]\n    recipe:")
 """`result`, reading `input1`."""
 
+LISTING = OUTPUT.replace("    recipe:", "    decisions: [decision1, decision2]\n    recipe:")
+"""`result`, made with `decision1` and `decision2`, which every universe then uses (Results
+*uses*)."""
+
 DECISIONS = """\
 decisions:
   decision1:
@@ -144,7 +148,7 @@ decisions:
 universes:
   u1: {decisions: {decision1: b, decision2: a}}
 """
-        + OUTPUT,
+        + LISTING,
         "/universes/u1/decisions",
     ),
     "INCOMPATIBLE_OPTIONS": Case(
@@ -158,7 +162,7 @@ decisions:
 universes:
   u1: {decisions: {decision1: a, decision2: a}}
 """
-        + OUTPUT,
+        + LISTING,
         "/universes/u1/decisions",
     ),
     "EXCLUDED_OPTION_SELECTED": Case(
@@ -170,7 +174,7 @@ decisions:
 universes:
   u1: {decisions: {decision2: c}}
 """
-        + OUTPUT,
+        + OUTPUT.replace("    recipe:", "    decisions: [decision2]\n    recipe:"),
         "/universes/u1/decisions",
     ),
     "INVALID_INSIGHT_REF": Case(
@@ -211,7 +215,7 @@ universes: {u1: {label: Drives nothing}}
     "DUPLICATE_ELEMENT": Case(
         "§16 What a universe sets",
         "analyses: {subanalysis: {path: subanalysis}, again: {path: subanalysis}}\n"
-        + OUTPUT
+        + OUTPUT.replace("    recipe:", "    decisions: [subanalysis.decision1]\n    recipe:")
         + "universes: {u1: {decisions: {subanalysis.decision1: a, again.decision1: a}}}\n",
         "/universes/u1/decisions",
         {"subanalysis/astra.yaml": SUBANALYSIS},
@@ -225,8 +229,34 @@ universes: {u1: {label: Drives nothing}}
     ),
     "MISSING_DECISION": Case(
         "§16 What a universe sets",
-        DECISIONS.replace("outputs:", "  decision2:\n    options: {a: {}, b: {}}\noutputs:")
+        DECISIONS.replace(
+            "outputs:", "  decision2:\n    options: {a: {}, b: {}}\noutputs:"
+        ).replace("decisions: [decision1]", "decisions: [decision1, decision2]")
         + "universes: {u1: {decisions: {decision1: a}}}\n",
+        "/universes/u1/decisions",
+    ),
+    "UNUSED_DECISION": Case(
+        "Rules, Results *uses on some branch*",
+        DECISIONS.replace("outputs:", "  decision2:\n    options: {a: {}, b: {}}\noutputs:")
+        + "universes: {u1: {decisions: {decision1: a, decision2: a}}}\n",
+        "/universes/u1/decisions",
+    ),
+    "INACTIVE_DECISION": Case(
+        "Rules, Results *uses*",
+        DECISIONS.replace("outputs:", "  decision3:\n    options: {a: {}, b: {}}\noutputs:")
+        + """\
+  gate:
+    switch: decision1
+    cases: {b: output1}
+  output4:
+    type: figure
+    format: png
+    inputs: [gate]
+    decisions: [decision3]
+    recipe:
+      command: python make.py '{inputs.gate}' '{decisions.decision3}' '{output}'
+universes: {u1: {decisions: {decision1: a, decision3: a}}}
+""",
         "/universes/u1/decisions",
     ),
     "UNDRIVEN_DECLARATION": Case(
@@ -257,6 +287,23 @@ universes: {u1: {decisions: {subanalysis.decision1: a}}}
     inputs: [output1#u9]
     recipe:
       command: python make.py '{output}'
+universes: {u1: {decisions: {decision1: a}}}
+""",
+        "/outputs/output2/inputs/0",
+    ),
+    "PIN_NOT_BUILT": Case(
+        "Rules, Elements *switch*",
+        DECISIONS
+        + """\
+  gate:
+    switch: decision1
+    cases: {b: output1}
+  output2:
+    type: table
+    format: csv
+    inputs: [gate#u1]
+    recipe:
+      command: python make.py '{inputs.gate#u1}' '{output}'
 universes: {u1: {decisions: {decision1: a}}}
 """,
         "/outputs/output2/inputs/0",

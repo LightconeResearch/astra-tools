@@ -16,10 +16,12 @@ from pathlib import Path
 import pytest
 
 from astra import api, rules
+from astra.diagnostics import Catalogue
+from astra.rules.context import Context
 from astra.sources.git import Repository
 from astra.sources.reader import WorktreeReader
 from astra.stack import Element, Identity, Stack, bind
-from astra.universes import built, driven, imports, pins
+from astra.universes import Chain, built, imports, pins
 from tests.conftest import SPEC, repository
 
 OUTPUT = """\
@@ -53,14 +55,17 @@ decisions:
       b: {}
       c: {excluded: It isn't what stage is for.}
 """
-    + OUTPUT % "stage_result"
+    + (OUTPUT % "stage_result").replace(
+        "    recipe:", "    decisions: [d, inner.d, parent.decision1]\n    recipe:"
+    )
     + """\
 universes:
   s1:
     decisions: {d: a, inner.d: a, parent.decision1: a}
 """
 )
-"""§16's `stage`: its universes drive `inner` and, through `..`, the root."""
+"""§16's `stage`: its universes drive `inner` and, through `..`, the root; `stage_result` lists
+the decisions they set, so each universe uses each key (Results *uses*)."""
 
 LIB = (
     """spec_version: "0.1.0"
@@ -85,7 +90,9 @@ decisions:
   decision1:
     options: {a: {}, b: {}}
 """
-    + OUTPUT % "result"
+    + (OUTPUT % "result").replace(
+        "    recipe:", "    decisions: [decision1, stage.d, stage.inner.d]\n    recipe:"
+    )
     + """\
 universes:
   u1:
@@ -156,6 +163,11 @@ def bound(top: Path, folder: str = "") -> Stack:
     stack = bind(WorktreeReader(top, Repository(top)), folder).stack
     assert stack is not None
     return stack
+
+
+def driven(stack: Stack) -> dict[Identity, tuple[Chain, ...]]:
+    """The chains each analysis's universes drive (§16), given what they use (Results *uses*)."""
+    return dict(Context(stack, Catalogue.load()).driven)
 
 
 def chains(stack: Stack, identity: Identity = ROOT_ID) -> set[tuple[str, ...]]:

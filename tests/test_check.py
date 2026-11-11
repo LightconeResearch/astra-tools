@@ -430,9 +430,6 @@ UNBUILT = MINIMAL + (
     """\
 analyses:
   lib: {path: lib}
-universes:
-  u1:
-    decisions: {}
 findings:
   insight1:
     claim: lib's out is cited.
@@ -440,15 +437,15 @@ findings:
       - artifact: lib.out
 """
 )
-"""A root whose evidence cites `lib`'s `out`, built per universe, without a pin, though no
-universe of the root drives `lib`."""
+"""A root with no universes, whose evidence cites `lib`'s `out`, built per universe, without a
+pin."""
 
 
 def test_evidence_that_cites_no_result_is_missing_and_fails_the_check(tmp_path: Path) -> None:
     """§20 *Evidence*: an `artifact` naming an output built per universe without a pin cites its
-    results in each of the root's universes where its analysis is built, here none, and if there
-    are none, it is `missing`; design §4.12: `astra check` exits 1, though every planned result is
-    unchanged."""
+    results in each of the root's universes where its analysis is built, here none, as the root
+    has none, and if there are none, it is `missing`; design §4.12: `astra check` exits 1, though
+    every planned result is unchanged."""
     top = repository(tmp_path, {"astra.yaml": UNBUILT, "lib/astra.yaml": LIB})
     build(top)
     report = api.check(top)

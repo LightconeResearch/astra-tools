@@ -1,5 +1,5 @@
-"""§8 Decisions and options: `UNKNOWN_OPTION`, in option references and universes' own
-selections, with design §4.13 cases 4, 5 and 10."""
+"""§8 Decisions and options: `UNKNOWN_OPTION`, in option references, universes' own selections
+and the keys of a switch's `cases`, with design §4.13 cases 4, 5 and 10."""
 
 from __future__ import annotations
 
@@ -45,6 +45,15 @@ outputs:
     format: json
     recipe:
       command: python make.py '{output}'
+  switch1:
+    switch: sub.decision1
+    cases: {a: output1, z: output1}
+  switch9:
+    switch: decision9
+    cases: {z: output1}
+  switch_bad:
+    switch: bad.decision1
+    cases: {z: output1}
 universes:
   u1:
     decisions: {decision1: c, sub.decision1: z, decision9: c, self.decision1: c, bad.decision1: z}
@@ -73,6 +82,7 @@ def test_an_option_its_decision_lacks_breaks_unknown_option(broken: api.Validati
     assert unknown(broken) == [
         "/decisions/decision1/options/a/requires/0",
         "/decisions/decision1/options/a/incompatible_with/0",
+        "/outputs/switch1/cases",
         "/universes/u1/decisions/decision1",
         "/universes/u1/decisions/sub.decision1",
         "/universes/u1/decisions/self.decision1",
@@ -82,19 +92,34 @@ def test_an_option_its_decision_lacks_breaks_unknown_option(broken: api.Validati
     selection = found["/universes/u1/decisions/sub.decision1"]
     assert (selection.level, selection.location.line, selection.location.column) == (
         "error",
-        23,
+        32,
         46,
     )
     assert "`a`, `b`" in selection.message
+
+
+def test_a_key_of_cases_its_switchs_decision_lacks_breaks_it(broken: api.ValidationReport) -> None:
+    """Elements *switch*: the keys of `cases` are options of the decision its `switch` names,
+    through a declaration too; reported at the key, which is what is misspelt."""
+    (case,) = [
+        d
+        for d in broken.diagnostics
+        if d.code == "UNKNOWN_OPTION" and d.location.pointer == "/outputs/switch1/cases"
+    ]
+    assert (case.location.key, case.location.line, case.location.column) == ("z", 23, 25)
+    assert "`switch1` switches on `sub.decision1`, which has no option `z`" in case.message
+    assert "`a`, `b`" in case.message
 
 
 def test_nothing_under_an_address_that_names_nothing_is_checked(
     broken: api.ValidationReport,
 ) -> None:
     """design §4.13 case 5: `decision9` names nothing, so `decision9: c` isn't checked for its
-    option; case 4: nor is `bad.decision1.z`, through an undetermined analysis."""
+    option, nor is a key of the cases of a switch on it; case 4: nor is `bad.decision1.z`, through
+    an undetermined analysis, nor a key under `switch: bad.decision1`."""
     assert not any("decision9" in pointer or "bad" in pointer for pointer in unknown(broken))
     assert "/decisions/decision1/options/a/incompatible_with/1" not in unknown(broken)
+    assert "/outputs/switch9/cases" not in unknown(broken)
 
 
 KEPT = """\
@@ -121,6 +146,12 @@ outputs:
     format: png
     recipe:
       command: python src/output4.py '{output}'
+  switch1:
+    switch: decision2
+    cases: {a: output4, c: output4}
+  switch2:
+    switch: sub.decision1
+    cases: {b: switch1}
 universes:
   u1:
     decisions: {decision1: a, decision2: a, sub.decision1: a}
@@ -132,6 +163,7 @@ universes:
 
 
 def test_options_of_their_decisions_keep_it(tmp_path: Path) -> None:
-    """§8, §12: an excluded option is still one of its decision's options."""
+    """§8, §12: an excluded option is still one of its decision's options, and may key a case
+    (Elements *switch*); a switch's decision may be another analysis's."""
     files = {"astra.yaml": KEPT, "sub/astra.yaml": SUB}
     assert unknown(api.validate(repository(tmp_path, files))) == []

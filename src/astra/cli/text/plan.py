@@ -78,6 +78,8 @@ def _counted(kind: NoteKind, notes: list[Note]) -> str:
         return f"{len(notes)} result(s) have two names"
     if kind == "unplanned":
         return f"{len(notes)} output(s) have no planned result"
+    if kind == "not_built":
+        return f"{len(notes)} output(s) aren't built in some universe, where a switch has no case"
     if kind == "same_computation":
         made = sum(len(note.results) for note in notes)
         return f"{len(notes)} computation(s) repeated across universes, in {made} result(s)"

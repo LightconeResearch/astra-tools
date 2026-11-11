@@ -15,10 +15,12 @@ from pathlib import Path
 import pytest
 
 from astra import api, rules
+from astra.diagnostics import Catalogue
+from astra.rules.context import Context
 from astra.sources.git import Repository
 from astra.sources.reader import WorktreeReader
 from astra.stack import Element, Identity, bind
-from astra.universes import Selection, driven, selections
+from astra.universes import Selection, selections
 from tests.conftest import SPEC, repository
 
 SUBANALYSIS = """\
@@ -272,6 +274,7 @@ outputs:
   result:
     type: metric
     format: json
+    decisions: [decision1, decision2, subanalysis.decision1]
     recipe:
       command: python make.py '{output}'
 universes:
@@ -307,7 +310,8 @@ def test_a_universe_with_no_effective_selection_checks_and_drives_by_its_own_key
     )
     stack = bind(WorktreeReader(top, Repository(top)), "").stack
     assert stack is not None
-    assert {tuple(d.id for d in chain) for chain in driven(stack)[ROOT_ID]} == {
+    driven = Context(stack, Catalogue.load()).driven
+    assert {tuple(d.id for d in chain) for chain in driven[ROOT_ID]} == {
         ("subanalysis",),
         ("again",),
     }

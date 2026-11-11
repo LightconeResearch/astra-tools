@@ -1,5 +1,5 @@
 """The stack in brief, as text: each analysis, the root first, with its file, its label, and
-its declarations, inputs, outputs, decisions and universes."""
+its declarations, inputs, outputs and switches, decisions and universes."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def show(stack: Stack) -> None:
                 for id_, declaration in member.declarations.items()
             ],
             "inputs": [f"{id_}: {input_.path}" for id_, input_ in analysis.inputs.items()],
-            "outputs": [f"{id_}: {o.type}, {o.format}" for id_, o in analysis.outputs.items()],
+            "outputs": [_output(id_, o) for id_, o in analysis.outputs.items()],
             "decisions": [
                 f"{id_}: {', '.join(decision.options)}"
                 for id_, decision in analysis.decisions.items()
@@ -45,6 +45,14 @@ def _reached(stack: Stack, declaration: Declaration) -> str:
         return f"nothing ({declaration.outcome})"
     file = file_named(stack.location(declaration.reached, ()))
     return f"{file} (not a valid document)" if declaration.outcome == "invalid" else file
+
+
+def _output(id_: str, output: model.Output) -> str:
+    """An output's type and format; a switch's decision and cases (Elements *switch*)."""
+    if output.is_switch:
+        cases = ", ".join(f"{option}: {target}" for option, target in output.cases.items())
+        return f"{id_}: switch on {output.switch} ({cases})"
+    return f"{id_}: {output.type}, {output.format}"
 
 
 def _universe(id_: str, universe: model.Universe) -> str:

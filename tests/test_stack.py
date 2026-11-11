@@ -237,7 +237,8 @@ def test_an_address_that_names_nothing_resolves_to_nothing(tmp_path: Path) -> No
 
 
 def test_every_field_of_sixs_table_is_resolved(tmp_path: Path) -> None:
-    """§6 *Addresses*: Output.inputs, Output.decisions, Option.requires and
+    """§6 *Addresses*: Output.inputs, Output.decisions, a switch's `switch` and its cases, each
+    keyed by an option and maybe pinned (Elements *switch*), Option.requires and
     Option.incompatible_with, the keys of Universe.decisions, Evidence.artifact, and an import's
     analysis and universe."""
     text = """\
@@ -261,6 +262,9 @@ outputs:
     decisions: [decision1]
     recipe:
       command: python make.py '{output}'
+  switch1:
+    switch: sub.decision1
+    cases: {a: input1, b: sub.output1#v1}
 universes:
   u1:
     decisions: {decision1: a, sub.decision1: b}
@@ -268,7 +272,7 @@ universes:
 findings:
   insight1:
     claim: x
-    evidence: [{artifact: output1}]
+    evidence: [{artifact: output1}, {artifact: switch1}]
 """
     sub = SUB + "universes:\n  v1:\n    decisions: {decision1: a}\n"
     top = repository(tmp_path, {"astra.yaml": text, "sub/astra.yaml": sub})
@@ -281,10 +285,80 @@ findings:
         ("inputs", "input1", None, None, "input"),
         ("inputs", "sub.output1#u1", None, None, "output"),
         ("decisions", "decision1", None, None, "decision"),
+        ("switch", "sub.decision1", None, None, "decision"),
+        ("case", "input1", None, "a", "input"),
+        ("case", "sub.output1#v1", None, "b", "output"),
         ("requires", "sub.decision1.a", None, "a", "decision"),
         ("incompatible_with", "decision2.a", None, "a", "decision"),
         ("selection", "decision1", "decision1", "a", "decision"),
         ("selection", "sub.decision1", "sub.decision1", "b", "decision"),
         ("import", "sub.v1", None, None, "universe"),
         ("artifact", "output1", None, None, "output"),
+        ("artifact", "switch1", None, None, "switch"),
     ]
+
+
+SWITCHES = """\
+spec_version: "0.1.0"
+analyses:
+  sub: {path: sub}
+inputs:
+  input1: {path: data/input1.csv}
+  shared: {path: data/shared.csv}
+decisions:
+  decision1:
+    options: {a: {}, b: {}}
+outputs:
+  output1:
+    type: metric
+    format: json
+    inputs: [switch1, shared]
+    recipe:
+      command: python make.py '{output}'
+  switch1:
+    switch: decision1
+    cases: {a: sub.output1#v1, b: switch2}
+  switch2:
+    switch: sub.decision1
+    cases: {a: input1, b: shared}
+  shared:
+    switch: decision1
+    cases: {a: input1}
+"""
+"""Two switches, one nested in the other, read by an output; and a switch whose id an input has
+too."""
+
+
+def test_a_switch_is_bound_as_a_switch(tmp_path: Path) -> None:
+    """Elements *switch*: a switch is an entry of `outputs` but an element of its own kind, which
+    `inputs`, a case and `artifact` take as they take an output, and never of kind `output`.
+    `Stack.switches` holds its `switch` and its cases by option, as resolved. design §4.13 case
+    5: an id that is an input and a switch names nothing, as one an input and an output share."""
+    sub = SUB + "universes:\n  v1:\n    decisions: {decision1: a}\n"
+    found = stack(repository(tmp_path, {"astra.yaml": SWITCHES, "sub/astra.yaml": sub}))
+    root = Identity("")
+    switch1, switch2 = Element(root, "switch", "switch1"), Element(root, "switch", "switch2")
+    assert list(found.switches) == [switch1, switch2, Element(root, "switch", "shared")]
+    assert found.element("switch1", "output") is None
+    assert found.element("switch1", "switch") == switch1
+    one, two = found.switches[switch1], found.switches[switch2]
+    assert (one.decision.field, one.decision.element) == (
+        "switch",
+        Element(root, "decision", "decision1"),
+    )
+    assert two.decision.element == Element(Identity("sub"), "decision", "decision1")
+    assert {option: case.field for option, case in one.cases.items()} == {"a": "case", "b": "case"}
+    assert (one.cases["a"].pin, one.cases["a"].option, one.cases["a"].pointer) == (
+        "v1",
+        "a",
+        ("outputs", "switch1", "cases", "a"),
+    )
+    assert one.cases["a"].element == Element(Identity("sub"), "output", "output1")
+    assert one.cases["b"].element == switch2
+    assert one.decision.owner == switch1 and one.cases["b"].owner == switch1
+    assert resolution(found, "switch1").element == switch1
+    assert [case.element for case in two.cases.values()] == [
+        Element(root, "input", "input1"),
+        None,
+    ]
+    assert [r.element for r in found.resolutions if r.written == "shared"] == [None, None]

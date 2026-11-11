@@ -255,13 +255,12 @@ def test_each_use_of_an_analysis_not_built_breaks_both_rules_in_the_drivers_file
     broken: api.ValidationReport,
 ) -> None:
     """§16 *The universe being built*: `other` isn't built in the root's universes, so in the
-    root's file its output read without a pin or pinned to `u1`, its decision named by the root's
-    constraint and listed by a planned result's output break both rules; in `stage`'s file,
-    where `stage_other` reads its output and lists its decision, NOT_BUILT_IN_UNIVERSE alone
-    holds them. Reads through driven declarations, and `other`'s output in its own `v1`, break
-    neither."""
+    root's file its output read without a pin or pinned to `u1`, and its decision listed by a
+    planned result's output, break both rules; in `stage`'s file, where `stage_other` reads its
+    output and lists its decision, NOT_BUILT_IN_UNIVERSE alone holds them. Reads through driven
+    declarations, `other`'s output in its own `v1`, and the root's constraint naming `other`'s
+    decision, which uses nothing (Rules), break neither."""
     uses = [
-        ("astra.yaml", "/decisions/decision1/options/a/incompatible_with/0"),
         ("astra.yaml", "/outputs/output7/inputs/4"),
         ("astra.yaml", "/outputs/output7/inputs/5"),
         ("astra.yaml", "/outputs/output7/decisions/0"),

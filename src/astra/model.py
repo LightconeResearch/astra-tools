@@ -112,20 +112,27 @@ class Recipe:
 
 @dataclass(frozen=True)
 class Output:
-    """What the analysis makes (§10)."""
+    """An entry of `outputs` (Elements): an output, with a `type`, a `format` and a `recipe`; or
+    a switch, with a `switch` and `cases` and none of those (`INVALID_SWITCH`)."""
 
-    type: str
-    format: str
-    recipe: Recipe
+    type: str | None = None
+    format: str | None = None
+    recipe: Recipe | None = None
     label: str | None = None
     description: str | None = None
     tags: tuple[str, ...] = ()
     inputs: tuple[str, ...] = ()
     decisions: tuple[str, ...] = ()
+    switch: str | None = None  # a decision's address
+    cases: Mapping[str, str] = field(default_factory=_empty)  # option id -> reference
+
+    @property
+    def is_switch(self) -> bool:
+        return self.switch is not None
 
     @classmethod
     def from_json(cls, value: Mapping[str, Any]) -> Output:
-        return _read(cls, value, recipe=Recipe.from_json)
+        return _read(cls, value, recipe=Recipe.from_json, cases=MappingProxyType)
 
 
 @dataclass(frozen=True)

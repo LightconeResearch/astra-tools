@@ -43,9 +43,10 @@ outputs:
   unread:
     type: metric
     format: json
-    decisions: [decision1]
+    decisions: [decision1, parent.decision1]
     recipe:
-      command: python src/unread.py '{decisions.decision1}' '{output}'
+      command: >-
+        python src/unread.py '{decisions.decision1}' '{decisions.parent.decision1}' '{output}'
 universes:
   u1:
     decisions: {decision1: a, parent.decision1: b}
@@ -53,7 +54,7 @@ universes:
     decisions: {decision1: b, parent.decision1: a}
 """
 """§15's `subanalysis`, whose own universes drive its parent (§18), and an output nothing
-reads."""
+reads, made with the parent's decision, which those universes then use (Results *uses*)."""
 
 ROOT = """\
 spec_version: "0.1.0"

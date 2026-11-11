@@ -113,6 +113,8 @@ KEEPING = {
 
 def test_placeholders_the_output_gives_keep_it(tmp_path: Path) -> None:
     """§11's table: `{inputs.<entry>}` and `{decisions.<entry>}` for each entry as written, dots
-    and `#` included, `{inputs}` and `{output}`."""
-    files = {"astra.yaml": analysis(KEEPING), "input1.csv": "1\n", "sub/astra.yaml": SUB}
+    and `#` included, `{inputs}` and `{output}`. A switch has no recipe to check (Elements
+    *switch*)."""
+    switch = "  switch1:\n    switch: decision1\n    cases: {a: output0, b: input1}\n"
+    files = {"astra.yaml": analysis(KEEPING) + switch, "input1.csv": "1\n", "sub/astra.yaml": SUB}
     assert broken(api.validate(repository(tmp_path, files))) == []

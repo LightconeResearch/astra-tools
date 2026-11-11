@@ -83,29 +83,33 @@ outputs:
 
 def test_info_shows_each_analysis_of_the_stack_in_brief(tmp_path: Path) -> None:
     """The root first, then each analysis it declares, by path and at a commit (§15, §17), each
-    with its declarations, inputs, outputs, decisions and universes. It checks nothing, so a
-    declaration that reaches nothing is shown, not reported."""
+    with its declarations, inputs, outputs, decisions and universes; a switch with the decision
+    it switches on and its cases (Elements *switch*). It checks nothing, so a declaration that
+    reaches nothing is shown, not reported."""
     files = {"astra.yaml": MINIMAL, "subanalysis/astra.yaml": SUBANALYSIS, "data/input1.csv": "1\n"}
     top = repository(tmp_path, files)
     first = git(top, "rev-parse", "HEAD").strip()
     declared = f"  previous: {{path: ., commit: '{first}'}}\ninputs:\n"
-    repository(top, {"astra.yaml": ROOT.replace("inputs:\n", declared, 1)})
+    switch = "  switch1:\n    switch: decision1\n    cases: {a: output1, b: input1}\nuniverses:\n"
+    text = ROOT.replace("inputs:\n", declared, 1).replace("universes:\n", switch, 1)
+    repository(top, {"astra.yaml": text})
     result = astra("info", str(top))
     assert result.exit_code == 0
     lines = result.stdout.splitlines()
-    assert lines[:10] == [
+    assert lines[:11] == [
         "astra.yaml  Example analysis",
         "  analyses  subanalysis: subanalysis/astra.yaml",
         "            missing: nothing (missing)",
         f"            previous: astra.yaml at {first}",
         "  inputs    input1: data/input1.csv",
         "  outputs   output1: metric, json",
+        "            switch1: switch on decision1 (a: output1, b: input1)",
         "  decisions decision1: a, b",
         "  universes u1",
         "            u2: derived from u1",
         "subanalysis/astra.yaml",
     ]
-    assert f"astra.yaml at {first}" in lines[10:]
+    assert f"astra.yaml at {first}" in lines[11:]
     assert "  outputs   result: metric, json" in lines
 
 

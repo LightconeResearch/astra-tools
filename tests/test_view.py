@@ -1,10 +1,12 @@
 """The universe view (design §4.6): the stack as it is in one of the root's universes, each
-analysis built there or not (§16), each decision and its option selected (§12), each output's
+analysis built there or not (§16), each decision, whether the universe uses it (Results *uses*)
+and its option selected (§12), each output, whether it is built there (Results *built*), and its
 planned result there and its places (§18); `api.view`, its shape `astra-universe-view/1`, and
 `astra view`.
 
 The stack is §2's worked example, with a `subanalysis` the root's universes drive (§16), and an
-`other` they don't, read pinned to its own `v1`.
+`other` they drive with nothing to set, as no universe of the root uses its decisions (Elements),
+read pinned to its own `v1`.
 """
 
 from __future__ import annotations
@@ -88,6 +90,12 @@ outputs:
     decisions: [d]
     recipe:
       command: python make.py '{decisions.d}' '{output}'
+  out2:
+    type: metric
+    format: json
+    decisions: [e]
+    recipe:
+      command: python make.py '{decisions.e}' '{output}'
 universes:
   v1:
     decisions: {d: b, e: a}
@@ -110,13 +118,13 @@ def top(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def state(view: UniverseView) -> dict[str, object]:
-    """Each analysis by folder: whether it is built, each decision's option, and the addresses
-    of each output's result there."""
+    """Each analysis by folder: whether it is built; whether the universe uses each decision, and
+    its option; and whether each output is built there, and the addresses of its result there."""
     return {
         analysis.member.identity.folder or ".": (
             analysis.built,
-            {id_: d.selected for id_, d in analysis.decisions.items()},
-            {id_: [p.address for p in o.places] for id_, o in analysis.outputs.items()},
+            {id_: (d.used, d.selected) for id_, d in analysis.decisions.items()},
+            {id_: (o.built, [p.address for p in o.places]) for id_, o in analysis.outputs.items()},
         )
         for analysis in view.analyses
     }
@@ -124,19 +132,30 @@ def state(view: UniverseView) -> dict[str, object]:
 
 def test_the_view_in_u1(top: Path) -> None:
     """§16: the root's universes drive `subanalysis`, so it is built in `u1`, with its
-    `decision1` set to `a`; its `output1` has the root's result there (§18), and `unread`,
-    which nothing reads, none. `other` isn't built in `u1`: no option is selected for its
-    decisions, and its `out` has no result in `u1`."""
+    `decision1` set to `a` and used; its `output1` has the root's result there (§18), and
+    `unread`, built once, which nothing reads, none. `other` is built in `u1` though no key drives
+    it. The root reads it only pinned to `other`'s own `v1`, which counts for `v1`, so no universe
+    of the root uses its decisions and it has nothing to set (Elements). `u1` neither uses nor
+    sets `d` and `e`. Its `out` and `out2`, built there, as what is built never turns on driving
+    (Results *built*), have no result in `u1`."""
     view = api.view("u1", top)
     assert (view.root, view.universe) == ("astra.yaml", "u1")
     assert state(view) == {
-        ".": (True, {"decision1": "a"}, {"output1": ["output1#u1"], "output2": ["output2"]}),
+        ".": (
+            True,
+            {"decision1": (True, "a")},
+            {"output1": (True, ["output1#u1"]), "output2": (True, ["output2"])},
+        ),
         "subanalysis": (
             True,
-            {"decision1": "a"},
-            {"output1": ["subanalysis.output1#u1"], "unread": []},
+            {"decision1": (True, "a")},
+            {"output1": (True, ["subanalysis.output1#u1"]), "unread": (True, [])},
         ),
-        "other": (False, {"d": None, "e": None}, {"out": []}),
+        "other": (
+            True,
+            {"d": (False, None), "e": (False, None)},
+            {"out": (True, []), "out2": (True, [])},
+        ),
     }
     sub = view.analyses[1].outputs["output1"]
     assert sub.result is not None and sub.result.owner == Identity("")
@@ -148,7 +167,11 @@ def test_the_view_in_u1(top: Path) -> None:
 def test_the_view_in_u2(top: Path) -> None:
     """§12: `u2` selects `decision1: b`, and `output1`'s result there is `output1#u2`."""
     root = state(api.view("u2", top))["."]
-    assert root == (True, {"decision1": "b"}, {"output1": ["output1#u2"], "output2": ["output2"]})
+    assert root == (
+        True,
+        {"decision1": (True, "b")},
+        {"output1": (True, ["output1#u2"]), "output2": (True, ["output2"])},
+    )
 
 
 def test_the_view_as_astra_universe_view_1(top: Path) -> None:
@@ -169,9 +192,11 @@ def test_the_view_as_astra_universe_view_1(top: Path) -> None:
     assert root["fields"]["universes"]["u1"] == {
         "decisions": {"decision1": "a", "subanalysis.decision1": "a"}
     }
-    assert root["decisions"]["decision1"] == {"selected": "a"}
+    assert root["decisions"]["decision1"] == {"used": True, "selected": "a"}
     assert root["outputs"]["output2"]["result"]["names"] == ["output2"]
     assert sub["outputs"]["output1"] == {
+        "built": True,
+        "takes": None,
         "result": {
             "names": ["subanalysis.output1"],
             "owner": {"folder": "", "commit": None},
@@ -186,7 +211,7 @@ def test_the_view_as_astra_universe_view_1(top: Path) -> None:
             ],
         },
     }
-    assert (other["built"], other["decisions"]["e"]) == (False, {"selected": None})
+    assert (other["built"], other["decisions"]["e"]) == (True, {"used": False, "selected": None})
 
 
 def test_astra_view_shows_the_stack_in_one_universe(top: Path) -> None:
@@ -202,10 +227,11 @@ def test_astra_view_shows_the_stack_in_one_universe(top: Path) -> None:
         "  decision1    a",
         "  output1      subanalysis.output1#u1  results/u1/subanalysis.output1.json",
         "  unread       no planned result",
-        "other/astra.yaml  not built in u1",
-        "  d            no option selected",
-        "  e            no option selected",
+        "other/astra.yaml  built",
+        "  d            unused",
+        "  e            unused",
         "  out          no planned result",
+        "  out2         no planned result",
     ]
     shape = json.loads(astra("view", "u1", str(top), "--json").stdout)
     assert shape == api.view("u1", top).to_json()

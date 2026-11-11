@@ -9,8 +9,10 @@ whether it is read through its record or run at a commit (§17). The plan also n
 author may want to tidy, though it breaks no rule (design §4.6): a pin that names another
 analysis's universe only because its file has no entry of that id (§16), a result with two
 names (§18), an output with no planned result (§18), results that are one computation in
-several universes, and a command that names a path outside its analysis's folder, or inside an
-analysis below it (`CODE_OUTSIDE_ANALYSIS`, §21).
+several universes, an output a switch leaves unbuilt in a universe, as it has no case there for
+the option its decision selects (Elements *switch*), and a command that names a path outside its
+analysis's folder, or inside an analysis below it (`CODE_OUTSIDE_ANALYSIS`, §21). Through a switch,
+an entry reads what the case the switch takes names (Elements *takes*), which its read records.
 
 `api.plan` plans only a valid stack: one that breaks a `MUST` has no plan. On such a stack,
 `plan` gives the results whose planning is determined (design §4.13 case 12), for `check`.
@@ -37,12 +39,14 @@ from astra.universes import (
     Building,
     Place,
     Planned,
+    Run,
     Selection,
+    Through,
     along,
     building,
     built,
+    own_universes,
     places,
-    read_in,
     run,
 )
 
@@ -57,13 +61,16 @@ class RequestError(ValueError):
 @dataclass(frozen=True)
 class Read:
     """One entry of an output's `inputs`, as written, and what it reads (§10): an input's file,
-    or a planned result's bytes."""
+    or a planned result's bytes, through the case each switch on the way takes (Elements
+    *takes*)."""
 
     entry: str
     path: str  # the input's file, or the default place of the result's bytes
     commit: str | None  # the commit `path` is read at; None for the working tree
     result: Result | None  # the planned result it reads; None for an input
     place: Place | None  # the place of the result's name whose bytes it reads; None for an input
+    via: tuple[str, ...] = ()  # each case taken on the way, as written, in order; () where the
+    # entry names no switch
 
 
 @dataclass(frozen=True)
@@ -87,7 +94,9 @@ class Result:
     container: str | None  # its recipe's, or else its analysis's, as written (§11)
 
 
-NoteKind = Literal["fallback_pin", "two_names", "unplanned", "same_computation", "outside_folder"]
+NoteKind = Literal[
+    "fallback_pin", "two_names", "unplanned", "not_built", "same_computation", "outside_folder"
+]
 
 
 @dataclass(frozen=True)
@@ -99,8 +108,10 @@ class Note:
     location: Location | None  # the pin, the output or the command; None for the kinds of results
     results: tuple[Result, ...] = ()  # those it is about, for `two_names` and `same_computation`
     built: bool = True  # it concerns what the root builds: False only for a `fallback_pin` that no
-    # planned result reads through, and an `unplanned` output or an `outside_folder` command of an
-    # analysis the root doesn't build
+    # planned result reads through, as the root builds every analysis of a stack it can plan
+    universes: tuple[Element, ...] = ()  # for `not_built`, the universes the output isn't built in
+    switch: Element | None = None  # for `not_built`, the switch with no case there
+    option: str | None = None  # for `not_built`, the option its decision selects there
 
 
 @dataclass(frozen=True)
@@ -119,7 +130,13 @@ class Plan:
         def read(entry: Read) -> dict[str, Any]:
             result = entry.result
             at = None if result is None else index[result.output, result.universe]
-            return {"entry": entry.entry, "path": entry.path, "commit": entry.commit, "result": at}
+            return {
+                "entry": entry.entry,
+                "path": entry.path,
+                "commit": entry.commit,
+                "result": at,
+                "via": list(entry.via),
+            }
 
         def resources(asked: Resources | None) -> dict[str, Any] | None:
             if asked is None:
@@ -133,6 +150,14 @@ class Plan:
                 "location": None if found.location is None else asdict(found.location),
                 "results": [index[result.output, result.universe] for result in found.results],
                 "built": found.built,
+                "universes": [
+                    {"analysis": asdict(universe.analysis), "id": universe.id}
+                    for universe in found.universes
+                ],
+                "switch": None
+                if found.switch is None
+                else {"analysis": asdict(found.switch.analysis), "id": found.switch.id},
+                "option": found.option,
             }
 
         return {
@@ -175,16 +200,14 @@ def plan(
     to build, planned or not: each is planned as the root's own outputs are, once or in each of
     the root's universes where its analysis is built, and the plan holds its results (only
     those built once or in `universes`, where given) and what they read. Raises
-    RequestError where a universe or an output asked for isn't there, or an output asked for
-    has no result there or reads a result that isn't built."""
+    RequestError where a universe or an output asked for isn't there, or is a switch, or an
+    output asked for has no result there, reads a result that isn't built, or uses, or reads
+    what uses, a decision that a universe it is built in doesn't set."""
     context = Context(stack, Catalogue.load())
     wanted = None if universes is None else {root_universe(stack, id_) for id_ in universes}
     addresses = tuple(outputs or ())
     requested = tuple(root_output(stack, address) for address in addresses)
-    reached = run(
-        stack, context.meaning, context.written, context.selections, context.pins,
-        context.per_universe, context.cycles, stack.root, requested,
-    )  # fmt: skip
+    reached = _run(context, requested)
     found = building(stack, reached, context.driven)
 
     def chosen(result: Planned) -> bool:
@@ -198,8 +221,11 @@ def plan(
         if not any(result.output == output for result in seeds):
             where = "the root's universes" if wanted is None else "the universes asked for"
             raise RequestError(
-                f"`{address}` has no result in {where}: its analysis isn't built there"
+                f"`{address}` has no result in {where}: its analysis isn't built there, or it is "
+                "built nowhere there"
             )
+    if requested:
+        _settled(context, reached, wanted, requested, addresses)
     made: dict[Key, Result] = {}
     left: set[Key] = set()  # left out, or being made: a result that reads it back is left out
 
@@ -210,7 +236,7 @@ def plan(
             return key in made
         left.add(key)
         reads = _reads(context, found.planned, result, bool(requested))
-        if reads is None or not all(isinstance(read, str) or visit(read) for _, read in reads):
+        if reads is None or not all(isinstance(read, str) or visit(read) for _, _, read in reads):
             return False
         left.remove(key)
         made[key] = _result(context, result, reads, made)
@@ -226,9 +252,82 @@ def plan(
 Key = tuple[Element, Element | None]
 """A planned result's output and universe, which `building` keys it by."""
 
-Reads = tuple[tuple[Resolution, Planned | str], ...]
-"""Each entry of an output's `inputs`, and what it reads: a planned result, or an input's file,
-as a path from the top."""
+Reads = tuple[tuple[Resolution, Through, Planned | str], ...]
+"""Each entry of an output's `inputs`, what it reads through the case each switch on the way
+takes, and that: a planned result, or an input's file, as a path from the top."""
+
+
+def _run(context: Context, requested: tuple[Element, ...]) -> Run:
+    """The root's run (Results *plans*, *reaches*, *uses*), with the outputs `requested` as its
+    own."""
+    return run(
+        context.stack, context.meaning, context.written, context.selections, context.pins,
+        context.per_universe, context.cycles, context.stack.root, requested,
+    )  # fmt: skip
+
+
+def _settled(
+    context: Context,
+    reached: Run,
+    wanted: set[Element] | None,
+    requested: tuple[Element, ...],
+    addresses: tuple[str, ...],
+) -> None:
+    """Raise RequestError where the plan's run, with the outputs `requested` as the root's own,
+    uses in a universe it covers a decision that universe doesn't set (Results *uses*). A valid
+    stack never plans such a result unasked (`MISSING_DECISION`), but an output asked for can
+    reach an analysis driven only because nothing planned uses its decisions (Elements)."""
+    unset = _unset(context, reached, wanted)
+    if unset is None:
+        return
+    address = addresses[0]
+    if len(requested) > 1:  # the first output asked for whose own run leaves one unset
+        for output, written in zip(requested, addresses, strict=True):
+            alone = _unset(context, _run(context, (output,)), wanted)
+            if alone is not None:
+                unset, address = alone, written
+                break
+    universe, decision = unset
+    named = context.named([universe], context.stack.root)
+    raise RequestError(
+        f"`{address}` can't be built on request in {named}: it, or what it reads, uses "
+        f"{_spelled(context, decision, universe)}, which {named} doesn't set"
+    )
+
+
+def _unset(
+    context: Context, reached: Run, wanted: set[Element] | None
+) -> tuple[Element, Element] | None:
+    """The first universe `reached` uses a decision in that it doesn't set, and that decision,
+    where the root's run doesn't already use it there (`Context.runs`): among the root's
+    universes in `wanted`, or all of them, and every other analysis's universe. None where there
+    is none."""
+    stack = context.stack
+    before = context.runs[stack.root].used
+    for universe, decisions in reached.used.items():
+        if universe.analysis == stack.root and wanted is not None and universe not in wanted:
+            continue
+        selection = context.selections.get(universe)
+        if selection is None:  # design §4.13 case 7
+            continue
+        known = before.get(universe, frozenset())
+        for decision in sorted(decisions - known, key=_order):
+            if not selection.options(decision):
+                return universe, decision
+    return None
+
+
+def _order(element: Element) -> tuple[str, str, str]:
+    return element.analysis.folder, element.analysis.commit or "", element.id
+
+
+def _spelled(context: Context, decision: Element, universe: Element) -> str:
+    """`decision`, in backticks, as a key of `universe`'s `decisions` would set it: through the
+    first chain its analysis's universes drive that reaches the decision's analysis (§16)."""
+    reaching = built(context.driven[universe.analysis], universe.analysis).get(decision.analysis)
+    if not reaching:
+        return f"`{decision.id}` of `{decision.analysis}`"
+    return "`" + ".".join((*(declaration.id for declaration in reaching[0]), decision.id)) + "`"
 
 
 def root_universe(stack: Stack, id_: str) -> Element:
@@ -249,8 +348,13 @@ def root_universe(stack: Stack, id_: str) -> Element:
 
 def root_output(stack: Stack, address: str) -> Element:
     """The output `address` names in the root's file. Raises RequestError where it names
-    none."""
+    none, or names a switch, which has no result (Elements *switch*)."""
     output = stack.element(address, "output")
+    if output is None and stack.element(address, "switch") is not None:
+        raise RequestError(
+            f"`{address}` is a switch, which has no result of its own: ask for the output a case "
+            "names"
+        )
     if output is None:
         raise RequestError(f"`{address}` names no output, read in the root's file")
     return output
@@ -259,35 +363,37 @@ def root_output(stack: Stack, address: str) -> Element:
 def _reads(
     context: Context, planned: Mapping[Key, Planned], result: Planned, requested: bool
 ) -> Reads | None:
-    """What each entry of `result`'s output's `inputs` reads: an input's file, or a planned
-    result (`read_in`). None where what one reads isn't determined, as only on a stack that
-    breaks a `MUST`: it names nothing, gives a path above the top, or names an output with no
-    result planned there. Where outputs are `requested`, that last raises RequestError
-    instead: an output asked for can read what isn't built (§13, §16)."""
-    reads: list[tuple[Resolution, Planned | str]] = []
+    """What each entry of `result`'s output's `inputs` reads, through the case each switch on
+    the way takes (`Meaning.through`): an input's file, in the folder of the input's analysis,
+    or a planned result. None where what one reads isn't determined, as only on a stack that
+    breaks a `MUST`: it names nothing, gives a path above the top, reads through a switch that
+    is undetermined or takes nothing, or names an output with no result planned there. Where
+    outputs are `requested`, those last two raise RequestError instead: an output asked for can
+    read what isn't built (§13, §16)."""
+    reads: list[tuple[Resolution, Through, Planned | str]] = []
     for entry in context.written[result.output]:
         if entry.field != "inputs":
             continue
-        element = entry.element
-        if element is None:
+        if entry.element is None:
             return None
-        if element.kind == "input":
-            written = context.stack.analysis(element.analysis).inputs[element.id].path
-            path = paths.join(element.analysis.folder, written)
-            if path is None:
+        through = context.meaning.through(entry, result.universe)
+        read: Planned | str | None = None
+        if through is not None and through.target.kind == "input":
+            target = through.target
+            written = context.stack.analysis(target.analysis).inputs[target.id].path
+            read = paths.join(target.analysis.folder, written)
+            if read is None:
                 return None
-            reads.append((entry, path))
-            continue
-        at = read_in(entry, result.universe, context.pins, context.per_universe)
-        read = planned.get((element, at))
+        elif through is not None:
+            read = planned.get((through.target, through.universe))
         if read is None and requested:
             raise RequestError(
                 f"`{result.output.id}` can't be built on request: `{entry.written}` reads a "
                 "result that isn't built there"
             )
-        if read is None:
+        if through is None or read is None:
             return None
-        reads.append((entry, read))
+        reads.append((entry, through, read))
     return tuple(reads)
 
 
@@ -295,22 +401,25 @@ def _result(context: Context, result: Planned, reads: Reads, made: Mapping[Key, 
     """`result` as a runner builds it, from the results it reads, already `made`."""
     stack, identity = context.stack, result.output.analysis
     inputs: list[Read] = []
-    for entry, read in reads:
-        assert entry.element is not None
+    for entry, through, read in reads:
+        via = tuple(step.case.written for step in through.steps)
         if isinstance(read, str):
-            inputs.append(Read(entry.written, read, entry.element.analysis.commit, None, None))
+            commit = through.target.analysis.commit
+            inputs.append(Read(entry.written, read, commit, None, None, via))
             continue
         done = made[read.output, read.universe]
-        # The name along the entry's declarations from the analysis `read` belongs
-        # to, after `result`'s first chain where `result` belongs there too, or else the first.
+        # The name along the entry's declarations, then each case's, from the analysis `read`
+        # belongs to, after `result`'s first chain where `result` belongs there too, or else the
+        # first.
         start = result.chains[0] if result.owner == read.owner else ()
-        index = along(read, (*start, *entry.chain))
+        index = along(read, (*start, *through.chain))
         place = done.places[0 if index is None else index]
-        inputs.append(Read(entry.written, place.bytes, done.owner.commit, done, place))
+        inputs.append(Read(entry.written, place.bytes, done.owner.commit, done, place, via))
     selection = None if result.universe is None else context.selections[result.universe]
     read_only = result.owner.commit != stack.root.commit
     analysis = stack.analysis(identity)
     recipe = analysis.outputs[result.output.id].recipe
+    assert recipe is not None  # a result's output isn't a switch
     return Result(
         result.names,
         result.owner,
@@ -332,7 +441,11 @@ def _notes(context: Context, found: Building, results: tuple[Result, ...]) -> tu
     """What the plan notes (design §4.6), kind by kind. Those about files are about the files
     read where the root is, which an author can edit; those about results, about `results`.
     `fallback_pin`, `unplanned` and `outside_folder` notes say whether they concern what the root
-    builds (`Note.built`): the root, and every analysis its universes drive (`built`)."""
+    builds (`Note.built`): the root, and every analysis its universes drive (`built`). In a stack
+    the plan accepts, that is every analysis: one whose decisions a universe of the root uses is
+    built there (`NOT_BUILT_IN_UNIVERSE`), and one with none it uses has nothing to set, so is
+    driven without a key (Elements). Only a `fallback_pin` that no planned result reads through
+    concerns something else."""
     stack = context.stack
     editable = [
         (member, analysis)
@@ -344,6 +457,7 @@ def _notes(context: Context, found: Building, results: tuple[Result, ...]) -> tu
         *_fallback_pins(context, {entry for entry, _ in found.reads}),
         *_two_names(stack.root, results),
         *_unplanned(context, found.planned, editable, builds),
+        *_not_built(context, found.run),
         *_same_computations(stack.root, results),
         *_outside_folder(context, editable, builds),
     )
@@ -394,27 +508,67 @@ def _unplanned(
     editable: Editable,
     builds: frozenset[Identity],
 ) -> Iterator[Note]:
-    """Each output of an analysis read where the root is with no planned result (§18): an
-    output of a declared analysis that no planned result reads and the root's evidence doesn't
-    cite, or one of the root's built per universe, where the root has no universes. A check of
-    the root never covers it. It concerns what the root builds where its analysis is one of
-    `builds`; an analysis the root only reads from isn't its business."""
+    """Each output other than a switch of an analysis read where the root is with no planned
+    result (§18): an output of a declared analysis that no planned result reads and the root's
+    evidence doesn't cite; one of the root's that only a case of its own switches names, so that
+    it is planned only where something planned reads it (Results *plans*); or another of the
+    root's, built in none of its universes, as where it is built per universe and the root has
+    none. A check of the root never covers it. It concerns what the root builds where its
+    analysis is one of `builds`; an analysis the root only reads from isn't its business."""
     stack = context.stack
     outputs = {key[0] for key in planned}
+    cased: dict[Element, Element] = {}  # each of the root's outputs a case of its own names
+    for entry in stack.resolutions:
+        if entry.field == "case" and entry.file == stack.root and entry.element is not None:
+            assert entry.owner is not None  # the switch whose case it is
+            cased.setdefault(entry.element, entry.owner)
     for member, analysis in editable:
-        for id_ in analysis.outputs:
-            if Element(member.identity, "output", id_) in outputs:
+        for id_, output in analysis.outputs.items():
+            element = Element(member.identity, "output", id_)
+            if output.is_switch or element in outputs:
                 continue
-            why = (
-                "it is built per universe and the root has no universes"
-                if member.identity == stack.root
-                else "no planned result reads it and the root's evidence doesn't cite it"
-            )
+            switch = cased.get(element)
+            if member.identity != stack.root:
+                why = "no planned result reads it and the root's evidence doesn't cite it"
+            elif switch is not None:
+                why = (
+                    f"only a case of `{switch.id}` names it, so it is planned only where "
+                    "something planned reads it, and nothing does"
+                )
+            elif not own_universes(stack, stack.root):
+                why = "it is built per universe and the root has no universes"
+            else:
+                why = "it is built in none of the root's universes"
             message = (
                 f"`{id_}` has no planned result: {why}, so a check of the root never covers it"
             )
             at = context.at(member.identity, ("outputs", id_))
             yield Note("unplanned", message, at, built=member.identity in builds)
+
+
+def _not_built(context: Context, reached: Run) -> Iterator[Note]:
+    """Each output that the plan's run reaches in a universe where it isn't built, as a switch on
+    the way has no case there for the option its decision selects (Elements *switch*; Results
+    *built*): one note for each output, switch and option, at the output, with the universes.
+    A missing case breaks no rule: this is the plan's own report of it."""
+    found: dict[tuple[Element, Element, str], list[Element]] = {}
+    for element, universe in reached.reached:
+        if element.kind != "output" or universe is None:
+            continue
+        cause = context.meaning.cause(element, universe)
+        if cause is not None:
+            found.setdefault((element, cause.switch, cause.option), []).append(universe)
+    for (output, switch, option), universes in found.items():
+        whose = "" if switch.analysis == output.analysis else f" of `{switch.analysis}`"
+        message = (
+            f"`{output.id}` isn't built in {context.named(universes, output.analysis)}: "
+            f"`{switch.id}`{whose} has no case there for `{option}`, the option its decision "
+            "selects"
+        )
+        at = context.at(output.analysis, ("outputs", output.id))
+        yield Note(
+            "not_built", message, at, universes=tuple(universes), switch=switch, option=option
+        )
 
 
 def _same_computations(root: Identity, results: Iterable[Result]) -> Iterator[Note]:
@@ -484,6 +638,8 @@ def _outside_folder(
 
     for member, analysis in editable:
         for id_, output in analysis.outputs.items():
+            if output.recipe is None:  # a switch runs nothing
+                continue
             named: list[str] = []
             for path in _paths(output.recipe.command):
                 if _climbs(path):

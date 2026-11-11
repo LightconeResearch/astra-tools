@@ -15,7 +15,9 @@ and the option each entry of its `decisions` selects. At each place:
 - the result is then `stale` where something `STALE_RESULT` compares has changed since the
   record's commit, the stack as it was there bound through a CommitReader, from the folder of
   the analysis the result belongs to, or where that commit can't be read or has no such output
-  (§20); otherwise it is `unchanged`;
+  (§20); for each switch an entry reads through, that is the decision it switches on, the option
+  selected for it where it is read and the case it takes, whatever bytes result (Results *made
+  from*); otherwise it is `unchanged`;
 - its bytes are `present` where those at the default place hash to the record's, and `absent`
   otherwise: `ABSENT_RESULT` where it has a valid record (§20, design §4.13 case 9).
 
@@ -23,7 +25,8 @@ A result of an analysis from a commit is read through its record at the declared
 analysis it belongs to, and the hashes of the results it reads are taken from their records;
 only one that a planned result reads gets a bytes status (§20 *Results of an analysis from a
 commit*).
-Evidence gets the status of the records it cites (`STALE_EVIDENCE`, §20 *Evidence*): the
+Evidence gets the status of the records it cites (`STALE_EVIDENCE`, §20 *Evidence*), through
+the case a switch it names takes in each of the root's universes (Results *Evidence*): the
 root's, and each item of a declared analysis's evidence that cites a planned result (design
 §4.7). Each record's environment gets what each registered scheme answered for it (design §4.10).
 
@@ -49,8 +52,8 @@ from astra.sources import standins
 from astra.sources.git import Repository
 from astra.sources.reader import CommitReader, in_repository
 from astra.sources.remote import Remotes
-from astra.stack import Element, Member, Resolution, Stack, bind
-from astra.universes import Place, Selection, along, read_in
+from astra.stack import Element, Identity, Member, Resolution, Stack, bind
+from astra.universes import Place, Selection, Step, Through, along
 
 SHAPE = "astra-check-report/1"
 
@@ -202,7 +205,7 @@ def check(
     only narrow the planned results reported to those built in those universes and of those
     outputs (design §4.7); the evidence is not narrowed (§20 *Evidence*). Commits are got from
     remotes through `remotes`. Raises RequestError where a universe or an output asked for isn't
-    there, or an output asked for has no planned result there."""
+    there, or is a switch, or an output asked for has no planned result there."""
     results = plan(stack).results
     narrowed = None if universes is None else {root_universe(stack, id_) for id_ in universes}
     named = {root_output(stack, address): address for address in outputs or ()}
@@ -256,6 +259,7 @@ class _Then:
 
     context: Context  # the stack bound there, from the folder of the analysis it belongs to
     output: Element  # the output its name names there
+    universe: Element | None  # its universe there; None for a result built once
     selection: Selection | None  # its universe's effective selection there; None for a result
     # built once, and where that universe has none
 
@@ -364,11 +368,11 @@ class _Checker:
                 f"at {commit[:12]}, the commit the record names, `{place.name}` names no output, "
                 "so what the result was made from can't be compared"
             )
-        selection = None
+        universe, selection = None, None
         if result.universe is not None:
             universe = Element(context.stack.root, "universe", result.universe.id)
             selection = context.selections.get(universe)
-        return _Then(context, output, selection)
+        return _Then(context, output, universe, selection)
 
     def _bind(self, repo: Repository, commit: str, folder: str, url: str | None) -> Context | str:
         """The stack as it is at `commit` of `repo`, got from `url` where it is a remote's, from
@@ -424,13 +428,16 @@ class _Checker:
         statuses: Mapping[Key, tuple[Status, ...]],
     ) -> list[str]:
         """What has changed, since the commit `record` names, of what `STALE_RESULT` compares:
-        the output's declaration, the options its decisions select in its universe, the
-        content of its inputs, and the results it reads (`STALE_RESULT`, §20 *The rules*; §20
-        *When a result is unchanged*)."""
+        the output's declaration, the options its decisions select in its universe, for each
+        switch an entry reads through the decision it switches on, the option selected for it
+        and the case it takes, the content of its inputs, and the results it reads
+        (`STALE_RESULT`, §20 *The rules*; §20 *When a result is unchanged*; Results *made
+        from*)."""
         commit = record.commit[:12]
         now = self.stack.analysis(result.output.analysis).outputs[result.output.id]
         was = then.context.stack.analysis(then.output.analysis).outputs[then.output.id]
         changes = []
+        assert now.recipe is not None and was.recipe is not None  # a result's output's
         if now.recipe.command != was.recipe.command:
             changes.append(f"its recipe's command isn't the one it had at {commit}")
         if now.inputs != was.inputs:
@@ -457,12 +464,26 @@ class _Checker:
         entries = [
             entry for entry in self.context.written[result.output] if entry.field == "inputs"
         ]
+        listed = {  # the output's entries at that commit, by how each is written
+            entry.written: entry
+            for entry in then.context.written[then.output]
+            if entry.field == "inputs"
+        }
         for entry, read in zip(entries, result.inputs, strict=True):
             item = recorded.get(read.entry)
             if item is None:  # an entry its output didn't list at that commit: a change above
                 continue
+            through = self.context.meaning.through(entry, result.universe)
+            assert through is not None  # what a planned result reads is determined
+            earlier = listed.get(entry.written)
+            read_then = (
+                None if earlier is None else then.context.meaning.through(earlier, then.universe)
+            )
+            changes.extend(
+                _switched(read.entry, through, read_then, self.context, then.context, commit)
+            )
             if read.result is None:
-                found = self._content(entry, read)
+                found = self._content(through.target.analysis, read)
                 if found is None:  # stale, since it can't be compared (§20)
                     changes.append(
                         f"the content of `{read.entry}` can't be read at {read.path}: no file "
@@ -485,12 +506,12 @@ class _Checker:
                 changes.append(f"{what}, was made again since, with other bytes than it read")
         return changes
 
-    def _content(self, entry: Resolution, read: Read) -> hashing.Digest | None:
-        """The hash and size of an input's content: of its file or, where a stand-in is at its
-        path, what the stand-in gives of it, never the stand-in's own (§20); None where neither
-        is there, as where a stand-in beside its path gives no SHA-256."""
-        assert entry.element is not None  # every address of a valid stack names an element
-        reader = self.stack.analyses[entry.element.analysis].reader
+    def _content(self, analysis: Identity, read: Read) -> hashing.Digest | None:
+        """The hash and size of an input of `analysis`, which may be another than the switch's
+        an entry reads it through: of its file or, where a stand-in is at its path, what the
+        stand-in gives of it, never the stand-in's own (§20); None where neither is there, as
+        where a stand-in beside its path gives no SHA-256."""
+        reader = self.stack.analyses[analysis].reader
         for standin in self.standins:
             if standin.place(read.path) == read.path and standin.recognises(reader, read.path):
                 given = standin.gives(reader, read.path)
@@ -539,50 +560,120 @@ class _Checker:
     ) -> EvidenceStatus | None:
         """The status of the evidence `entry` (§20 *Evidence*), from the planned results it cites
         (`_cited`). Each gives the record at the place of its name along the artifact's
-        declarations from the analysis it belongs to (`universes.along`), or, where they give
-        none of its names, the worst of its records. None where its `artifact` names nothing
-        or it cites a result whose planning isn't determined, as only on a stack that breaks a
-        `MUST` (design §4.13 cases 4, 5 and 12); and for a declared analysis's evidence that
-        cites no planned result, which a check doesn't cover."""
-        output = entry.element
-        if output is None:  # design §4.13 cases 4 and 5
+        declarations, then each case's, from the analysis it belongs to (`universes.along`), or,
+        where they give none of its names, the worst of its records. None where its `artifact`
+        names nothing or it cites a result whose planning isn't determined, as only on a stack
+        that breaks a `MUST` (design §4.13 cases 4, 5 and 12); and for a declared analysis's
+        evidence that cites no planned result, which a check doesn't cover."""
+        element = entry.element
+        if element is None:  # design §4.13 cases 4 and 5
             return None
-        cited = self._cited(entry, output)
+        cited = self._cited(entry, element)
         if entry.file != self.stack.root and not cited:
             return None
         read: list[Status] = []
-        for at in cited:
-            if (output, at) not in statuses:
+        for through in cited:
+            key = (through.target, through.universe)
+            if key not in statuses:
                 return None
-            index = along(self.context.building.planned[output, at], entry.chain)
-            each = statuses[output, at]
+            index = along(self.context.building.planned[key], through.chain)
+            each = statuses[key]
             read.extend(each if index is None else each[index : index + 1])
         status = _worst(s.record_status for s in read)
         location = self.stack.location(entry.file, entry.pointer)
         reasons: tuple[Reason, ...] = ()
         addresses = tuple(s.place.address for s in read)
         if status != "unchanged":
+            none = (
+                "cites no result: it takes a case with a planned result in none of the root's "
+                "universes"
+                if element.kind == "switch"
+                else "cites no result: its output is built in none of the root's universes"
+            )
             what = (
                 f"cites {', '.join(f'`{address}`' for address in addresses)}, whose record is "
                 f"{status}"
                 if read
-                else "cites no result: its output is built in none of the root's universes"
+                else none
             )
             reasons = (self.reason("STALE_EVIDENCE", f"`{entry.written}` {what}", location),)
         return EvidenceStatus(location, entry.written, addresses, status, reasons)
 
-    def _cited(self, entry: Resolution, output: Element) -> list[Element | None]:
-        """The universe of each planned result the evidence `entry` cites, the root's or a
-        declared analysis's (§20 *Evidence*): one where its `artifact` is pinned or names an
-        output built once, and otherwise its output's in each of the root's universes where its
-        analysis is built."""
+    def _cited(self, entry: Resolution, element: Element) -> list[Through]:
+        """What the evidence `entry`, the root's or a declared analysis's, reads for each planned
+        result it cites (§20 *Evidence*; Results *Evidence*), each once: one where its `artifact`
+        is pinned or names an output built once; and otherwise, where it names an output built
+        per universe or a switch, in each of the root's universes, its output's result there, or
+        the result of the case the switch takes there, where it is planned."""
         context, building = self.context, self.context.building
-        universes: list[Element | None]
-        if entry.pin is None and output in context.per_universe:
+        universes: list[Element | None] = [None]
+        if entry.pin is None and (element.kind == "switch" or element in context.per_universe):
             universes = [u for u in building.universes if u.analysis == self.stack.root]
-        else:
-            universes = [read_in(entry, None, context.pins, context.per_universe)]
-        return [at for at in universes if (output, at) in building.planned]
+        found: dict[Key, Through] = {}
+        for universe in universes:
+            through = context.meaning.through(entry, universe)
+            if through is not None and (through.target, through.universe) in building.planned:
+                found.setdefault((through.target, through.universe), through)
+        return list(found.values())
+
+
+def _switched(
+    entry: str, now: Through, then: Through | None, here: Context, was: Context, commit: str
+) -> list[str]:
+    """What has changed, since `commit`, of the switches `entry` reads through, `now` and `then`
+    as the stacks `here` and `was` have them: which switches it reads through, each one's
+    decision, the option selected for it where it is read, and the case it takes (Results *made
+    from*), whatever bytes result. Compared step by step, up to the first whose switch, decision
+    or case differs, after which the steps follow other cases."""
+    if then is None:
+        if not now.steps:
+            return []
+        return [
+            f"`{entry}` reads through {_switches(now.steps)}, where what it read at {commit} isn't "
+            "determined there"
+        ]
+    other = (
+        f"`{entry}` reads through {_switches(now.steps)}, where it read through "
+        f"{_switches(then.steps)} at {commit}"
+    )
+    changes: list[str] = []
+    for step, before in zip(now.steps, then.steps, strict=False):
+        if _which(step) != _which(before):
+            return [*changes, other]
+        decision = here.stack.switches[step.switch].decision.written
+        earlier = was.stack.switches[before.switch].decision.written
+        if decision != earlier:
+            return [
+                *changes,
+                f"`{step.switch.id}` switches on `{decision}`, where it switched on `{earlier}` at "
+                f"{commit}",
+            ]
+        if step.option != before.option:
+            changes.append(
+                f"`{step.switch.id}` switches on `{decision}`, which selects `{step.option}` in "
+                f"`{step.universe.id}`, where it selected `{before.option}` at {commit}"
+            )
+        elif step.case.written != before.case.written:
+            changes.append(
+                f"`{step.switch.id}`'s case for `{step.option}` is `{step.case.written}`, where it "
+                f"was `{before.case.written}` at {commit}"
+            )
+        if step.case.written != before.case.written:
+            return changes  # the steps after follow other cases
+    if len(now.steps) != len(then.steps):
+        changes.append(other)
+    return changes
+
+
+def _switches(steps: tuple[Step, ...]) -> str:
+    """The switches of `steps`, in order, or that there are none."""
+    return " then ".join(f"`{step.switch.id}`" for step in steps) or "no switch"
+
+
+def _which(step: Step) -> tuple[str, str]:
+    """A switch, by its analysis's folder and its id, as one stack and another bound at an
+    earlier commit both know it."""
+    return step.switch.analysis.folder, step.switch.id
 
 
 def _worst(statuses: Iterable[RecordStatus]) -> RecordStatus:

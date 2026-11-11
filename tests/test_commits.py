@@ -187,11 +187,18 @@ outputs:
     format: json
     recipe:
       command: python make.py '{output}'
+  uses_e:
+    type: metric
+    format: json
+    decisions: [e]
+    recipe:
+      command: python make.py '{decisions.e}' '{output}'
 universes:
   u1:
     decisions: {e: a}
 """
-"""An analysis whose own `u1` reads `lib.out` through a `lib` it doesn't drive (§16)."""
+"""An analysis whose own `u1` reads `lib.out` through a `lib` it doesn't drive (§16), and uses
+its key `e` through `uses_e`, which nothing reads (Results *uses*)."""
 
 
 def test_a_must_found_only_as_its_own_root_is_reported_at_its_place(tmp_path: Path) -> None:

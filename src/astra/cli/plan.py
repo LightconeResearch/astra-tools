@@ -23,14 +23,15 @@ def command(path: Path | None, as_json: bool, listed: bool) -> None:
     commit whose record it is read through (§17). Then come the notes, none of them a breach,
     counted by kind, and listed with --notes (the JSON lists every one): pins that name another
     analysis's universe only because their file has no universe of that id (§16), results with
-    two names (§18), outputs with no planned result (§18), results that are one computation in
-    several universes, and commands that name a path outside their analysis's folder, or in a
-    folder below it that holds an analysis of its own (CODE_OUTSIDE_ANALYSIS, §21). Pins,
-    outputs and commands are counted and listed where they concern what the analysis in PATH
-    builds: a pin a planned result reads through, an output or a command of the analysis or of
-    one its universes drive; a line gives the whole stack's count where it is more. Exits 1
-    where the analysis breaks a MUST, which is shown as `astra validate` shows it, and 2 where
-    it can't be read.
+    two names (§18), outputs with no planned result (§18), outputs that aren't built in some
+    universe because a switch they read has no case there for the option selected (Elements),
+    results that are one computation in several universes, and commands that name a path outside
+    their analysis's folder, or in a folder below it that holds an analysis of its own
+    (CODE_OUTSIDE_ANALYSIS, §21). Pins, outputs and commands are counted and listed where they
+    concern what the analysis in PATH builds: a pin a planned result reads through, an output or
+    a command of the analysis or of one its universes drive; a line gives the whole stack's count
+    where it is more. Exits 1 where the analysis breaks a MUST, which is shown as `astra
+    validate` shows it, and 2 where it can't be read.
     """
     from astra import api
 

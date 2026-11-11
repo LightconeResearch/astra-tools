@@ -4,7 +4,8 @@ and every placeholder is one its output gives (`UNDECLARED_TEMPLATE_REF`).
 The command is read from the left, as §11 *The command as a template* says: `{{` is a literal
 `{` and `}}` a literal `}`, and any other `{` opens a placeholder, which ends at the next `}`.
 A placeholder is `{inputs}`, `{output}`, or `{inputs.<entry>}` or `{decisions.<entry>}` for an
-entry of the output's `inputs` or `decisions` exactly as written.
+entry of the output's `inputs` or `decisions` exactly as written. A switch has no recipe, so
+nothing of it is checked here (Elements *switch*).
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ CODES = frozenset({"UNDECLARED_TEMPLATE_REF"})
 def check(context: Context) -> Iterator[Diagnostic]:
     for member, analysis in context.stack.determined():
         for id_, output in analysis.outputs.items():
+            if output.is_switch:
+                continue
             at = context.at(member.identity, ("outputs", id_, "recipe", "command"))
             for problem in _problems(output):
                 yield context.diagnostic("UNDECLARED_TEMPLATE_REF", problem, at)
@@ -33,6 +36,7 @@ _BRACES = re.compile(r"\{\{|\}\}|\{[^}]*\}|\{|\}")
 
 def _problems(output: model.Output) -> Iterator[str]:
     """What is wrong with `output`'s command as a template, one problem at a time."""
+    assert output.recipe is not None  # every output but a switch has one (`MISSING_FIELD`)
     for brace in _BRACES.finditer(output.recipe.command):
         text, at = brace[0], brace.start() + 1
         if text == "}":
