@@ -16,7 +16,7 @@ from astra import api
 from tests.conftest import SPEC
 
 ANALYSES = SPEC / "conformance" / "analyses"
-CASES = sorted([*ANALYSES.glob("[0-9]*"), *(ANALYSES / "when").glob("[0-9]*")])
+CASES = sorted(ANALYSES.glob("[0-9]*"))
 
 
 def environment(place: Path) -> dict[str, str]:

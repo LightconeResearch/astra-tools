@@ -5,10 +5,11 @@ shape `astra-plan/1`, and `astra plan`.
 
 The stacks are §2's worked example; astra-spec's `examples/iris_pipeline`; §16's `output5`
 reading §15's `subanalysis` in three universes, where `subanalysis`'s own `v1` drives its
-parent (§18), with an output of every placeholder; §9's `decision3`, in an output's
-`decisions`; §18's `inner` reached through `inner` and `stage.inner`; §17's analysis from a
-commit, driven and pinned; an analysis whose recipes ask for resources and containers; and one
-with each note a stack read where the root is can have (design §4.6).
+parent (§18), with an output of every placeholder; an analysis with a declaration no key
+drives, for outputs asked for that aren't built; §18's `inner` reached through `inner` and
+`stage.inner`; §17's analysis from a commit, driven and pinned; an analysis whose recipes ask for
+resources and containers; and one with each note a stack read where the root is can have
+(design §4.6).
 """
 
 from __future__ import annotations
@@ -170,30 +171,13 @@ PLACEHOLDERS = """\
 """An output of every placeholder of §11's table, the entries with dots and `#`, `{{` and
 `}}`."""
 
-ON_REQUEST = """\
-  cond:
-    type: figure
-    format: png
-    when: [decision1.b]
-    recipe:
-      command: python src/cond.py '{output}'
-  reader:
-    type: metric
-    format: json
-    inputs: [cond]
-    recipe:
-      command: python src/reader.py '{inputs.cond}' '{output}'
-"""
-"""Two outputs of `subanalysis` that nothing reads: one active only where `decision1.b` is
-selected, and one that reads it without a pin and is active everywhere."""
-
 
 @pytest.fixture(scope="module")
 def pinning(tmp_path_factory: pytest.TempPathFactory) -> Path:
     files = {
         "astra.yaml": ROOT.replace("universes:\n", PLACEHOLDERS + "universes:\n", 1),
         "data/input1.csv": "1\n",
-        "subanalysis/astra.yaml": SUBANALYSIS.replace("universes:\n", ON_REQUEST + "universes:\n"),
+        "subanalysis/astra.yaml": SUBANALYSIS,
         "subanalysis/data/input1.csv": "2\n",
     }
     return repository(tmp_path_factory.mktemp("pinning"), files)
@@ -211,7 +195,6 @@ def test_output5s_three_pins_read_three_results_each_in_its_owners_folder(pinnin
         (".", "output1#u2"),
         (".", "output3#u1"),
         (".", "output3#u2"),
-        (".", "output4#u2"),
         (".", "output5"),
         (".", "subanalysis.output1#u1"),
         (".", "subanalysis.output1#u2"),
@@ -294,43 +277,6 @@ def test_a_driven_analysiss_recipe_runs_in_its_own_folder(pinning: Path) -> None
     )
 
 
-CONDITIONAL = """\
-spec_version: "0.1.0"
-decisions:
-  decision1:
-    options: {a: {}, b: {}}
-  decision3:
-    when: [decision1.b]
-    options: {a: {}, b: {}}
-outputs:
-  output1:
-    type: metric
-    format: json
-    decisions: [decision1, decision3]
-    recipe:
-      command: python make.py '{decisions.decision1}' '{decisions.decision3}' '{output}'
-universes:
-  u1: {decisions: {decision1: a}}
-  u2: {decisions: {decision1: b, decision3: a}}
-"""
-"""§9's `decision3`, active only where `decision1.b` is selected, in an output's `decisions`."""
-
-
-def test_a_decision_inactive_where_a_result_is_built_selects_no_option(tmp_path: Path) -> None:
-    """O30: in `u1`, `decision3` is inactive (§9) and no option is selected for it: the
-    result's `decisions` holds None for the entry, `{decisions.decision3}` becomes the empty
-    string, and the shape gives `null`."""
-    plan = api.plan(repository(tmp_path, {"astra.yaml": CONDITIONAL}))
-    one, two = plan.results
-    assert (dict(one.decisions), dict(two.decisions)) == (
-        {"decision1": "a", "decision3": None},
-        {"decision1": "b", "decision3": "a"},
-    )
-    assert render_command(one, tmp_path) == "python make.py 'a' '' 'results/u1/output1.json'"
-    assert render_command(two, tmp_path) == "python make.py 'b' 'a' 'results/u2/output1.json'"
-    assert plan.to_json()["results"][0]["decisions"] == {"decision1": "a", "decision3": None}
-
-
 # --- universes= and outputs= ---
 
 
@@ -349,13 +295,10 @@ def test_universes_narrow_the_plan_to_what_is_built_there_and_what_it_reads(
 def test_an_output_nothing_reads_is_built_on_request(pinning: Path) -> None:
     """An output of a declared analysis that no planned result reads isn't planned (§18), but
     can be asked for: it is planned as the root's own outputs are, in each of the root's
-    universes where it is active (§9) and its analysis is built, and named from the root."""
+    universes where its analysis is built, and named from the root."""
     assert results(api.plan(pinning, outputs=["subanalysis.unread"])) == [
         (".", "subanalysis.unread#u1"),
         (".", "subanalysis.unread#u2"),
-    ]
-    assert results(api.plan(pinning, outputs=["subanalysis.cond"])) == [
-        (".", "subanalysis.cond#u2")
     ]
 
 
@@ -365,18 +308,87 @@ def test_an_output_nothing_reads_is_built_on_request(pinning: Path) -> None:
         (["u9"], None, "no universe `u9`: its universes are u1, u2"),
         (["subanalysis_u1"], None, "^`subanalysis_u1` is an import, which selects nothing: its"),
         (None, ["output9"], "`output9` names no output"),
-        (["u1"], ["subanalysis.cond"], "`subanalysis.cond` has no result in the universes"),
-        (None, ["subanalysis.reader"], "`reader` can't be built on request: `cond` reads"),
     ],
 )
 def test_what_isnt_there_is_a_request_error(
     pinning: Path, universes: list[str] | None, outputs: list[str] | None, message: str
 ) -> None:
-    """A universe the root doesn't have, or an import; an address that names no output; an
-    output with no result where it is asked for; and one that reads, in `u1`, an output
-    inactive there (§13)."""
+    """A universe the root doesn't have, or an import; an address that names no output."""
     with pytest.raises(api.RequestError, match=message.replace("(", r"\(")):
         api.plan(pinning, universes=universes, outputs=outputs)
+
+
+UNDRIVEN = """\
+spec_version: "0.1.0"
+analyses:
+  stage: {path: stage}
+decisions:
+  decision1:
+    options: {a: {}, b: {}}
+outputs:
+  output1:
+    type: metric
+    format: json
+    decisions: [decision1]
+    recipe:
+      command: python make.py '{decisions.decision1}' '{output}'
+universes:
+  u1: {decisions: {decision1: a}}
+  u2: {decisions: {decision1: b}}
+"""
+"""A root whose universes drive `stage`, which has no decisions to set, and set no key
+through `stage.lone`, so they don't drive `lone` (§16)."""
+
+READS_LONE = """\
+spec_version: "0.1.0"
+analyses:
+  lone: {path: ../lone}
+outputs:
+  reader:
+    type: metric
+    format: json
+    inputs: [lone.out]
+    recipe:
+      command: python make.py '{inputs.lone.out}' '{output}'
+"""
+"""`stage`, with no decisions, whose `reader` reads `lone`'s `out` without a pin."""
+
+LONE = """\
+spec_version: "0.1.0"
+decisions:
+  d:
+    options: {a: {}, b: {}}
+outputs:
+  out:
+    type: metric
+    format: json
+    decisions: [d]
+    recipe:
+      command: python make.py '{decisions.d}' '{output}'
+"""
+"""An analysis whose `out`, listing its decision `d`, is built per universe."""
+
+
+def test_an_output_asked_for_with_no_result_to_give_is_a_request_error(tmp_path: Path) -> None:
+    """design §4.6, §16 *The universe being built*: the root's universes drive `stage`, but not
+    `lone`, which `stage` declares. `stage.lone.out` has no result in them, and `stage.reader`,
+    built in each, reads `lone.out` where it isn't built. Nothing planned reads either, so the
+    stack breaks no rule."""
+    files = {"astra.yaml": UNDRIVEN, "stage/astra.yaml": READS_LONE, "lone/astra.yaml": LONE}
+    top = repository(tmp_path, files)
+    assert api.validate(top).diagnostics == ()
+    with pytest.raises(
+        api.RequestError,
+        match="`stage.lone.out` has no result in the root's universes: its analysis isn't built "
+        "there",
+    ):
+        api.plan(top, outputs=["stage.lone.out"])
+    with pytest.raises(
+        api.RequestError,
+        match="`reader` can't be built on request: `lone.out` reads a result that isn't built "
+        "there",
+    ):
+        api.plan(top, outputs=["stage.reader"])
 
 
 # --- §18: a result with two names ---
@@ -808,12 +820,6 @@ outputs:
     decisions: [decision2]
     recipe:
       command: python src/third.py '{inputs.first}' '{decisions.decision2}' '{output}'
-  never:
-    type: figure
-    format: png
-    when: [decision1.c]
-    recipe:
-      command: python src/never.py '{output}'
 universes:
   u1: {decisions: {decision1: a, decision2: x}}
   u2: {decisions: {decision1: a, decision2: y}}
@@ -821,31 +827,44 @@ universes:
 """
 """`first` selects the same option of `decision1` in `u1` and `u2`, so it is one computation
 there, and so is `second`, which reads it; `third` selects `decision2` too, which differs.
-`never` is active in no universe, and `first`'s command names `../lib`."""
+`first`'s command names `../lib`."""
+
+NO_UNIVERSES = """\
+spec_version: "0.1.0"
+decisions:
+  decision1:
+    options: {a: {}, b: {}}
+outputs:
+  never:
+    type: figure
+    format: png
+    decisions: [decision1]
+    recipe:
+      command: python src/never.py '{decisions.decision1}' '{output}'
+"""
+"""A root with no universes, whose `never` is built per universe."""
 
 
 def test_the_plan_notes_each_output_with_no_planned_result(pinning: Path, tmp_path: Path) -> None:
     """design §4.6, §18: an output of a declared analysis that no planned result reads and the
-    root's evidence doesn't cite, and an output of the root active in none of its universes,
-    have no planned result, so a check of the root never covers them. Each is noted at the
-    output, in the files read where the root is."""
+    root's evidence doesn't cite, and an output of the root built per universe where the root
+    has no universes, have no planned result, so a check of the root never covers them. Each is
+    noted at the output, in the files read where the root is."""
     found = [note for note in api.plan(pinning).notes if note.kind == "unplanned"]
     assert [(n.location and n.location.file, n.location and n.location.pointer) for n in found] == [
-        ("subanalysis/astra.yaml", "/outputs/unread"),
-        ("subanalysis/astra.yaml", "/outputs/cond"),
-        ("subanalysis/astra.yaml", "/outputs/reader"),
+        ("subanalysis/astra.yaml", "/outputs/unread")
     ]
     assert found[0].message == (
         "`unread` has no planned result: no planned result reads it and the root's evidence "
         "doesn't cite it, so a check of the root never covers it"
     )
-    top = repository(tmp_path, {"astra.yaml": NOTED, "data/input1.csv": "1\n"})
+    top = repository(tmp_path, {"astra.yaml": NO_UNIVERSES})
     (never,) = [note for note in api.plan(top).notes if note.kind == "unplanned"]
     assert never.location is not None
     assert (never.location.pointer, never.results) == ("/outputs/never", ())
     assert never.message == (
-        "`never` has no planned result: it is active in none of the root's universes, so a "
-        "check of the root never covers it"
+        "`never` has no planned result: it is built per universe and the root has no universes, "
+        "so a check of the root never covers it"
     )
 
 
@@ -1037,13 +1056,12 @@ def test_astra_plan_counts_the_notes_by_kind_and_lists_them_on_request(tmp_path:
     top = repository(tmp_path, {"astra.yaml": NOTED, "data/input1.csv": "1\n"})
     plan = api.plan(top)
     counts = [
-        "  1 output(s) have no planned result",
         "  2 computation(s) repeated across universes, in 4 result(s)",
         "  1 command(s) name a path outside their analysis (CODE_OUTSIDE_ANALYSIS)",
     ]
     lines = astra("plan", str(top)).stdout.splitlines()
     assert not any(line.startswith("note ") for line in lines)
-    assert lines[-4:] == [
+    assert lines[-3:] == [
         f"{len(plan.results)} planned result(s), and notes, none of them a breach "
         "(--notes lists them):",
         *counts,
@@ -1051,11 +1069,11 @@ def test_astra_plan_counts_the_notes_by_kind_and_lists_them_on_request(tmp_path:
     lines = astra("plan", str(top), "--notes").stdout.splitlines()
     listed = [line for line in lines if line.startswith("note ")]
     assert all(line.endswith(note.message) for line, note in zip(listed, plan.notes, strict=True))
-    assert lines[-4:] == [
+    assert lines[-3:] == [
         f"{len(plan.results)} planned result(s), and notes, none of them a breach:",
         *counts,
     ]
-    assert len(json.loads(astra("plan", str(top), "--json", "--notes").stdout)["notes"]) == 4
+    assert len(json.loads(astra("plan", str(top), "--json", "--notes").stdout)["notes"]) == 3
 
 
 def test_an_invalid_analysis_has_no_plan(tmp_path: Path) -> None:

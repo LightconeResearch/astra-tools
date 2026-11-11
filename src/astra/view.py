@@ -1,12 +1,10 @@
-"""view(): the stack as it is in one universe of the root, for UIs (§9, §12, §16, §18; design
-§4.6).
+"""view(): the stack as it is in one universe of the root, for UIs (§12, §16, §18; design §4.6).
 
 Each analysis of the stack, the root first, with its fields as its `astra.yaml` writes them and
-whether it is built in the universe (§16 *The universe being built*); each of its decisions,
-whether it is active there (§9) and the option the universe selects for it (§12); and each of
-its outputs, whether it is active there and its planned result there, with its places (§18):
-its result in the universe, or its one result where it is built once. Like the plan, the view
-is made only of a valid stack (`api.view`).
+whether it is built in the universe (§16 *The universe being built*); each of its decisions and
+the option the universe selects for it (§12); and each of its outputs and its planned result
+there, with its places (§18): its result in the universe, or its one result where it is built
+once. Like the plan, the view is made only of a valid stack (`api.view`).
 """
 
 from __future__ import annotations
@@ -27,13 +25,11 @@ SHAPE = "astra-universe-view/1"
 
 @dataclass(frozen=True)
 class DecisionView:
-    active: bool | None  # None where it is undetermined: its `when` tests what isn't set there
     selected: str | None  # the option the universe selects; None where it selects none
 
 
 @dataclass(frozen=True)
 class OutputView:
-    active: bool | None
     result: Planned | None  # its planned result in the universe, or once; None where none is
     places: tuple[Place, ...]  # the result's, one for each of its names
 
@@ -74,10 +70,7 @@ def _analysis(analysis: AnalysisView) -> dict[str, Any]:
         "built": analysis.built,
         "fields": member.document.value,
         "decisions": {id_: asdict(decision) for id_, decision in analysis.decisions.items()},
-        "outputs": {
-            id_: {"active": output.active, "result": _result(output)}
-            for id_, output in analysis.outputs.items()
-        },
+        "outputs": {id_: {"result": _result(output)} for id_, output in analysis.outputs.items()},
     }
 
 
@@ -107,14 +100,14 @@ def view(stack: Stack, universe: str) -> UniverseView:
         for id_ in analysis.decisions:
             decision = Element(member.identity, "decision", id_)
             selected = min(selection.options(decision), default=None)
-            decisions[id_] = DecisionView(selection.active(decision), selected)
+            decisions[id_] = DecisionView(selected)
         outputs: dict[str, OutputView] = {}
         for id_ in analysis.outputs:
             output = Element(member.identity, "output", id_)
             at = element if output in context.per_universe else None
             result = context.building.planned.get((output, at))
             found = () if result is None else places(stack, result)
-            outputs[id_] = OutputView(selection.active(output), result, found)
+            outputs[id_] = OutputView(result, found)
         analyses.append(
             AnalysisView(
                 member,

@@ -1,5 +1,5 @@
-"""§8 Decisions and options: `UNKNOWN_OPTION`, in conditions, option references and universes'
-own selections, with design §4.13 cases 4, 5 and 10."""
+"""§8 Decisions and options: `UNKNOWN_OPTION`, in option references and universes' own
+selections, with design §4.13 cases 4, 5 and 10."""
 
 from __future__ import annotations
 
@@ -38,13 +38,11 @@ decisions:
         incompatible_with: [sub.decision1.z, decision9.z, bad.decision1.z]
       b: {}
   decision2:
-    when: [decision1.c]
     options: {a: {}, b: {}}
 outputs:
   output1:
     type: metric
     format: json
-    when: ["~decision1.c", decision9.c]
     recipe:
       command: python make.py '{output}'
 universes:
@@ -69,14 +67,12 @@ def unknown(report: api.ValidationReport) -> list[str]:
 
 
 def test_an_option_its_decision_lacks_breaks_unknown_option(broken: api.ValidationReport) -> None:
-    """§8: in a constraint, through a declaration too; in a condition, `~` or not; and in a
-    universe's own selection, derived or not, reported at the option selected. design §4.13 case
-    10: the key `self.decision1` loops, and still names its decision."""
+    """§8: in a constraint, through a declaration too; and in a universe's own selection, derived
+    or not, reported at the option selected. design §4.13 case 10: the key `self.decision1` loops,
+    and still names its decision."""
     assert unknown(broken) == [
         "/decisions/decision1/options/a/requires/0",
         "/decisions/decision1/options/a/incompatible_with/0",
-        "/decisions/decision2/when/0",
-        "/outputs/output1/when/0",
         "/universes/u1/decisions/decision1",
         "/universes/u1/decisions/sub.decision1",
         "/universes/u1/decisions/self.decision1",
@@ -86,7 +82,7 @@ def test_an_option_its_decision_lacks_breaks_unknown_option(broken: api.Validati
     selection = found["/universes/u1/decisions/sub.decision1"]
     assert (selection.level, selection.location.line, selection.location.column) == (
         "error",
-        25,
+        23,
         46,
     )
     assert "`a`, `b`" in selection.message
@@ -95,9 +91,8 @@ def test_an_option_its_decision_lacks_breaks_unknown_option(broken: api.Validati
 def test_nothing_under_an_address_that_names_nothing_is_checked(
     broken: api.ValidationReport,
 ) -> None:
-    """design §4.13 case 5: `decision9` names nothing, so `decision9.c` and `decision9: c` aren't
-    checked for their option; case 4: nor is `bad.decision1.z`, through an undetermined
-    analysis."""
+    """design §4.13 case 5: `decision9` names nothing, so `decision9: c` isn't checked for its
+    option; case 4: nor is `bad.decision1.z`, through an undetermined analysis."""
     assert not any("decision9" in pointer or "bad" in pointer for pointer in unknown(broken))
     assert "/decisions/decision1/options/a/incompatible_with/1" not in unknown(broken)
 
@@ -120,14 +115,10 @@ decisions:
       b: {}
       c:
         excluded: It needs data this analysis doesn't have.
-  decision3:
-    when: [decision1.b]
-    options: {a: {}, b: {}}
 outputs:
   output4:
     type: figure
     format: png
-    when: ["~decision1.a", "~decision2.c"]
     recipe:
       command: python src/output4.py '{output}'
 universes:
@@ -135,12 +126,12 @@ universes:
     decisions: {decision1: a, decision2: a, sub.decision1: a}
   u2:
     derived_from: u1
-    decisions: {decision1: b, decision2: b, decision3: a}
+    decisions: {decision1: b, decision2: b}
 """
-"""§8's fragment, §9's conditions and §12's universes, with `subanalysis` as `sub`."""
+"""§8's fragment and §12's universes, with `subanalysis` as `sub`."""
 
 
 def test_options_of_their_decisions_keep_it(tmp_path: Path) -> None:
-    """§8, §9, §12: an excluded option is still one of its decision's options."""
+    """§8, §12: an excluded option is still one of its decision's options."""
     files = {"astra.yaml": KEPT, "sub/astra.yaml": SUB}
     assert unknown(api.validate(repository(tmp_path, files))) == []

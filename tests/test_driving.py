@@ -72,19 +72,6 @@ analyses:
 )
 """An analysis with no decisions, which declares another and its parent."""
 
-OPT = (
-    """spec_version: "0.1.0"
-analyses:
-  parent: {path: ..}
-decisions:
-  o:
-    when: [parent.decision1.b]
-    options: {x: {}, y: {}}
-"""
-    + OUTPUT % "opt_result"
-)
-"""An analysis whose one decision `when` switches off where the root's `decision1` isn't `b`."""
-
 ROOT = (
     """spec_version: "0.1.0"
 analyses:
@@ -92,7 +79,6 @@ analyses:
   stage2: {path: stage}
   inner: {path: stage/inner}
   lib: {path: lib}
-  opt: {path: opt}
   self: {path: .}
   bad: {path: bad}
 decisions:
@@ -105,7 +91,7 @@ universes:
   u1:
     decisions: {decision1: a, stage.d: a, stage.inner.d: a}
   u2:
-    decisions: {decision1: b, stage.d: a, inner.d: b, opt.o: x}
+    decisions: {decision1: b, stage.d: a, inner.d: b}
   u3:
     derived_from: u1
     decisions: {stage.inner.d: b}
@@ -118,7 +104,6 @@ KEPT_FILES = {
     "stage/inner/astra.yaml": INNER,
     "lib/astra.yaml": LIB,
     "lib/deep/astra.yaml": 'spec_version: "0.1.0"\n' + OUTPUT % "deep_result",
-    "opt/astra.yaml": OPT,
 }
 
 BROKEN_FILES = {
@@ -204,7 +189,6 @@ def test_each_chain_a_key_goes_through_is_driven_on_its_own(kept: Path) -> None:
         ("stage",),
         ("stage", "inner"),
         ("inner",),
-        ("opt",),
         ("lib",),
         ("lib", "deep"),
     }
@@ -227,7 +211,6 @@ def test_the_analyses_built_in_a_universe_are_known_by_identity(kept: Path) -> N
         ROOT_ID,
         Identity("stage"),
         Identity("stage/inner"),
-        Identity("opt"),
         Identity("lib"),
         Identity("lib/deep"),
     ]
@@ -242,8 +225,8 @@ def test_a_key_that_loops_drives_nothing(broken: Path) -> None:
 
 def test_a_stack_driven_as_written_breaks_no_rule_on_selections(kept: Path) -> None:
     """§16: `stage.inner.d` and `inner.d` spell one decision, set under either in different
-    universes; u3 changes it under the key it inherits; in u1, where `when` switches off every
-    decision of `opt`, nothing is set for it; `stage`'s `parent.decision1` doesn't loop."""
+    universes; u3 changes it under the key it inherits; `stage`'s `parent.decision1` doesn't
+    loop."""
     assert found(api.validate(kept)) == []
 
 
@@ -265,7 +248,6 @@ def test_each_rule_is_broken_where_sixteens_text_says(broken_report: api.Validat
         ("LOOPING_KEY", "astra.yaml", "/universes/again/decisions", "stage2.again.d"),
         ("LOOPING_KEY", "astra.yaml", "/universes/parent/decisions", "stage.parent.decision1"),
         ("LOOPING_KEY", "astra.yaml", "/universes/itself/decisions", "self.decision1"),
-        ("MISSING_DECISION", "astra.yaml", "/universes/unset/decisions", None),
         ("MISSING_DECISION", "astra.yaml", "/universes/unset/decisions", None),
         ("MISSING_DECISION", "astra.yaml", "/universes/unset/decisions", None),
         ("MISSING_DECISION", "stage/astra.yaml", "/universes/s2/decisions", None),
@@ -299,14 +281,14 @@ def test_looping_key_says_how_to_key_the_decision(broken_report: api.ValidationR
 
 
 def test_missing_decision_names_each_decision_unset(broken_report: api.ValidationReport) -> None:
-    """§16: whichever universe has the key that drives `stage`, `inner` and `opt`, `unset` sets
-    their active decisions; `opt.o` is active where `decision1` is `b`."""
+    """§16: whichever universe has the key that drives `stage` and `inner`, `unset` sets their
+    decisions."""
     messages = [
         d.message
         for d in broken_report.diagnostics
         if d.code == "MISSING_DECISION" and d.location.file == "astra.yaml"
     ]
-    assert [message.split("`")[3] for message in messages] == ["stage.d", "stage.inner.d", "opt.o"]
+    assert [message.split("`")[3] for message in messages] == ["stage.d", "stage.inner.d"]
     assert "this analysis's universes drive `stage`" in messages[0]
     stage = [d.message for d in broken_report.diagnostics if d.location.file == "stage/astra.yaml"]
     assert [message.split("`")[3] for message in stage] == ["d", "parent.decision1"]

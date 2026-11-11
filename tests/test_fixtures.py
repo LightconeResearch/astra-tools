@@ -19,13 +19,9 @@ from tests.conftest import DOCUMENTS, git_init
 
 
 def fixtures(kind: str) -> list[Path]:
-    """The documents of `kind`, `valid` or `invalid`, with those of `when/<kind>/`: the invalid
-    documents whose break is in a `when`."""
-    return sorted(
-        path
-        for folder in (DOCUMENTS / kind, DOCUMENTS / "when" / kind)
-        for path in [*folder.glob("*.yaml"), *folder.glob("*.json")]
-    )
+    """The documents of `kind`, `valid` or `invalid`."""
+    folder = DOCUMENTS / kind
+    return sorted([*folder.glob("*.yaml"), *folder.glob("*.json")])
 
 
 def expected(path: Path) -> set[tuple[str, str]]:

@@ -1,23 +1,22 @@
 """§16 Driving and consuming, the rules on selections: a universe's own `decisions` give each
 decision one key (`DUPLICATE_ELEMENT`), and no key goes through a declaration that leads back
-(`LOOPING_KEY`); every universe sets every active decision of its analysis and of each analysis
-its analysis's universes drive (`MISSING_DECISION`); and every pin names a universe
+(`LOOPING_KEY`); every universe sets every decision of its analysis and of each analysis its
+analysis's universes drive (`MISSING_DECISION`); and every pin names a universe
 (`UNKNOWN_PIN_UNIVERSE`).
 
 Every universe of every analysis of the stack is checked, a driven analysis's own included
 (§16 *What a validator checks*). A universe with no effective selection is checked by the first
 two on its own `decisions`, and not by `MISSING_DECISION` (design §4.13 case 7), which isn't checked
-either for a decision whose activity is undetermined (case 6), or of an undetermined analysis
-(case 4). A key or a reference that names nothing is checked by none (case 5), but for
-`LOOPING_KEY`, judged on its declarations as far as they resolve (case 10).
+either for a decision of an undetermined analysis (case 4). A key or a reference that names
+nothing is checked by none (case 5), but for `LOOPING_KEY`, judged on its declarations as far as
+they resolve (case 10).
 
 §16's rules on the universe being built: what a use there names belongs to an analysis built in
 it (`NOT_BUILT_IN_UNIVERSE`), and in the file of the analysis whose universe it is, the file's
 universes drive the use's chain of declarations (`UNDRIVEN_DECLARATION`); and no planned result
 has two names (`RESULT_IN_TWO_PLACES`, §18). They hold only in the universes built, and for an
-output only where its result is planned or, for its `when`, would be if the `when` held
-(`universes.building`), so not in a universe with no effective selection, nor through an
-element whose activity is undetermined (design §4.13 cases 6 and 7).
+output only where its result is planned (`universes.building`), so not in a universe with no
+effective selection (design §4.13 case 7).
 """
 
 from __future__ import annotations
@@ -116,7 +115,7 @@ def _missing(
     universe: model.Universe,
     building: Mapping[Identity, tuple[Chain, ...]],
 ) -> Iterator[Diagnostic]:
-    """Each active decision the effective selection leaves unset, of the universe's analysis
+    """Each decision the effective selection leaves unset, of the universe's analysis
     and of each analysis its analysis's universes drive (§16 *What a universe sets*), spelled
     through the first chain that reaches it."""
     name = selection.universe
@@ -126,15 +125,15 @@ def _missing(
         chain = chains[0]
         for id_ in context.stack.analysis(identity).decisions:
             decision = Element(identity, "decision", id_)
-            if context.activity(name, decision) is not True or selection.options(decision):
+            if selection.options(decision):
                 continue
             spelled = ".".join((*(declaration.id for declaration in chain), id_))
-            message = f"`{name.id}` selects nothing for `{spelled}`, which is active there"
+            message = f"`{name.id}` selects nothing for `{spelled}`"
             if chain:
                 through = ".".join(declaration.id for declaration in chain)
                 message += (
                     f": this analysis's universes drive `{through}`, so each of them sets its "
-                    "active decisions"
+                    "decisions"
                 )
             yield context.diagnostic("MISSING_DECISION", message, location)
 
@@ -178,10 +177,7 @@ def _uses(context: Context) -> Uses:
       per universe, and the decisions it lists;
     - in the universe a pin names, each output built per universe that a planned result's
       output, or the root's evidence, pins;
-    - where an output's result is planned, or would be if its `when` held, the decisions its
-      `when` tests;
-    - in each analysis built in a universe built, what its decisions' `when` and its options'
-      constraints test.
+    - in each analysis built in a universe built, what its options' constraints name.
 
     Not in a universe with no effective selection (design §4.13 case 7), not for an address that
     names nothing (case 5), and not for one that names an output on a cycle (case 13)."""
@@ -200,10 +196,6 @@ def _uses(context: Context) -> Uses:
         for entry in context.written[planned.output]:
             if entry.field == "decisions":
                 use(entry, planned.universe)
-    for output, universe in building.considered:
-        for entry in context.written[output]:
-            if entry.field == "when":
-                use(entry, universe)
     for universe, analyses in building.universes.items():
         for identity in analyses:
             for id_ in context.stack.analysis(identity).decisions:

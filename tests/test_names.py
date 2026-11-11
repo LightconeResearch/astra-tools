@@ -46,7 +46,6 @@ inputs:
   input1: {path: data/input1.csv}
 decisions:
   decision1:
-    when: [sub.decision9.a]
     options:
       a:
         requires: [decision9.a]
@@ -58,7 +57,6 @@ outputs:
     format: json
     inputs: [input9, sub.output9, nothere.output1, sub.decision1#v1]
     decisions: [decision9, sub.output1]
-    when: [decision9.a]
     recipe:
       command: python make.py '{output}'
 universes:
@@ -87,7 +85,6 @@ inputs:
   input1: {path: data/input1.csv}
 decisions:
   decision1:
-    when: ["~sub.decision1.b"]
     options:
       a:
         requires: [again.decision1.a]
@@ -99,7 +96,6 @@ outputs:
     format: json
     inputs: [input1, sub.output1#v1, again.output1, sub.parent.input1, self.output2]
     decisions: [decision1, sub.decision1, sub.parent.decision1]
-    when: [decision1.a]
     recipe:
       command: python make.py '{output}'
   output2:
@@ -138,7 +134,6 @@ def test_every_field_of_sixs_table_breaks_it(broken: api.ValidationReport) -> No
     each field of the table; each written address is reported once, not again in the
     universe that inherits it (§12)."""
     assert unresolved(broken) == [
-        ("astra.yaml", "/decisions/decision1/when/0", None),
         ("astra.yaml", "/decisions/decision1/options/a/requires/0", None),
         ("astra.yaml", "/decisions/decision1/options/a/incompatible_with/0", None),
         ("astra.yaml", "/outputs/output1/inputs/0", None),
@@ -147,7 +142,6 @@ def test_every_field_of_sixs_table_breaks_it(broken: api.ValidationReport) -> No
         ("astra.yaml", "/outputs/output1/inputs/3", None),
         ("astra.yaml", "/outputs/output1/decisions/0", None),
         ("astra.yaml", "/outputs/output1/decisions/1", None),
-        ("astra.yaml", "/outputs/output1/when/0", None),
         ("astra.yaml", "/universes/u1/decisions", "decision9"),
         ("astra.yaml", "/universes/u1/decisions", "sub.decision9"),
         ("astra.yaml", "/universes/imp1/analysis", None),
@@ -168,10 +162,10 @@ def test_it_is_reported_where_it_is_written(broken: api.ValidationReport) -> Non
         if d.code == "UNRESOLVED_ADDRESS" and d.location.file == "astra.yaml"
     }
     entry = found["/outputs/output1/inputs/1", None]
-    assert (entry.level, entry.location.line, entry.location.column) == ("error", 19, 22)
+    assert (entry.level, entry.location.line, entry.location.column) == ("error", 18, 22)
     assert "`sub` has no input or output `output9`" in entry.message
     key = found["/universes/u1/decisions", "sub.decision9"]
-    assert (key.location.line, key.location.column) == (26, 45)
+    assert (key.location.line, key.location.column) == (24, 45)
     assert (
         "this file declares no analysis `nothere`"
         in found["/outputs/output1/inputs/2", None].message

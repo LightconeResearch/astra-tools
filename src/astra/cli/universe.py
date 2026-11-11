@@ -47,7 +47,7 @@ def show(universe: str, path: Path | None) -> None:
         element = root_universe(stack, universe)
     except RequestError as error:
         raise click.BadParameter(str(error), param_hint="UNIVERSE") from None
-    found = universes.selections(stack, universes.written(stack))
+    found = universes.selections(stack)
     selection = found[element]
     if selection is None:  # design §4.13 case 7
         click.echo(

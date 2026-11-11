@@ -171,7 +171,6 @@ outputs:
   first:
     type: metric
     format: json
-    when: [d.a]
     inputs: [second]
     recipe:
       command: python make.py {inputs} '{output}'
@@ -185,9 +184,8 @@ universes:
   u1:
     decisions: {d: b}
 """
-"""`first` and `second` read each other, and `first` isn't active in `u1`; `reader` reads
-`first` in `u1`, unpinned and pinned to it, and `sub`'s `lower`, which is on a cycle in `sub`,
-in `u1`, which doesn't drive `sub`."""
+"""`first` and `second` read each other; `reader` reads `first`, unpinned and pinned to `u1`, and
+`sub`'s `lower`, which is on a cycle in `sub`, in `u1`, which doesn't drive `sub`."""
 
 LOOPING = """\
 spec_version: "0.1.0"
@@ -214,10 +212,8 @@ outputs:
 
 def test_no_rule_on_what_reads_an_output_on_a_cycle_is_checked(tmp_path: Path) -> None:
     """Design §4.13 case 13: for an output on a cycle, whether it is built per universe can
-    turn on the cycle, so no rule on what reads it is checked: no INPUT_NOT_BUILT where
-    `reader` and `second` read `first` in `u1`, no PIN_INACTIVE for `first#u1`, and no
-    NOT_BUILT_IN_UNIVERSE or UNDRIVEN_DECLARATION for `sub.lower`. The breach is reported as
-    OUTPUT_CYCLE alone."""
+    turn on the cycle, so no rule on what reads it is checked: no NOT_BUILT_IN_UNIVERSE or
+    UNDRIVEN_DECLARATION for `sub.lower`. The breach is reported as OUTPUT_CYCLE alone."""
     files = {"astra.yaml": ON_A_CYCLE, "sub/astra.yaml": LOOPING}
     report = api.validate(repository(tmp_path, files))
     assert [(d.code, d.location.file, d.location.pointer) for d in report.diagnostics] == [

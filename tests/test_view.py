@@ -1,10 +1,10 @@
 """The universe view (design §4.6): the stack as it is in one of the root's universes, each
-analysis built there or not (§16), each decision active or not and its option selected (§9,
-§12), each output's planned result there and its places (§18); `api.view`, its shape
-`astra-universe-view/1`, and `astra view`.
+analysis built there or not (§16), each decision and its option selected (§12), each output's
+planned result there and its places (§18); `api.view`, its shape `astra-universe-view/1`, and
+`astra view`.
 
-The stack is §2's worked example, with §9's `decision3` and `output4`, a `subanalysis` the
-root's universes drive (§16), and an `other` they don't, read pinned to its own `v1`.
+The stack is §2's worked example, with a `subanalysis` the root's universes drive (§16), and an
+`other` they don't, read pinned to its own `v1`.
 """
 
 from __future__ import annotations
@@ -32,9 +32,6 @@ inputs:
 decisions:
   decision1:
     options: {a: {}, b: {}}
-  decision3:
-    when: [decision1.b]
-    options: {a: {}, b: {}}
 outputs:
   output1:
     type: metric
@@ -51,17 +48,11 @@ outputs:
     inputs: [output1#u1, output1#u2, other.out#v1]
     recipe:
       command: python src/output2.py {inputs} '{output}'
-  output4:
-    type: figure
-    format: png
-    when: [decision1.b]
-    recipe:
-      command: python src/output4.py '{output}'
 universes:
   u1:
     decisions: {decision1: a, subanalysis.decision1: a}
   u2:
-    decisions: {decision1: b, decision3: a, subanalysis.decision1: b}
+    decisions: {decision1: b, subanalysis.decision1: b}
 """
 
 SUBANALYSIS = """\
@@ -89,7 +80,6 @@ decisions:
   d:
     options: {a: {}, b: {}}
   e:
-    when: [d.b]
     options: {a: {}, b: {}}
 outputs:
   out:
@@ -120,42 +110,33 @@ def top(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def state(view: UniverseView) -> dict[str, object]:
-    """Each analysis by folder: whether it is built, and each decision's activity and option,
-    and each output's activity and the addresses of its result there."""
+    """Each analysis by folder: whether it is built, each decision's option, and the addresses
+    of each output's result there."""
     return {
         analysis.member.identity.folder or ".": (
             analysis.built,
-            {id_: (d.active, d.selected) for id_, d in analysis.decisions.items()},
-            {id_: (o.active, [p.address for p in o.places]) for id_, o in analysis.outputs.items()},
+            {id_: d.selected for id_, d in analysis.decisions.items()},
+            {id_: [p.address for p in o.places] for id_, o in analysis.outputs.items()},
         )
         for analysis in view.analyses
     }
 
 
 def test_the_view_in_u1(top: Path) -> None:
-    """§9: `decision3` and `output4` are inactive where `decision1.a` is selected. §16: the
-    root's universes drive `subanalysis`, so it is built in `u1`, with its `decision1` set to
-    `a`; its `output1` has the root's result there (§18), and `unread`, which nothing reads,
-    none. `other` isn't built in `u1`: no option is selected for its decisions, `e`'s `when`
-    tests a decision `u1` leaves unset (O16), and its `out` has no result in `u1`."""
+    """§16: the root's universes drive `subanalysis`, so it is built in `u1`, with its
+    `decision1` set to `a`; its `output1` has the root's result there (§18), and `unread`,
+    which nothing reads, none. `other` isn't built in `u1`: no option is selected for its
+    decisions, and its `out` has no result in `u1`."""
     view = api.view("u1", top)
     assert (view.root, view.universe) == ("astra.yaml", "u1")
     assert state(view) == {
-        ".": (
-            True,
-            {"decision1": (True, "a"), "decision3": (False, None)},
-            {
-                "output1": (True, ["output1#u1"]),
-                "output2": (True, ["output2"]),
-                "output4": (False, []),
-            },
-        ),
+        ".": (True, {"decision1": "a"}, {"output1": ["output1#u1"], "output2": ["output2"]}),
         "subanalysis": (
             True,
-            {"decision1": (True, "a")},
-            {"output1": (True, ["subanalysis.output1#u1"]), "unread": (True, [])},
+            {"decision1": "a"},
+            {"output1": ["subanalysis.output1#u1"], "unread": []},
         ),
-        "other": (False, {"d": (True, None), "e": (None, None)}, {"out": (True, [])}),
+        "other": (False, {"d": None, "e": None}, {"out": []}),
     }
     sub = view.analyses[1].outputs["output1"]
     assert sub.result is not None and sub.result.owner == Identity("")
@@ -165,17 +146,9 @@ def test_the_view_in_u1(top: Path) -> None:
 
 
 def test_the_view_in_u2(top: Path) -> None:
-    """§9: `decision1.b` switches `decision3` and `output4` on."""
+    """§12: `u2` selects `decision1: b`, and `output1`'s result there is `output1#u2`."""
     root = state(api.view("u2", top))["."]
-    assert root == (
-        True,
-        {"decision1": (True, "b"), "decision3": (True, "a")},
-        {
-            "output1": (True, ["output1#u2"]),
-            "output2": (True, ["output2"]),
-            "output4": (True, ["output4#u2"]),
-        },
-    )
+    assert root == (True, {"decision1": "b"}, {"output1": ["output1#u2"], "output2": ["output2"]})
 
 
 def test_the_view_as_astra_universe_view_1(top: Path) -> None:
@@ -196,10 +169,9 @@ def test_the_view_as_astra_universe_view_1(top: Path) -> None:
     assert root["fields"]["universes"]["u1"] == {
         "decisions": {"decision1": "a", "subanalysis.decision1": "a"}
     }
-    assert root["decisions"]["decision3"] == {"active": False, "selected": None}
-    assert root["outputs"]["output4"] == {"active": False, "result": None}
+    assert root["decisions"]["decision1"] == {"selected": "a"}
+    assert root["outputs"]["output2"]["result"]["names"] == ["output2"]
     assert sub["outputs"]["output1"] == {
-        "active": True,
         "result": {
             "names": ["subanalysis.output1"],
             "owner": {"folder": "", "commit": None},
@@ -214,7 +186,7 @@ def test_the_view_as_astra_universe_view_1(top: Path) -> None:
             ],
         },
     }
-    assert (other["built"], other["decisions"]["e"]) == (False, {"active": None, "selected": None})
+    assert (other["built"], other["decisions"]["e"]) == (False, {"selected": None})
 
 
 def test_astra_view_shows_the_stack_in_one_universe(top: Path) -> None:
@@ -224,10 +196,8 @@ def test_astra_view_shows_the_stack_in_one_universe(top: Path) -> None:
         "universe u1",
         "astra.yaml  built",
         "  decision1    a",
-        "  decision3    inactive",
         "  output1      output1#u1  results/u1/output1.json",
         "  output2      output2  results/output2.csv",
-        "  output4      inactive",
         "subanalysis/astra.yaml  built",
         "  decision1    a",
         "  output1      subanalysis.output1#u1  results/u1/subanalysis.output1.json",
@@ -270,7 +240,7 @@ def test_astra_view_of_a_universe_the_root_hasnt_is_a_usage_error(top: Path, uni
 
 def test_an_invalid_analysis_has_no_view(tmp_path: Path) -> None:
     """`astra view` prints the validation report, as `astra validate` does, and exits 1."""
-    files = {"astra.yaml": ROOT.replace("decision3: a, ", ""), "data/input1.csv": "1\n"}
+    files = {"astra.yaml": ROOT.replace("decision1: b, ", ""), "data/input1.csv": "1\n"}
     files |= {"subanalysis/astra.yaml": SUBANALYSIS, "other/astra.yaml": OTHER}
     folder = repository(tmp_path, files)
     with pytest.raises(api.InvalidAnalysisError):

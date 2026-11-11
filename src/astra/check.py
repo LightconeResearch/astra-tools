@@ -574,8 +574,8 @@ class _Checker:
     def _cited(self, entry: Resolution, output: Element) -> list[Element | None]:
         """The universe of each planned result the evidence `entry` cites, the root's or a
         declared analysis's (§20 *Evidence*): one where its `artifact` is pinned or names an
-        output built once, and otherwise its output's in each of the root's universes where it
-        is active and its analysis is built."""
+        output built once, and otherwise its output's in each of the root's universes where its
+        analysis is built."""
         context, building = self.context, self.context.building
         universes: list[Element | None]
         if entry.pin is None and output in context.per_universe:

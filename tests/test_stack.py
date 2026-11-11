@@ -237,9 +237,9 @@ def test_an_address_that_names_nothing_resolves_to_nothing(tmp_path: Path) -> No
 
 
 def test_every_field_of_sixs_table_is_resolved(tmp_path: Path) -> None:
-    """§6 *Addresses*: Output.inputs, Output.decisions, conditions (Output.when and
-    Decision.when), Option.requires and Option.incompatible_with, the keys of
-    Universe.decisions, Evidence.artifact, and an import's analysis and universe."""
+    """§6 *Addresses*: Output.inputs, Output.decisions, Option.requires and
+    Option.incompatible_with, the keys of Universe.decisions, Evidence.artifact, and an import's
+    analysis and universe."""
     text = """\
 spec_version: "0.1.0"
 analyses:
@@ -252,7 +252,6 @@ decisions:
       a: {requires: [sub.decision1.a]}
       b: {incompatible_with: [decision2.a]}
   decision2:
-    when: ["~decision1.b"]
     options: {a: {}}
 outputs:
   output1:
@@ -260,7 +259,6 @@ outputs:
     format: json
     inputs: [input1, sub.output1#u1]
     decisions: [decision1]
-    when: [decision1.a]
     recipe:
       command: python make.py '{output}'
 universes:
@@ -275,20 +273,18 @@ findings:
     sub = SUB + "universes:\n  v1:\n    decisions: {decision1: a}\n"
     top = repository(tmp_path, {"astra.yaml": text, "sub/astra.yaml": sub})
     found = [
-        (r.field, r.written, r.key, r.option, r.negated, r.element and r.element.kind)
+        (r.field, r.written, r.key, r.option, r.element and r.element.kind)
         for r in stack(top).resolutions
         if r.file == Identity("")
     ]
     assert found == [
-        ("inputs", "input1", None, None, False, "input"),
-        ("inputs", "sub.output1#u1", None, None, False, "output"),
-        ("decisions", "decision1", None, None, False, "decision"),
-        ("when", "decision1.a", None, "a", False, "decision"),
-        ("requires", "sub.decision1.a", None, "a", False, "decision"),
-        ("incompatible_with", "decision2.a", None, "a", False, "decision"),
-        ("when", "~decision1.b", None, "b", True, "decision"),
-        ("selection", "decision1", "decision1", "a", False, "decision"),
-        ("selection", "sub.decision1", "sub.decision1", "b", False, "decision"),
-        ("import", "sub.v1", None, None, False, "universe"),
-        ("artifact", "output1", None, None, False, "output"),
+        ("inputs", "input1", None, None, "input"),
+        ("inputs", "sub.output1#u1", None, None, "output"),
+        ("decisions", "decision1", None, None, "decision"),
+        ("requires", "sub.decision1.a", None, "a", "decision"),
+        ("incompatible_with", "decision2.a", None, "a", "decision"),
+        ("selection", "decision1", "decision1", "a", "decision"),
+        ("selection", "sub.decision1", "sub.decision1", "b", "decision"),
+        ("import", "sub.v1", None, None, "universe"),
+        ("artifact", "output1", None, None, "output"),
     ]

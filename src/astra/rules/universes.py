@@ -1,14 +1,12 @@
 """§12 Universes: a universe's `derived_from` names another of its analysis's universes
 (`UNKNOWN_DERIVED_FROM`) and its chain doesn't loop (`DERIVED_FROM_CYCLE`); its effective
 selection keeps every constraint of the options it selects (`MISSING_REQUIRED_OPTION`,
-`INCOMPATIBLE_OPTIONS`) and selects no excluded one (`EXCLUDED_OPTION_SELECTED`); and what it sets
-itself is active there (`INACTIVE_DECISION`).
+`INCOMPATIBLE_OPTIONS`) and selects no excluded one (`EXCLUDED_OPTION_SELECTED`).
 
 Every universe of every analysis of the stack is checked (§16 *What a validator checks*), on its
-effective selection (`universes.selections`). None of the last four is checked for a universe
+effective selection (`universes.selections`). None of the last three is checked for a universe
 that has none (design §4.13 case 7), for a selection that names nothing, nor against a constraint
-that names nothing (case 5), nor `INACTIVE_DECISION` for a decision whose activity is
-undetermined (case 6).
+that names nothing (case 5).
 """
 
 from __future__ import annotations
@@ -19,7 +17,7 @@ from astra import model
 from astra.diagnostics import Diagnostic, Location
 from astra.rules.context import Context
 from astra.stack import Element, Resolution, Stack
-from astra.universes import Selection, names_option, options, when
+from astra.universes import Selection, names_option, options
 
 CODES = frozenset(
     {
@@ -28,7 +26,6 @@ CODES = frozenset(
         "MISSING_REQUIRED_OPTION",
         "INCOMPATIBLE_OPTIONS",
         "EXCLUDED_OPTION_SELECTED",
-        "INACTIVE_DECISION",
     }
 )
 
@@ -126,13 +123,6 @@ def _selected(
             message = f"{selects}, which is incompatible with `{refused.written}`, selected too"
             where = context.at(refused.file, refused.pointer)
             yield context.diagnostic("INCOMPATIBLE_OPTIONS", message, at, [*related, where])
-    if selection.own(entry) and context.activity(selection.universe, decision) is False:
-        conditions = ", ".join(f"`{condition}`" for condition in when(stack, decision))
-        message = (
-            f"`{universe}` sets `{entry.key}` itself, though it isn't active there: its `when` "
-            f"({conditions}) doesn't hold in `{universe}`'s effective selection"
-        )
-        yield context.diagnostic("INACTIVE_DECISION", message, at)
 
 
 def _selects(selection: Selection, constraint: Resolution) -> bool:

@@ -22,15 +22,11 @@ def show(view: UniverseView) -> None:
         built = "built" if analysis.built else f"not built in {view.universe}"
         out.print(Text.assemble((file, "bold"), f"  {built}"))
         for id_, decision in analysis.decisions.items():
-            shown = decision.selected or (
-                "inactive" if decision.active is False else "no option selected"
-            )
+            shown = decision.selected or "no option selected"
             out.print(Text(f"  {id_:<12} {shown}"))
         for id_, output in analysis.outputs.items():
             owner = output.result and output.result.owner.commit
             at = f" at {owner}" if owner else ""
             places = [f"{place.address}  {place.bytes}{at}" for place in output.places]
-            shown = ", ".join(places) or (
-                "inactive" if output.active is False else "no planned result"
-            )
+            shown = ", ".join(places) or "no planned result"
             out.print(Text(f"  {id_:<12} {shown}"))

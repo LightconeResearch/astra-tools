@@ -172,8 +172,8 @@ def plan(
     `universes`, ids of the root's universes, narrows them to the results built in those
     universes and what they read. `outputs`, addresses read in the root's file, names outputs
     to build, planned or not: each is planned as the root's own outputs are, once or in each of
-    the root's universes where it is active and its analysis is built, and the plan holds its
-    results (only those built once or in `universes`, where given) and what they read. Raises
+    the root's universes where its analysis is built, and the plan holds its results (only
+    those built once or in `universes`, where given) and what they read. Raises
     RequestError where a universe or an output asked for isn't there, or an output asked for
     has no result there or reads a result that isn't built."""
     context = Context(stack, Catalogue.load())
@@ -196,8 +196,7 @@ def plan(
         if not any(result.output == output for result in seeds):
             where = "the root's universes" if wanted is None else "the universes asked for"
             raise RequestError(
-                f"`{address}` has no result in {where}: its analysis isn't built there, or it "
-                "is active nowhere there"
+                f"`{address}` has no result in {where}: its analysis isn't built there"
             )
     made: dict[Key, Result] = {}
     left: set[Key] = set()  # left out, or being made: a result that reads it back is left out
@@ -395,9 +394,9 @@ def _unplanned(
 ) -> Iterator[Note]:
     """Each output of an analysis read where the root is with no planned result (§18): an
     output of a declared analysis that no planned result reads and the root's evidence doesn't
-    cite, or one of the root's active in none of its universes. A check of the root never
-    covers it. It concerns what the root builds where its analysis is one of `builds`; an
-    analysis the root only reads from isn't its business."""
+    cite, or one of the root's built per universe, where the root has no universes. A check of
+    the root never covers it. It concerns what the root builds where its analysis is one of
+    `builds`; an analysis the root only reads from isn't its business."""
     stack = context.stack
     outputs = {key[0] for key in planned}
     for member, analysis in editable:
@@ -405,7 +404,7 @@ def _unplanned(
             if Element(member.identity, "output", id_) in outputs:
                 continue
             why = (
-                "it is active in none of the root's universes"
+                "it is built per universe and the root has no universes"
                 if member.identity == stack.root
                 else "no planned result reads it and the root's evidence doesn't cite it"
             )
@@ -539,8 +538,7 @@ def selected(entries: Iterable[Resolution], selection: Selection | None) -> dict
     """Each entry of an output's `decisions`, among the addresses it writes (`entries`), as
     written, and the option `selection`, the effective selection of the universe its result is
     built in, selects for it; None where there is no selection, the entry names nothing or no
-    option is selected."""
-    # OPEN(O30): an inactive decision has no option selected.
+    option is selected (never, on a valid stack: `MISSING_DECISION`)."""
     return {
         entry.written: None
         if selection is None or entry.element is None
@@ -602,6 +600,6 @@ def render_command(
         field, _, entry = placeholder.partition(".")
         if field == "inputs":
             return reads[entry]
-        return result.decisions[entry] or ""  # OPEN(O30)
+        return result.decisions[entry] or ""  # None only on a stack that breaks MUST
 
     return _TEMPLATE.sub(fill, result.command)

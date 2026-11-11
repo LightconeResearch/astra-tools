@@ -1,5 +1,5 @@
-"""§8 Decisions and options: every option named by a condition, an option reference or a
-universe's own selection is one of its decision's options (`UNKNOWN_OPTION`).
+"""§8 Decisions and options: every option named by an option reference or a universe's own
+selection is one of its decision's options (`UNKNOWN_OPTION`).
 
 Binding has resolved each address to its decision (`astra.stack`). Under an address that names
 nothing, no option is checked (design §4.13 case 5); a key that loops still names its decision, and

@@ -135,9 +135,6 @@ decisions:
     options: {a: {}, b: {}}
   decision2:
     options: {a: {}, b: {}}
-  decision3:
-    when: [decision1.b]
-    options: {a: {}, b: {}}
 outputs:
   output1:
     type: metric
@@ -150,10 +147,10 @@ universes:
     decisions: {decision1: a, decision2: a, subanalysis.decision1: a}
   u2:
     derived_from: u1
-    decisions: {decision1: b, decision2: b, decision3: a}
+    decisions: {decision1: b, decision2: b}
   u3:
     derived_from: u2
-    decisions: {decision1: a}   # the inherited decision3 is dropped
+    decisions: {decision1: a}   # replaces the decision1 it inherits
   u4:
     label: Derived from nothing
     derived_from: u9
@@ -194,7 +191,6 @@ def test_universe_list_shows_the_universes_and_imports(universes: Path) -> None:
                 "subanalysis.decision1: a  (from u1)",
                 "decision1: b",
                 "decision2: b",
-                "decision3: a",
             ],
         ),
         (
@@ -207,7 +203,8 @@ def test_universe_show_gives_the_effective_selection(
     universes: Path, universe: str, selects: list[str]
 ) -> None:
     """§12's table: what each universe selects once `derived_from` is resolved, each inherited
-    selection with the universe it comes from; `u3` drops the `decision3` it inherits."""
+    selection with the universe it comes from; `u3` replaces the `decision1` it inherits from
+    `u2`."""
     result = astra("universe", "show", universe, str(universes))
     assert result.exit_code == 0
     lines = result.stdout.splitlines()

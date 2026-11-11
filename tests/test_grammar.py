@@ -1,11 +1,10 @@
-"""The five forms of a name (§6 *The forms of a name*, Annex C), on §6's examples."""
+"""The forms of a name (§6 *The forms of a name*, Annex C), on §6's examples."""
 
 from __future__ import annotations
 
 from astra.grammar import (
     Address,
     parse_address,
-    parse_condition,
     parse_option_reference,
     parse_reference,
 )
@@ -31,10 +30,3 @@ def test_the_last_segment_of_an_option_reference_is_the_option() -> None:
     """§6: the option `a` of `subanalysis`'s `decision1` is `subanalysis.decision1.a`."""
     reference = parse_option_reference("subanalysis.decision1.a")
     assert (reference.decision, reference.option) == (Address(("subanalysis", "decision1")), "a")
-
-
-def test_a_condition_is_an_option_reference_possibly_after_a_tilde() -> None:
-    """§9: `~d.o` holds when the option isn't selected."""
-    condition = parse_condition("~decision1.b")
-    assert (condition.negated, condition.option.option) == (True, "b")
-    assert parse_condition("decision1.b").negated is False

@@ -5,7 +5,6 @@ id               = lower *( lower / DIGIT / "_" )
 address          = id *( "." id )               ; [declaration "."]... element
 reference        = address [ "#" id ]           ; "#" pins a universe
 option-reference = address "." id              ; a decision's address, then an option id
-condition        = [ "~" ] option-reference     ; "~": the option is not selected
 ```
 
 Binding parses only what the schema accepted, which takes its form (`INVALID_REFERENCE`), so a
@@ -55,15 +54,6 @@ class OptionReference:
     option: str
 
 
-@dataclass(frozen=True)
-class Condition:
-    """An option reference, possibly after `~`, which holds when the option isn't selected
-    (§9)."""
-
-    option: OptionReference
-    negated: bool = False
-
-
 def parse_address(text: str) -> Address:
     return Address(tuple(text.split(".")))
 
@@ -76,8 +66,3 @@ def parse_reference(text: str) -> Reference:
 def parse_option_reference(text: str) -> OptionReference:
     address = parse_address(text)
     return OptionReference(Address(address.declarations), address.id)
-
-
-def parse_condition(text: str) -> Condition:
-    negated = text.startswith("~")
-    return Condition(parse_option_reference(text[1:] if negated else text), negated)

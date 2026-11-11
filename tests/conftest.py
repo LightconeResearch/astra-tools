@@ -21,7 +21,7 @@ SPEC = Path(str(files("astra.schema") / "generated")).parents[3]
 and its `examples/` are the oracle (design §1, principle 6)."""
 
 DOCUMENTS = SPEC / "conformance" / "documents"
-"""The conformance suite's documents: `valid/`, `invalid/`, and `when/invalid/`."""
+"""The conformance suite's documents: `valid/` and `invalid/`."""
 
 MINIMAL = """\
 spec_version: "0.1.0"

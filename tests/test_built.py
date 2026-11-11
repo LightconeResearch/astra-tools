@@ -1,5 +1,5 @@
 """§16's rules on the universe being built, `NOT_BUILT_IN_UNIVERSE` and `UNDRIVEN_DECLARATION`,
-and `RESULT_IN_TWO_PLACES` (§16, §18), with design §4.13 cases 5, 6 and 7.
+and `RESULT_IN_TWO_PLACES` (§16, §18), with design §4.13 cases 5 and 7.
 
 The stacks are §16's: the root drives §15's `subanalysis`, which consumes the root's `decision1`
 through `parent: {path: ..}`, and `stage`, which declares `inner` and a second `inner_undriven`
@@ -96,25 +96,18 @@ outputs:
 """§16's `stage`, with `inner` declared twice."""
 
 BROKEN_STAGE = (
-    STAGE.replace(
-        "outputs:\n",
-        """\
-  e:
-    when: [other.d.a]
-    options: {a: {}, b: {}}
-outputs:
-""",
-    )
+    STAGE
     + """\
   stage_other:
     type: metric
     format: json
     inputs: [other.other_out]
+    decisions: [other.d]
     recipe:
       command: python make.py '{output}'
 """
 )
-"""`stage`, consuming a decision of `other`, and reading its output, where `other` isn't built."""
+"""`stage`, listing a decision of `other` and reading its output, where `other` isn't built."""
 
 ROOT = """\
 spec_version: "0.1.0"
@@ -162,9 +155,6 @@ BROKEN_ROOT = (
     options:
       a: {incompatible_with: [other.d.b]}
       b: {}
-  decision2:
-    when: [other.d.a]
-    options: {a: {}, b: {}}
 outputs:
 """,
     )
@@ -188,8 +178,7 @@ outputs:
   output8:
     type: metric
     format: json
-    when: [other.d.a]
-    inputs: [other.other_out, nothere.output1]
+    inputs: [nothere.output1]
     recipe:
       command: python make.py '{output}'
 universes:
@@ -204,8 +193,8 @@ universes:
 )
 """§16's reads through undriven declarations, uses of `other`'s output and decision in the
 root's universes, in each place a use can be written, and `u3`'s key `inner.d`, which drives the
-root's `inner` beside `stage.inner` (§18). `output8`'s activity is undetermined, since `other`'s
-`d` is unset, and `u4` has no effective selection (design §4.13 cases 6 and 7)."""
+root's `inner` beside `stage.inner` (§18). `output8` reads through `nothere`, which names nothing
+(design §4.13 case 5), and `u4` has no effective selection (case 7)."""
 
 
 def files(root: str, stage: str) -> dict[str, str]:
@@ -266,22 +255,20 @@ def test_each_use_of_an_analysis_not_built_breaks_both_rules_in_the_drivers_file
     broken: api.ValidationReport,
 ) -> None:
     """§16 *The universe being built*: `other` isn't built in the root's universes, so in the
-    root's file its output read without a pin or pinned to `u1`, its decision listed by a
-    planned result's output, tested by `output8`'s `when` (whose result would be planned if the
-    `when` held), and by a decision's `when` and a constraint break both rules; in `stage`'s
-    file, NOT_BUILT_IN_UNIVERSE alone holds them. Reads through driven declarations, and
-    `other`'s output in its own `v1`, break neither."""
+    root's file its output read without a pin or pinned to `u1`, its decision named by the root's
+    constraint and listed by a planned result's output break both rules; in `stage`'s file,
+    where `stage_other` reads its output and lists its decision, NOT_BUILT_IN_UNIVERSE alone
+    holds them. Reads through driven declarations, and `other`'s output in its own `v1`, break
+    neither."""
     uses = [
         ("astra.yaml", "/decisions/decision1/options/a/incompatible_with/0"),
-        ("astra.yaml", "/decisions/decision2/when/0"),
         ("astra.yaml", "/outputs/output7/inputs/4"),
         ("astra.yaml", "/outputs/output7/inputs/5"),
         ("astra.yaml", "/outputs/output7/decisions/0"),
-        ("astra.yaml", "/outputs/output8/when/0"),
     ]
     in_stage = [
-        ("stage/astra.yaml", "/decisions/e/when/0"),
         ("stage/astra.yaml", "/outputs/stage_other/inputs/0"),
+        ("stage/astra.yaml", "/outputs/stage_other/decisions/0"),
     ]
     assert found(broken, "NOT_BUILT_IN_UNIVERSE") == uses + in_stage
     reads = [("astra.yaml", f"/outputs/output7/inputs/{index}") for index in range(4)]
@@ -321,15 +308,14 @@ def test_nothing_is_checked_where_annex_d_leaves_it_undetermined(
     broken: api.ValidationReport,
 ) -> None:
     """design §4.13: no rule on the universe being built in `u4`, which has no effective selection
-    (case 7), nor for what `output8` reads, whose activity is undetermined (case 6), though its
-    `when` is checked; nor through `nothere`, which names nothing (case 5)."""
+    (case 7), nor through `nothere`, which names nothing (case 5)."""
     ours = [
         d for d in broken.diagnostics if d.code in ("NOT_BUILT_IN_UNIVERSE", "UNDRIVEN_DECLARATION")
     ]
     assert not [d for d in ours if "`u4`" in d.message]
     assert not [d for d in ours if d.location.pointer.startswith("/outputs/output8/inputs/")]
     assert [
-        d.code for d in broken.diagnostics if d.location.pointer == "/outputs/output8/inputs/1"
+        d.code for d in broken.diagnostics if d.location.pointer == "/outputs/output8/inputs/0"
     ] == ["UNRESOLVED_ADDRESS"]
 
 

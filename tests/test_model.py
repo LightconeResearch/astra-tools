@@ -52,15 +52,14 @@ def test_its_fields_are_its_schema_classs(cls: type) -> None:
 
 
 def test_an_analysis_is_read_whole() -> None:
-    """astra-spec's fixture of the core fields: inputs, outputs with references and conditions,
-    decisions with constraints."""
+    """astra-spec's fixture of the core fields: inputs, outputs with references, decisions with
+    constraints."""
     text = (DOCUMENTS / "valid" / "Analysis-002-core.yaml").read_bytes()
     analysis = model.Analysis.from_json(load_yaml(text).value)
     assert analysis.inputs["catalog"].path == "data/catalog.csv"
     estimates = analysis.outputs["estimates"]
     assert estimates.inputs == ("catalog", "calibration.spectra")
     assert estimates.recipe.command.startswith("python src/predict.py")
-    assert analysis.outputs["bias"].when == ("~method.template",)
     options = analysis.decisions["method"].options
     assert options["neural_net"].requires == ("training.large",)
     assert analysis.decisions["training"].options["small"].excluded is not None

@@ -70,13 +70,12 @@ class Option:
 
 @dataclass(frozen=True)
 class Decision:
-    """A choice the analysis makes, between its options (§8), active under its `when` (§9)."""
+    """A choice the analysis makes, between its options (§8)."""
 
     options: Mapping[str, Option]
     label: str | None = None
     rationale: str | None = None
     tags: tuple[str, ...] = ()
-    when: tuple[str, ...] = ()
 
     @classmethod
     def from_json(cls, value: Mapping[str, Any]) -> Decision:
@@ -123,7 +122,6 @@ class Output:
     tags: tuple[str, ...] = ()
     inputs: tuple[str, ...] = ()
     decisions: tuple[str, ...] = ()
-    when: tuple[str, ...] = ()
 
     @classmethod
     def from_json(cls, value: Mapping[str, Any]) -> Output:

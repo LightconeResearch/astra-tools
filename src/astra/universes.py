@@ -1,10 +1,9 @@
-"""What each universe selects, what is active, driven and built in it, and what is planned
-(§9, §12, §13, §16, §18; design §2).
+"""What each universe selects, what is driven and built in it, and what is planned
+(§12, §13, §16, §18; design §2).
 
 Pure functions of a Stack, each of which `rules.Context` computes once:
 
-- `selections`: every universe's effective selection (§12), with the activity of every decision
-  and output of the stack in it (§9; design §4.13 cases 6 and 7);
+- `selections`: every universe's effective selection (§12; design §4.13 case 7);
 - `driven`: the chains of declarations each analysis's universes drive (§16 *Driving*; design §4.13
   case 10), and `built`, the analyses built in its universes, whose decisions they set, each
   with the chains that reach it;
@@ -39,13 +38,11 @@ Chain = tuple[Declaration, ...]
 
 @dataclass(frozen=True)
 class Selection:
-    """A universe's effective selection (§12 *The effective selection*), and what is active in
-    it (§9)."""
+    """A universe's effective selection (§12 *The effective selection*)."""
 
     universe: Element
     entries: tuple[Resolution, ...]  # the keys it selects, own and inherited, each where written
     inherited: tuple[Resolution, ...]  # the effective selection it derives from; () without one
-    activity: Mapping[Element, bool | None]  # each decision and output of the stack
 
     def own(self, entry: Resolution) -> bool:
         """Whether the universe sets `entry` itself, rather than inherits it."""
@@ -59,28 +56,15 @@ class Selection:
             if entry.element == decision and entry.option is not None
         )
 
-    def active(self, element: Element) -> bool | None:
-        """Whether a decision or an output is active here (§9); None where that is undetermined
-        (design §4.13 case 6)."""
-        return self.activity.get(element)
-
 
 def options(stack: Stack, decision: Element) -> Mapping[str, model.Option]:
     """The options of `decision`, a decision of an analysis whose file is valid."""
     return stack.analysis(decision.analysis).decisions[decision.id].options
 
 
-def when(stack: Stack, element: Element) -> tuple[str, ...]:
-    """The conditions of a decision's or an output's `when`, as written."""
-    analysis = stack.analysis(element.analysis)
-    if element.kind == "decision":
-        return analysis.decisions[element.id].when
-    return analysis.outputs[element.id].when
-
-
 def names_option(stack: Stack, resolution: Resolution) -> bool:
-    """Whether a condition, a constraint or a selection names an option: its address resolves to
-    a decision, and its option is one of that decision's (design §4.13 case 5)."""
+    """Whether a constraint or a selection names an option: its address resolves to a
+    decision, and its option is one of that decision's (design §4.13 case 5)."""
     decision = resolution.element
     return decision is not None and resolution.option in options(stack, decision)
 
@@ -97,36 +81,29 @@ def own_keys(stack: Stack, universe: Element) -> tuple[Resolution, ...]:
 # --- §12: effective selections ---
 
 
-def selections(
-    stack: Stack, written: Mapping[Element, tuple[Resolution, ...]]
-) -> Mapping[Element, Selection | None]:
+def selections(stack: Stack) -> Mapping[Element, Selection | None]:
     """The effective selection of every universe of every analysis of the stack, a driven
-    analysis's own included (§16 *What a validator checks*), from the addresses each decision
-    and output writes (`written`); None for a universe that has none (design §4.13 case 7)."""
-    whens = {
-        element: tuple(entry for entry in entries if entry.field == "when")
-        for element, entries in written.items()
-    }
+    analysis's own included (§16 *What a validator checks*); None for a universe that has none
+    (design §4.13 case 7)."""
     found: dict[Element, Selection | None] = {}
     for member, analysis in stack.determined():
         for id_, universe in analysis.universes.items():
             if not universe.is_import:
                 element = Element(member.identity, "universe", id_)
-                effective_selection(stack, element, whens, found)
+                effective_selection(stack, element, found)
     return MappingProxyType(found)
 
 
 def effective_selection(
     stack: Stack,
     universe: Element,
-    whens: Mapping[Element, tuple[Resolution, ...]],
     found: dict[Element, Selection | None],
     deriving: tuple[Element, ...] = (),
 ) -> Selection | None:
-    """§12's three steps for `universe`, or None where its `derived_from` doesn't name another
-    of its analysis's universes, or its chain loops or reaches a universe with no effective
-    selection (design §4.13 case 7). `found` holds the selections already made, and `deriving` the
-    universes waiting on this one's."""
+    """§12's steps 1 and 2 for `universe` (step 3 went with `when`), or None where its
+    `derived_from` doesn't name another of its analysis's universes, or its chain loops or
+    reaches a universe with no effective selection (design §4.13 case 7). `found` holds the
+    selections already made, and `deriving` the universes waiting on this one's."""
     if universe in found:
         return found[universe]
     analysis = stack.analysis(universe.analysis)
@@ -134,35 +111,24 @@ def effective_selection(
     named = analysis.universes[universe.id].derived_from
     result: Selection | None = None
     if named is None:  # step 1
-        result = Selection(universe, own, (), _activity(stack, whens, own))
+        result = Selection(universe, own, ())
     else:
         parent = Element(universe.analysis, "universe", named)
         entry = analysis.universes.get(named)
         if entry is not None and not entry.is_import and parent not in (*deriving, universe):
-            inherited = effective_selection(stack, parent, whens, found, (*deriving, universe))
+            inherited = effective_selection(stack, parent, found, (*deriving, universe))
             if inherited is not None:
-                result = _derive(stack, whens, universe, own, inherited.entries)
+                result = _derive(universe, own, inherited.entries)
     found[universe] = result
     return result
 
 
 def _derive(
-    stack: Stack,
-    whens: Mapping[Element, tuple[Resolution, ...]],
-    universe: Element,
-    own: tuple[Resolution, ...],
-    inherited: tuple[Resolution, ...],
+    universe: Element, own: tuple[Resolution, ...], inherited: tuple[Resolution, ...]
 ) -> Selection:
-    """Steps 2 and 3: each own selection replaces what is inherited for its decision, and an
-    inherited selection of a decision that isn't active in the result is dropped. One whose
-    activity is undetermined isn't (design §4.13 case 6)."""
+    """Step 2: each own selection replaces what is inherited for its decision."""
     kept = tuple(entry for entry in inherited if not any(_one_key(entry, mine) for mine in own))
-    activity = _activity(stack, whens, (*kept, *own))  # OPEN(O2): step 3 is one pass
-    kept = tuple(
-        entry for entry in kept if entry.element is None or activity[entry.element] is not False
-    )
-    entries = (*kept, *own)
-    return Selection(universe, entries, inherited, _activity(stack, whens, entries))
+    return Selection(universe, (*kept, *own), inherited)
 
 
 def _one_key(inherited: Resolution, own: Resolution) -> bool:
@@ -172,12 +138,12 @@ def _one_key(inherited: Resolution, own: Resolution) -> bool:
     return same or inherited.key == own.key
 
 
-# --- §9: activity ---
+# --- §6: the addresses each element writes ---
 
 
 def written(stack: Stack) -> Mapping[Element, tuple[Resolution, ...]]:
     """The addresses each decision and output of the stack's valid files writes, () for none: an
-    output's `inputs`, `decisions` and `when`; a decision's `when` and its options' constraints."""
+    output's `inputs` and `decisions`; a decision's options' constraints."""
     found: dict[Element, list[Resolution]] = {}
     for member, analysis in stack.determined():
         for id_ in analysis.decisions:
@@ -188,43 +154,6 @@ def written(stack: Stack) -> Mapping[Element, tuple[Resolution, ...]]:
         if resolution.owner is not None and resolution.owner.kind in ("output", "decision"):
             found[resolution.owner].append(resolution)
     return MappingProxyType({element: tuple(entries) for element, entries in found.items()})
-
-
-def _activity(
-    stack: Stack,
-    whens: Mapping[Element, tuple[Resolution, ...]],
-    entries: tuple[Resolution, ...],
-) -> Mapping[Element, bool | None]:
-    """Whether each decision and output is active in the selection `entries`: each condition
-    of its `when` holds (§9). None where a condition is undetermined (design §4.13 case 6): it names
-    nothing, or tests a decision that `entries` set to an option that names nothing, or leave
-    unset though it isn't inactive."""
-    chosen: dict[Element, set[str]] = {}
-    for entry in entries:
-        if entry.element is not None and entry.option is not None:
-            chosen.setdefault(entry.element, set()).add(entry.option)
-    found: dict[Element, bool | None] = {}
-
-    def active(element: Element, waiting: frozenset[Element]) -> bool | None:
-        if element in waiting:
-            return None  # a `when` that waits on its own element
-        if element not in found:
-            held = [holds(condition, waiting | {element}) for condition in whens[element]]
-            found[element] = None if None in held else all(held)
-        return found[element]
-
-    def holds(condition: Resolution, waiting: frozenset[Element]) -> bool | None:
-        decision = condition.element
-        if decision is None or not names_option(stack, condition):
-            return None
-        selected = chosen.get(decision, set())
-        if not selected and active(decision, waiting) is not False:
-            return None  # OPEN(O16): unset, and not inactive
-        if not selected <= options(stack, decision).keys():
-            return None
-        return (condition.option in selected) != condition.negated
-
-    return MappingProxyType({element: active(element, frozenset()) for element in whens})
 
 
 # --- §16: driving ---
@@ -328,7 +257,7 @@ def _has_decisions(stack: Stack, declaration: Declaration) -> bool:
 
 
 def built(chains: tuple[Chain, ...], driver: Identity) -> Mapping[Identity, tuple[Chain, ...]]:
-    """The analyses built in a universe of `driver`, whose active decisions every one of its
+    """The analyses built in a universe of `driver`, whose decisions every one of its
     universes sets (§16 *What a universe sets*, *The universe being built*), each with the
     chains that reach it: the driver itself, by the empty chain, and each analysis reached
     through a declaration its universes drive, by each such chain of `chains`, in their order.
@@ -387,14 +316,14 @@ def pins(
 
 def per_universe(stack: Stack) -> frozenset[Element]:
     """The outputs built per universe (§13 *Built per universe or built once*): each that lists
-    `decisions`, has a `when`, or has an unpinned entry of `inputs` naming an output built per
-    universe, through any declaration. Every other output is built once. An entry that names
-    nothing names no output (design §4.13 case 5)."""
+    `decisions`, or has an unpinned entry of `inputs` naming an output built per universe,
+    through any declaration. Every other output is built once. An entry that names nothing names
+    no output (design §4.13 case 5)."""
     found = {
         Element(member.identity, "output", id_)
         for member, analysis in stack.determined()
         for id_, output in analysis.outputs.items()
-        if output.decisions or output.when
+        if output.decisions
     }
     reads = [entry for entry in stack.resolutions if entry.field == "inputs" and entry.pin is None]
     grown = True
@@ -524,9 +453,6 @@ class Building:
     by the chains that reach it (`built`)."""
     planned: Mapping[tuple[Element, Element | None], Planned]
     """Each planned result, by its output and universe, in the order reached."""
-    considered: tuple[tuple[Element, Element], ...]
-    """Each output and universe where the output's result is planned, or would be if its `when`
-    held."""
     reads: tuple[tuple[Resolution, Element | None], ...]
     """Each entry of a planned result's `inputs`, and of the root's evidence, that names an
     output, with the universe it reads that output in: the result's, or the one its pin names;
@@ -551,19 +477,18 @@ def building(
     - the root's universes are built, and each universe a pin on an output built per universe
       names, in the `inputs` of a planned result's output or in the root's evidence;
     - each output of the root built once has a result, and each built per universe one in each
-      of the root's universes where it is active;
+      of the root's universes;
     - so has what a planned result's output reads, pinned or not, through any declaration;
     - and what the root's evidence cites: one result where it is pinned or names an output
-      built once, and otherwise the output's in each of the root's universes where it is active
-      and its analysis is built (§20 *Evidence*).
+      built once, and otherwise the output's in each of the root's universes where its analysis
+      is built (§20 *Evidence*).
 
-    A result is planned in a universe only where its output is active there, which a universe
-    with no effective selection decides for none (design §4.13 cases 6 and 7), and where its
-    output's analysis is built there. A pin that names no universe builds none (case 5)."""
+    A result is planned in a universe only where the universe has an effective selection (design
+    §4.13 case 7) and its output's analysis is built there. A pin that names no universe builds
+    none (case 5)."""
     root = stack.analysis(stack.root)
     universes: dict[Element, Mapping[Identity, tuple[Chain, ...]]] = {}
     planned: dict[tuple[Element, Element | None], Planned] = {}
-    considered: dict[tuple[Element, Element], None] = {}
     reads: dict[tuple[Resolution, Element | None], None] = {}
     todo: list[Planned] = []
 
@@ -578,9 +503,6 @@ def building(
             selection = selections[universe]
             # Not planned, and nothing further (design §4.13 cases 7 and 12).
             if selection is None or output.analysis not in build(universe):
-                return
-            considered[output, universe] = None
-            if selection.active(output) is not True:
                 return
             named = build(universe)[output.analysis]
         if (output, universe) not in planned:
@@ -622,6 +544,4 @@ def building(
         for entry in written[result.output]:
             if entry.field == "inputs":
                 read(entry, result.universe)
-    return Building(
-        MappingProxyType(universes), MappingProxyType(planned), tuple(considered), tuple(reads)
-    )
+    return Building(MappingProxyType(universes), MappingProxyType(planned), tuple(reads))

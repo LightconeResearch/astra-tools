@@ -219,7 +219,7 @@ astra view UNIVERSE [PATH] [--json]
 Shows the analysis as it is in UNIVERSE. For each analysis of the stack, it gives whether that
 analysis is built in UNIVERSE
 ([Elements](https://astra-spec.org/0.1/specification/#elements)), the option selected
-for each decision, and each output's result and where it goes, or why it has none. `--json`
+for each decision, and each output's result and where it goes, or that it has none. `--json`
 prints it as `astra-universe-view/1`. Exits 2 where the analysis has no universe UNIVERSE.
 
 ```console

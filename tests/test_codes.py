@@ -173,55 +173,6 @@ universes:
         + OUTPUT,
         "/universes/u1/decisions",
     ),
-    "INACTIVE_DECISION": Case(
-        "§12 The effective selection",
-        DECISIONS.replace(
-            "outputs:",
-            "  decision3:\n    when: [decision1.b]\n    options: {a: {}, b: {}}\noutputs:",
-        )
-        + "universes: {u1: {decisions: {decision1: a, decision3: a}}}\n",
-        "/universes/u1/decisions",
-    ),
-    "PIN_INACTIVE": Case(
-        "§13 Pins",
-        DECISIONS
-        + """\
-  output4:
-    type: figure
-    format: png
-    when: [decision1.b]
-    recipe:
-      command: python make.py '{output}'
-  output2:
-    type: table
-    format: csv
-    inputs: [output4#u1]
-    recipe:
-      command: python make.py '{output}'
-universes: {u1: {decisions: {decision1: a}}, u2: {decisions: {decision1: b}}}
-""",
-        "/outputs/output2/inputs/0",
-    ),
-    "INPUT_NOT_BUILT": Case(
-        "§13 Pins",
-        DECISIONS
-        + """\
-  output4:
-    type: figure
-    format: png
-    when: [decision1.b]
-    recipe:
-      command: python make.py '{output}'
-  output8:
-    type: table
-    format: csv
-    inputs: [output4]
-    recipe:
-      command: python make.py '{output}'
-universes: {u1: {decisions: {decision1: a}}}
-""",
-        "/outputs/output8/inputs/0",
-    ),
     "INVALID_INSIGHT_REF": Case(
         "§14",
         "decisions:\n  decision1:\n    options: {a: {insights: [insight2]}, b: {}}\n" + OUTPUT,

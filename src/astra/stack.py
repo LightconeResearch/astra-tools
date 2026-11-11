@@ -32,7 +32,6 @@ from astra.diagnostics import Catalogue, Diagnostic, Location, json_pointer
 from astra.grammar import (
     Address,
     parse_address,
-    parse_condition,
     parse_option_reference,
     parse_reference,
 )
@@ -117,23 +116,20 @@ class Element:
 Field = Literal[
     "inputs",
     "decisions",
-    "when",
     "requires",
     "incompatible_with",
     "selection",
     "artifact",
     "import",
 ]
-"""Where an address is written (§6 *Addresses*): `Output.inputs`; `Output.decisions`; a
-condition of `Output.when` or `Decision.when`; `Option.requires` and `Option.incompatible_with`;
-a key of `Universe.decisions` (`selection`); `Evidence.artifact`; and an import's `analysis`
-then `.` and its `universe`."""
+"""Where an address is written (§6 *Addresses*): `Output.inputs`; `Output.decisions`;
+`Option.requires` and `Option.incompatible_with`; a key of `Universe.decisions` (`selection`);
+`Evidence.artifact`; and an import's `analysis` then `.` and its `universe`."""
 
 TAKES: Mapping[Field, tuple[Kind, ...]] = MappingProxyType(
     {
         "inputs": ("input", "output"),  # an id both have names nothing (`_resolve`)
         "decisions": ("decision",),
-        "when": ("decision",),
         "requires": ("decision",),
         "incompatible_with": ("decision",),
         "selection": ("decision",),
@@ -157,10 +153,9 @@ class Resolution:
     pointer: Pointer  # where it is written; for a key of Universe.decisions, the map
     key: str | None  # the key of Universe.decisions; otherwise None
     written: str  # the value as written; for an import, `analysis.universe`
-    address: Address  # without a pin, a `~` or an option (§6)
+    address: Address  # without a pin or an option (§6)
     pin: str | None  # a reference's pin
-    option: str | None  # the option a condition, a constraint or a selection names
-    negated: bool  # a condition's `~`
+    option: str | None  # the option a constraint or a selection names
     chain: tuple[Declaration, ...]  # the declarations it goes through, as far as they resolve
     element: Element | None  # None where it names nothing
     undetermined: bool  # it goes through a declaration whose analysis is undetermined
@@ -364,30 +359,22 @@ def _resolutions(
         key: str | None = None,
         pin: str | None = None,
         option: str | None = None,
-        negated: bool = False,
     ) -> Resolution:
         chain, element, undetermined = _resolve(members, file, address, TAKES[field])
         if field == "import" and element is not None and element.analysis == file:
             element = None  # an import names another analysis's universe (§16)
         return Resolution(
-            file, owner, field, pointer, key, written, address, pin, option, negated, chain,
-            element, undetermined,
+            file, owner, field, pointer, key, written, address, pin, option, chain, element,
+            undetermined,
         )  # fmt: skip
 
-    def conditions(
+    def constraints(
         owner: Element, field: Field, at: Pointer, written: Sequence[str]
     ) -> Iterator[Resolution]:
         for index, text in enumerate(written):
-            if field == "when":
-                condition = parse_condition(text)
-                reference, negated = condition.option, condition.negated
-            else:
-                reference, negated = parse_option_reference(text), False
+            reference = parse_option_reference(text)
             pointer = (*at, field, index)
-            yield resolve(
-                owner, field, pointer, text, reference.decision, option=reference.option,
-                negated=negated,
-            )  # fmt: skip
+            yield resolve(owner, field, pointer, text, reference.decision, option=reference.option)
 
     for id_, output in analysis.outputs.items():
         at: Pointer = ("outputs", id_)
@@ -399,14 +386,12 @@ def _resolutions(
         for index, text in enumerate(output.decisions):
             pointer = (*at, "decisions", index)
             yield resolve(owner, "decisions", pointer, text, parse_address(text))
-        yield from conditions(owner, "when", at, output.when)
     for id_, decision in analysis.decisions.items():
         owner = Element(file, "decision", id_)
-        yield from conditions(owner, "when", ("decisions", id_), decision.when)
         for option_id, option in decision.options.items():
             at = ("decisions", id_, "options", option_id)
-            yield from conditions(owner, "requires", at, option.requires)
-            yield from conditions(owner, "incompatible_with", at, option.incompatible_with)
+            yield from constraints(owner, "requires", at, option.requires)
+            yield from constraints(owner, "incompatible_with", at, option.incompatible_with)
     for id_, universe in analysis.universes.items():
         owner = Element(file, "universe", id_)
         if universe.analysis is not None and universe.universe is not None:

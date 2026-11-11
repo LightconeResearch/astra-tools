@@ -74,12 +74,6 @@ outputs:
       command: >-
         python src/output1.py '{inputs.input1}' '{inputs.subanalysis.output1}'
         '{decisions.decision1}' '{output}'
-  output4:
-    type: figure
-    format: png
-    when: [decision1.b]
-    recipe:
-      command: python src/output4.py '{output}'
   output5:
     type: table
     format: csv
@@ -102,7 +96,7 @@ findings:
     claim: The decision of subanalysis changes its output.
     evidence: [{artifact: subanalysis.output1}]
 """
-"""§16's `output5`, §9's `output4`, and a finding citing `subanalysis.output1` without a pin."""
+"""§16's `output5`, and a finding citing `subanalysis.output1` without a pin."""
 
 ROOT_ID, SUB_ID = Identity(""), Identity("subanalysis")
 
@@ -179,17 +173,15 @@ def test_the_universes_built_are_the_roots_and_those_pins_name(pinning: Path) ->
 def test_each_planned_result_is_named_from_the_analysis_whose_universe_it_is_built_in(
     pinning: Path,
 ) -> None:
-    """§18: the root's outputs in its universes where they are active (`output4` only in
-    `u2`), `output5` once; what the root builds of `subanalysis` in its universes is named
-    `subanalysis.output1`; `output1` in `subanalysis`'s own `u1` and `v1` is named from
-    `subanalysis`; the root's `output1`, built in `v1` through the driven `parent: {path: ..}`,
-    is named `parent.output1` there, though the root's own file reads it as
-    `output1#subanalysis_v1`. The finding cites `subanalysis.output1` in each of the root's
+    """§18: the root's outputs, `output5` once; what the root builds of `subanalysis` in its
+    universes is named `subanalysis.output1`; `output1` in `subanalysis`'s own `u1` and `v1` is
+    named from `subanalysis`; the root's `output1`, built in `v1` through the driven
+    `parent: {path: ..}`, is named `parent.output1` there, though the root's own file reads it
+    as `output1#subanalysis_v1`. The finding cites `subanalysis.output1` in each of the root's
     universes (§20 *Evidence*); `unread`, which nothing reads or cites, isn't planned."""
     assert planned(pinning) == {
         (".", "output1#u1"),
         (".", "output1#u2"),
-        (".", "output4#u2"),
         (".", "output5"),
         (".", "subanalysis.output1#u1"),
         (".", "subanalysis.output1#u2"),

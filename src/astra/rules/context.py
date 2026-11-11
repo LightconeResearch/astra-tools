@@ -50,7 +50,7 @@ class Context:
     def selections(self) -> Mapping[Element, Selection | None]:
         """Every universe's effective selection (§12), None where it has none (design §4.13
         case 7)."""
-        return universes.selections(self.stack, self.written)
+        return universes.selections(self.stack)
 
     @cached_property
     def driven(self) -> Mapping[Identity, tuple[Chain, ...]]:
@@ -106,13 +106,6 @@ class Context:
         """design §4.13 case 13: whether `element` is an output on a cycle, on whose results'
         places, and on what reads it, no rule but `OUTPUT_CYCLE` is checked."""
         return element in self.cycles
-
-    def activity(self, universe: Element, element: Element) -> bool | None:
-        """design §4.13 cases 6 and 7: whether a decision or an output is active in `universe`
-        (§9); None where its activity is undetermined, or the universe has no effective
-        selection."""
-        selection = self.selections[universe]
-        return None if selection is None else selection.active(element)
 
 
 def _listed(items: list[str]) -> str:
