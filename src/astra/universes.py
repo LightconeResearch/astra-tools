@@ -12,10 +12,14 @@ Pure functions of a Stack, each of which `rules.Context` computes once:
 - `per_universe`: the outputs built per universe, every other being built once (§13);
 - `depends` and `cycles`: what each output depends on directly, and the outputs that depend on
   themselves (§10);
-- `building`: the universes built, what is built in each, the root's planned results, each with
-  its names, and the universe each entry they read is read in (§16 *The universe being built*,
-  §18); `places`, where each name of a planned result puts its record and its bytes (§18
-  *Where records and bytes go*).
+- `Meaning`: whether each output is built in each universe, which never turns on driving
+  (Results *result*);
+- `run`: what an analysis driving reaches from its planning roots, built or not, the universe
+  each address it follows is read in, and what it plans (Results *plans*);
+- `building`: of the root's run, the universes built, what is built in each, and the planned
+  results whose analysis is built in their universe, each with its names (§16 *The universe
+  being built*, §18); `places`, where each name of a planned result puts its record and its
+  bytes (§18 *Where records and bytes go*).
 
 A universe is named by its analysis and its id (§16 *The universe being built*): an `Element` of
 kind `universe`, so imports of one universe, under any ids, name one Element.
@@ -443,105 +447,215 @@ def read_in(
     return universe if entry.pin is None else pinned[entry]
 
 
+At = tuple[Element, Element | None]
+"""An element and the universe it is in, None for an output built once."""
+
+
+class Meaning:
+    """Whether an output is built in a universe (Results *result*), each answer computed once:
+    an input, and an output built once, always are; an output built per universe is where every
+    entry of its `inputs` read without a pin is. A pinned entry never makes its reader not built.
+    It never consults driving: an output can be built in a universe that doesn't build its
+    analysis, and then has no result there (§16 *The universe being built*). One for each
+    `rules.Context`."""
+
+    def __init__(
+        self,
+        written: Mapping[Element, tuple[Resolution, ...]],
+        selections: Mapping[Element, Selection | None],
+        per_universe: frozenset[Element],
+        cycles: frozenset[Element],
+    ) -> None:
+        self._written = written
+        self._selections = selections
+        self._per_universe = per_universe
+        self._cycles = cycles
+        self._built: dict[At, bool | None] = {}
+
+    def built(self, element: Element, universe: Element | None) -> bool | None:
+        """Whether `element`, an input or an output, is built in `universe` (None: once). None
+        where that is undetermined: for an output on a cycle (design §4.13 case 13), and for one
+        built per universe in a universe with no effective selection (case 7), or that reads
+        without a pin what names nothing (cases 4 and 5) or what is undetermined."""
+        key = (element, universe)
+        if key not in self._built:
+            self._built[key] = self._judged(element, universe)
+        return self._built[key]
+
+    def _judged(self, element: Element, universe: Element | None) -> bool | None:
+        if element in self._cycles:
+            return None
+        if element.kind == "input" or element not in self._per_universe:
+            return True
+        if universe is None or self._selections.get(universe) is None:
+            return None
+        found: bool | None = True
+        for entry in self._written[element]:
+            if entry.field == "inputs" and entry.pin is None:
+                read = None if entry.element is None else self.built(entry.element, universe)
+                found = _both(found, read)
+        return found
+
+
+def _both(one: bool | None, other: bool | None) -> bool | None:
+    """Kleene's and, for what is built or planned: False over None, None over True."""
+    if one is False or other is False:
+        return False
+    return None if one is None or other is None else True
+
+
+@dataclass(frozen=True)
+class Run:
+    """What one analysis, driving, reaches and plans (Results *plans*)."""
+
+    driver: Identity
+    reached: Mapping[At, None]
+    """Each output reached from the driver's planning roots, built there or not, by the universe
+    it is reached in, None for an output built once, in the order reached."""
+    planned: Mapping[At, bool | None]
+    """Each output reached that is planned, in the order reached: True, or None where its
+    planning is undetermined (design §4.13 case 12)."""
+    reads: tuple[tuple[Resolution, Element | None], ...]
+    """Each address the reach follows, with the universe it is read in: each entry of a reached
+    output's `decisions`, in the output's universe, and each entry of its `inputs` and of the
+    driver's evidence that names an output, in the universe it reads that output in
+    (`read_in`), None for an output built once. A pin that names no universe reads nothing."""
+
+
+def run(
+    stack: Stack,
+    meaning: Meaning,
+    written: Mapping[Element, tuple[Resolution, ...]],
+    selections: Mapping[Element, Selection | None],
+    pinned: Mapping[Resolution, Element | None],
+    per_universe: frozenset[Element],
+    cycles: frozenset[Element],
+    driver: Identity,
+    requested: tuple[Element, ...] = (),
+) -> Run:
+    """What `driver` reaches and plans (Results *plans*), from what `meaning` says is built, the
+    addresses each output writes (`written`), the effective selections, the universe each pin
+    names (`pins`), the outputs built per universe and those on a cycle; with the outputs
+    `requested` as its own, to build them on request (`plan.plan`).
+
+    Its planning roots are its own outputs and what its evidence cites: an output built once,
+    and evidence citing one, once; other pinned evidence in the universe its pin names; any
+    other in each of its universes. From an output reached, every entry of its `inputs` that
+    names an output reaches that output, in the universe it reads it in (`read_in`), whether
+    either is built there or not; but nothing is followed from an output on a cycle (design
+    §4.13 case 13), or in a universe with no effective selection (case 7). Reach never consults
+    what is built, nor driving.
+
+    A root is planned where it is built, and so is what a planned output reads: each output's
+    status, where it is reached through others, is the best of each reader's and its own
+    (`_both`), True over None. Not built (False), it isn't planned."""
+    analysis = stack.analysis(driver)
+    own = [
+        Element(driver, "universe", id_)
+        for id_, universe in analysis.universes.items()
+        if not universe.is_import
+    ]
+    reached: dict[At, None] = {}
+    reads: dict[tuple[Resolution, Element | None], None] = {}
+    edges: dict[At, list[At]] = {}
+    roots: list[At] = []
+    todo: list[At] = []
+
+    def reach(output: Element, universe: Element | None) -> At:
+        if (output, universe) not in reached:
+            reached[output, universe] = None
+            todo.append((output, universe))
+        return output, universe
+
+    def follow(entry: Resolution, universe: Element | None) -> At | None:
+        """What an entry of `inputs`, or evidence, reads: None for an input or nothing."""
+        output = entry.element
+        if output is None or output.kind != "output":
+            return None
+        at = read_in(entry, universe, pinned, per_universe)
+        if output in per_universe and at is None:  # a pin that names no universe (case 5)
+            return None
+        reads[entry, at] = None
+        return reach(output, at)
+
+    outputs = [Element(driver, "output", id_) for id_ in analysis.outputs]
+    for output in (*outputs, *requested):  # one asked for, as the driver's own
+        for universe in own if output in per_universe else [None]:
+            roots.append(reach(output, universe))
+    for entry in stack.resolutions:
+        if entry.field == "artifact" and entry.file == driver:
+            unpinned = entry.pin is None and entry.element in per_universe
+            for universe in own if unpinned else [None]:
+                cited = follow(entry, universe)
+                if cited is not None:
+                    roots.append(cited)
+    while todo:
+        output, universe = todo.pop(0)
+        if output in cycles or (universe is not None and selections[universe] is None):
+            continue
+        for entry in written[output]:
+            if entry.field == "decisions":
+                reads[entry, universe] = None
+            elif entry.field == "inputs":
+                read = follow(entry, universe)
+                if read is not None:
+                    edges.setdefault((output, universe), []).append(read)
+
+    status: dict[At, bool | None] = {}
+    improved: list[At] = []
+
+    def plan(key: At, found: bool | None) -> None:
+        if found is False or (key in status and (status[key] is True or found is None)):
+            return
+        status[key] = found
+        improved.append(key)
+
+    for root in roots:
+        plan(root, meaning.built(*root))
+    while improved:
+        key = improved.pop(0)
+        for read in edges.get(key, ()):
+            plan(read, _both(status[key], meaning.built(*read)))
+    planned = {key: status[key] for key in reached if key in status}
+    return Run(driver, MappingProxyType(reached), MappingProxyType(planned), tuple(reads))
+
+
 @dataclass(frozen=True)
 class Building:
     """What building the root builds (§16 *The universe being built*, §18)."""
 
     universes: Mapping[Element, Mapping[Identity, tuple[Chain, ...]]]
-    """Each universe built, the root's first, with the analyses built in it: its driver, the
-    analysis whose universe it is, by the empty chain, then each its driver's universes drive,
-    by the chains that reach it (`built`)."""
-    planned: Mapping[tuple[Element, Element | None], Planned]
+    """Each universe built, the root's first, then each other its run reads in, with the analyses
+    built in it: its driver, the analysis whose universe it is, by the empty chain, then each its
+    driver's universes drive, by the chains that reach it (`built`)."""
+    planned: Mapping[At, Planned]
     """Each planned result, by its output and universe, in the order reached."""
     reads: tuple[tuple[Resolution, Element | None], ...]
-    """Each entry of a planned result's `inputs`, and of the root's evidence, that names an
-    output, with the universe it reads that output in: the result's, or the one its pin names;
-    None for an output built once. A pin that names no universe reads nothing."""
+    """Each address the root's run follows, with the universe it is read in (`Run.reads`)."""
+    run: Run
+    """The root's run."""
 
 
-def building(
-    stack: Stack,
-    written: Mapping[Element, tuple[Resolution, ...]],
-    selections: Mapping[Element, Selection | None],
-    chains: Mapping[Identity, tuple[Chain, ...]],
-    pinned: Mapping[Resolution, Element | None],
-    per_universe: frozenset[Element],
-    requested: tuple[Element, ...] = (),
-) -> Building:
-    """The universes built and the root's planned results (§16 *The universe being built*,
-    §18), from the addresses each output writes (`written`), the effective selections, the
-    chains each analysis's universes drive (`driven`), the universe each pin names (`pins`) and
-    the outputs built per universe, with the outputs `requested` planned as the root's own are,
-    to build them on request (`plan.plan`):
-
-    - the root's universes are built, and each universe a pin on an output built per universe
-      names, in the `inputs` of a planned result's output or in the root's evidence;
-    - each output of the root built once has a result, and each built per universe one in each
-      of the root's universes;
-    - so has what a planned result's output reads, pinned or not, through any declaration;
-    - and what the root's evidence cites: one result where it is pinned or names an output
-      built once, and otherwise the output's in each of the root's universes where its analysis
-      is built (§20 *Evidence*).
-
-    A result is planned in a universe only where the universe has an effective selection (design
-    §4.13 case 7) and its output's analysis is built there. A pin that names no universe builds
-    none (case 5)."""
-    root = stack.analysis(stack.root)
+def building(stack: Stack, run: Run, chains: Mapping[Identity, tuple[Chain, ...]]) -> Building:
+    """What building the root, `run`'s driver, builds (§16 *The universe being built*, §18), from
+    the chains each analysis's universes drive (`driven`): its own universes, and each other
+    universe its run reads in, each with the analyses built in it (`built`); and a result for
+    each output `run` plans (True) where it is built once, or where its analysis is built in its
+    universe. Any other output planned has no result: its planning is undetermined (design §4.13
+    case 12)."""
     universes: dict[Element, Mapping[Identity, tuple[Chain, ...]]] = {}
-    planned: dict[tuple[Element, Element | None], Planned] = {}
-    reads: dict[tuple[Resolution, Element | None], None] = {}
-    todo: list[Planned] = []
-
-    def build(universe: Element) -> Mapping[Identity, tuple[Chain, ...]]:
-        if universe not in universes:
-            universes[universe] = built(chains[universe.analysis], universe.analysis)
-        return universes[universe]
-
-    def plan(output: Element, universe: Element | None) -> None:
-        named: tuple[Chain, ...] = ((),)  # a result built once is its output's analysis's
-        if universe is not None:
-            selection = selections[universe]
-            # Not planned, and nothing further (design §4.13 cases 7 and 12).
-            if selection is None or output.analysis not in build(universe):
-                return
-            named = build(universe)[output.analysis]
-        if (output, universe) not in planned:
-            result = Planned(output, universe, named)
-            planned[output, universe] = result
-            todo.append(result)
-
-    def read(entry: Resolution, universe: Element | None) -> None:
-        """What an entry of `inputs`, or evidence, reads (`read_in`)."""
-        output = entry.element
-        if output is None or output.kind != "output":
-            return
-        at = read_in(entry, universe, pinned, per_universe)
-        if output in per_universe:
-            if at is None:
-                return
-            build(at)
-        reads[entry, at] = None
-        plan(output, at)
-
     own = [
-        Element(stack.root, "universe", id_) for id_, u in root.universes.items() if not u.is_import
+        Element(run.driver, "universe", id_)
+        for id_, universe in stack.analysis(run.driver).universes.items()
+        if not universe.is_import
     ]
-    for universe in own:
-        build(universe)
-    every: list[Element | None] = [*own]
-    once: list[Element | None] = [None]
-    outputs = [Element(stack.root, "output", id_) for id_ in root.outputs]
-    for output in (*outputs, *requested):  # one asked for, as the root's own
-        for target in every if output in per_universe else once:
-            plan(output, target)
-    for entry in stack.resolutions:
-        if entry.field == "artifact" and entry.file == stack.root:
-            unpinned = entry.pin is None and entry.element in per_universe
-            for target in every if unpinned else once:
-                read(entry, target)
-    while todo:
-        result = todo.pop(0)
-        for entry in written[result.output]:
-            if entry.field == "inputs":
-                read(entry, result.universe)
-    return Building(MappingProxyType(universes), MappingProxyType(planned), tuple(reads))
+    for each in (*own, *(at for _, at in run.reads if at is not None)):
+        if each not in universes:
+            universes[each] = built(chains[each.analysis], each.analysis)
+    planned: dict[At, Planned] = {}
+    for (output, universe), status in run.planned.items():
+        # a result built once is its output's analysis's; none where its analysis isn't built
+        named = ((),) if universe is None else universes[universe].get(output.analysis)
+        if status is True and named is not None:
+            planned[output, universe] = Planned(output, universe, named)
+    return Building(MappingProxyType(universes), MappingProxyType(planned), run.reads, run)

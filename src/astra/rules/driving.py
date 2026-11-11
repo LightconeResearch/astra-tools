@@ -14,9 +14,10 @@ they resolve (case 10).
 §16's rules on the universe being built: what a use there names belongs to an analysis built in
 it (`NOT_BUILT_IN_UNIVERSE`), and in the file of the analysis whose universe it is, the file's
 universes drive the use's chain of declarations (`UNDRIVEN_DECLARATION`); and no planned result
-has two names (`RESULT_IN_TWO_PLACES`, §18). They hold only in the universes built, and for an
-output only where its result is planned (`universes.building`), so not in a universe with no
-effective selection (design §4.13 case 7).
+has two names (`RESULT_IN_TWO_PLACES`, §18). The first two hold over what the root reaches
+(`universes.run`): in each universe it reaches an output in, whether that output, or its
+analysis, is built there or not, but not in a universe with no effective selection (design §4.13
+case 7). The last holds over the root's planned results (`universes.building`).
 """
 
 from __future__ import annotations
@@ -171,31 +172,33 @@ that hold it, in the order reached."""
 
 def _uses(context: Context) -> Uses:
     """Where the rules on the universe being built apply (`NOT_BUILT_IN_UNIVERSE` and
-    `UNDRIVEN_DECLARATION`, §16 *The rules*):
+    `UNDRIVEN_DECLARATION`, §16 *The rules*), over what the root reaches, built or not
+    (`universes.run`):
 
-    - in the universe a result is planned in, what its output reads without a pin that is built
-      per universe, and the decisions it lists;
-    - in the universe a pin names, each output built per universe that a planned result's
-      output, or the root's evidence, pins;
+    - in the universe an output is reached in, what it reads without a pin that is built per
+      universe, and the decisions it lists;
+    - in the universe a pin names, each output built per universe that an output reached, or the
+      root's evidence, pins;
     - in each analysis built in a universe built, what its options' constraints name.
 
     Not in a universe with no effective selection (design §4.13 case 7), not for an address that
-    names nothing (case 5), and not for one that names an output on a cycle (case 13)."""
+    names nothing (case 5), not for one that names an output on a cycle (case 13), and not for
+    one that names an element of its own file's analysis, which uses nothing of another (§15)."""
     found: dict[Resolution, dict[Element, None]] = {}
 
     def use(entry: Resolution, universe: Element | None) -> None:
-        if universe is not None and entry.element is not None:
-            if context.selections[universe] is not None and not context.on_cycle(entry.element):
-                found.setdefault(entry, {})[universe] = None
+        element = entry.element
+        if universe is None or element is None or element.analysis == entry.file:
+            return
+        if context.selections[universe] is not None and not context.on_cycle(element):
+            found.setdefault(entry, {})[universe] = None
 
     building, per_universe = context.building, context.per_universe
     for entry, universe in building.reads:  # the root's evidence only where it pins
-        if (entry.field == "inputs" or entry.pin is not None) and entry.element in per_universe:
+        if entry.field == "decisions":
             use(entry, universe)
-    for planned in building.planned.values():
-        for entry in context.written[planned.output]:
-            if entry.field == "decisions":
-                use(entry, planned.universe)
+        elif (entry.field == "inputs" or entry.pin is not None) and entry.element in per_universe:
+            use(entry, universe)
     for universe, analyses in building.universes.items():
         for identity in analyses:
             for id_ in context.stack.analysis(identity).decisions:

@@ -43,6 +43,7 @@ from astra.universes import (
     built,
     places,
     read_in,
+    run,
 )
 
 SHAPE = "astra-plan/1"
@@ -180,10 +181,11 @@ def plan(
     wanted = None if universes is None else {root_universe(stack, id_) for id_ in universes}
     addresses = tuple(outputs or ())
     requested = tuple(root_output(stack, address) for address in addresses)
-    found = building(
-        stack, context.written, context.selections, context.driven, context.pins,
-        context.per_universe, requested,
+    reached = run(
+        stack, context.meaning, context.written, context.selections, context.pins,
+        context.per_universe, context.cycles, stack.root, requested,
     )  # fmt: skip
+    found = building(stack, reached, context.driven)
 
     def chosen(result: Planned) -> bool:
         if not requested:

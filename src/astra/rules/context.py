@@ -88,11 +88,25 @@ class Context:
         return universes.written(self.stack)
 
     @cached_property
+    def meaning(self) -> universes.Meaning:
+        """Whether each output is built in each universe (Results *result*)."""
+        return universes.Meaning(self.written, self.selections, self.per_universe, self.cycles)
+
+    @cached_property
     def building(self) -> Building:
-        """The universes built, and the root's planned results (§16, §18)."""
-        return universes.building(
-            self.stack, self.written, self.selections, self.driven, self.pins, self.per_universe
+        """What the root reaches and plans, the universes built, and its planned results whose
+        analysis is built in their universe (§16, §18)."""
+        run = universes.run(
+            self.stack,
+            self.meaning,
+            self.written,
+            self.selections,
+            self.pins,
+            self.per_universe,
+            self.cycles,
+            self.stack.root,
         )
+        return universes.building(self.stack, run, self.driven)
 
     # --- design §4.13 ---
 
