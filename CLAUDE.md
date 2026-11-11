@@ -58,8 +58,9 @@ src/astra/                no __init__.py: astra-spec owns astra.schema
   # 2. binding
   stack.py                bind(reader, root) -> Bound(stack | None, diagnostics)
   # 3. meaning: pure functions of a Stack
-  universes.py            selections, driving, pins and imports, the universes built,
-                          planned results, their names and places
+  universes.py            what each universe selects, what each switch takes, what is built,
+                          reached, planned and used, what is driven, pins and imports, the
+                          universes built, planned results, their names and places
   rules/                  the validator rules, one module per section of Part II
   validate.py             validate() -> ValidationReport
   plan.py                 plan() -> Plan, and render_command
