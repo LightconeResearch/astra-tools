@@ -18,7 +18,7 @@ def command(path: Path | None, as_json: bool, listed: bool) -> None:
     """Show the planned results of the analysis in PATH, each after what it reads.
 
     PATH is the analysis's folder, the current one by default. Each result is shown with its
-    places, its record's and its bytes' (§18), the container and resources its recipe asks for,
+    places, its record's and its bytes' (§18), the resources its recipe asks for,
     and its command, run in its analysis's folder, with its placeholders filled in (§11), or the
     commit whose record it is read through (§17). Then come the notes, none of them a breach,
     counted by kind, and listed with --notes (the JSON lists every one): pins that name another

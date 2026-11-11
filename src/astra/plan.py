@@ -91,7 +91,6 @@ class Result:
     run_at: str | None  # for a driven analysis from a commit, the commit its recipe runs on, on
     # that analysis's files; never the commit its record names, which is the driver's (§19)
     resources: Resources | None  # what its recipe asks for (§11)
-    container: str | None  # its recipe's, or else its analysis's, as written (§11)
 
 
 NoteKind = Literal[
@@ -177,7 +176,6 @@ class Plan:
                     "read_only": result.read_only,
                     "run_at": result.run_at,
                     "resources": resources(result.resources),
-                    "container": result.container,
                 }
                 for result in self.results
             ],
@@ -433,7 +431,6 @@ def _result(context: Context, result: Planned, reads: Reads, made: Mapping[Key, 
         read_only,
         None if read_only or identity.commit == stack.root.commit else identity.commit,
         recipe.resources,
-        recipe.container if recipe.container is not None else analysis.container,
     )
 
 

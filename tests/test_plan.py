@@ -8,8 +8,7 @@ reading §15's `subanalysis` in three universes, where `subanalysis`'s own `v1` 
 parent (§18), with an output of every placeholder; an analysis with a declaration no key
 drives, for outputs asked for that aren't built; §18's `inner` reached through `inner` and
 `stage.inner`; §17's analysis from a commit, driven and pinned; an analysis whose recipes ask for
-resources and containers; and one with each note a stack read where the root is can have
-(design §4.6).
+resources; and one with each note a stack read where the root is can have (design §4.6).
 """
 
 from __future__ import annotations
@@ -633,7 +632,6 @@ def test_the_plan_as_astra_plan_1(worked: Path) -> None:
         "read_only": False,
         "run_at": None,
         "resources": None,
-        "container": None,
     }  # fmt: skip
     assert shape["results"][0]["universe"] == "u1"
     assert shape["results"][0]["decisions"] == {"decision1": "a"}
@@ -671,7 +669,6 @@ def test_astra_plan_shows_each_result_with_its_places_and_command(worked: Path) 
 
 ASKING = """\
 spec_version: "0.1.0"
-container: ghcr.io/lab/analysis:1
 outputs:
   default:
     type: metric
@@ -683,41 +680,33 @@ outputs:
     format: json
     recipe:
       command: python make.py '{output}'
-      container: containers/Containerfile
       resources: {cpus: 0.5, memory: 4GB, gpus: 1}
 """
-"""An analysis with a default container, and a recipe with a container and resources of its
-own."""
+"""An analysis with a recipe that asks for resources, and one that asks for none."""
 
 
 def test_each_result_carries_what_its_recipe_asks_for(tmp_path: Path) -> None:
-    """§11, design §4.6: a result carries its recipe's `resources`, and its recipe's `container`
-    or else its analysis's, as written, which a runner schedules with. `astra-plan/1` gives the
-    resources asked for, and `astra plan` shows both."""
+    """§11, design §4.6: a result carries its recipe's `resources`, as written, which a runner
+    schedules with. `astra-plan/1` gives them, and `astra plan` shows them."""
     top = repository(tmp_path, {"astra.yaml": ASKING})
     plan = api.plan(top)
     default, own = plan.results
-    assert (default.container, default.resources) == ("ghcr.io/lab/analysis:1", None)
-    assert (own.container, own.resources) == (
-        "containers/Containerfile",
-        Resources(cpus=0.5, memory="4GB", gpus=1),
-    )
-    assert [(r["container"], r["resources"]) for r in plan.to_json()["results"]] == [
-        ("ghcr.io/lab/analysis:1", None),
-        ("containers/Containerfile", {"cpus": 0.5, "memory": "4GB", "gpus": 1}),
+    assert default.resources is None
+    assert own.resources == Resources(cpus=0.5, memory="4GB", gpus=1)
+    assert [r["resources"] for r in plan.to_json()["results"]] == [
+        None,
+        {"cpus": 0.5, "memory": "4GB", "gpus": 1},
     ]
     assert astra("plan", str(top)).stdout.splitlines() == [
         "default",
         "  record    .astra/records/default.json",
         "  bytes     results/default.json",
         "  run in    .",
-        "  container ghcr.io/lab/analysis:1",
         "  command   python make.py 'results/default.json'",
         "own",
         "  record    .astra/records/own.json",
         "  bytes     results/own.json",
         "  run in    .",
-        "  container containers/Containerfile",
         "  resources cpus 0.5, memory 4GB, gpus 1",
         "  command   python make.py 'results/own.json'",
         "2 planned result(s)",

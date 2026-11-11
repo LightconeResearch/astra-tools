@@ -32,8 +32,6 @@ def show(plan: Plan, *, listed: bool = False) -> None:
         folder = result.workdir or "."
         run_at = "" if result.run_at is None else f" at {result.run_at}"
         out.print(Text(f"  run in    {folder}{run_at}"))
-        if result.container is not None:
-            out.print(Text(f"  container {result.container}"))
         if result.resources is not None:
             asked = asdict(result.resources).items()
             shown = ", ".join(f"{key} {value}" for key, value in asked if value is not None)

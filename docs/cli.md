@@ -158,8 +158,8 @@ astra plan [PATH] [--json] [--notes]
 
 Lists every planned result, each after what it reads. For each result it shows where its record
 and its bytes go ([Results](https://astra-spec.org/0.1/specification/#results)),
-the folder its recipe runs in, the container and resources the recipe asks for, if any, and its
-command with the placeholders filled in
+the folder its recipe runs in, the resources the recipe asks for, if any, and its command with
+the placeholders filled in
 ([Elements](https://astra-spec.org/0.1/specification/#elements)). A result that belongs to an
 analysis from a commit isn't built here: it is read through its record at that commit
 ([Results](https://astra-spec.org/0.1/specification/#results)).

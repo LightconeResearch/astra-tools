@@ -102,7 +102,6 @@ class Recipe:
     """How an output is made: a command, a template (§11)."""
 
     command: str
-    container: str | None = None
     resources: Resources | None = None
 
     @classmethod
@@ -236,7 +235,6 @@ class Analysis:
     label: str | None = None
     description: str | None = None
     tags: tuple[str, ...] = ()
-    container: str | None = None
     inputs: Mapping[str, Input] = field(default_factory=_empty)
     decisions: Mapping[str, Decision] = field(default_factory=_empty)
     universes: Mapping[str, Universe] = field(default_factory=_empty)
