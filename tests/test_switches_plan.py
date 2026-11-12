@@ -330,6 +330,59 @@ def test_an_output_built_in_none_of_the_roots_universes_has_no_result_to_give(
     assert results(api.plan(top, outputs=["base"])) == {(".", "base")}
 
 
+ROOTED = """\
+spec_version: "0.1.0"
+decisions:
+  decision1:
+    options: {a: {}, b: {}, c: {}}
+  decision2:
+    options: {x: {}, y: {}}
+outputs:
+  base:
+    type: metric
+    format: json
+    recipe:
+      command: python make.py '{output}'
+  gap:
+    switch: decision1
+    cases: {b: base, c: inner}
+  inner:
+    switch: decision2
+    cases: {x: base}
+universes:
+  u1:
+    decisions: {decision1: a}
+  u2:
+    decisions: {decision1: b}
+  u3:
+    decisions: {decision1: c, decision2: y}
+"""
+"""`gap`, which nothing reads, takes nothing in `u1` and, through `inner`, nothing in `u3`."""
+
+
+def test_the_plan_notes_a_switch_nothing_reads_where_it_takes_nothing(tmp_path: Path) -> None:
+    """Design §4.6: a switch the plan plans from, which nothing reads (Results *plans*), gets a
+    `not_built` note where it takes nothing, as an output does: `gap` has no case for `a` in
+    `u1`, and in `u3` takes `inner`, which has no case for `y`. `inner`, which `gap`'s case
+    reads, is left to `gap`'s note."""
+    plan = api.plan(repository(tmp_path, {"astra.yaml": ROOTED}))
+    assert results(plan) == {(".", "base")}
+    notes = [n for n in plan.notes if n.kind == "not_built"]
+    found = [
+        (n.location and n.location.pointer, [u.id for u in n.universes], n.switch, n.option)
+        for n in notes
+    ]
+    assert found == [
+        ("/outputs/gap", ["u1"], Element(ROOT, "switch", "gap"), "a"),
+        ("/outputs/gap", ["u3"], Element(ROOT, "switch", "inner"), "y"),
+    ]
+    assert [n.message for n in notes] == [
+        "`gap` isn't built in `u1`: it has no case there for `a`, the option its decision selects",
+        "`gap` isn't built in `u3`: `inner` has no case there for `y`, the option its decision "
+        "selects",
+    ]
+
+
 # --- D. the view ---
 
 

@@ -203,7 +203,8 @@ The notes point out things that are valid but easy to miss. None of them is a br
 - a result with two names;
 - an output with no planned result;
 - an output that isn't built in some universe, because a switch it reads has no case there for
-  the option selected ([Elements](https://astra-spec.org/0.1/specification/#elements));
+  the option selected, and a switch that nothing reads with no such case
+  ([Elements](https://astra-spec.org/0.1/specification/#elements));
 - results that are one computation in several universes;
 - a command that names a path outside its analysis's folder, or inside a folder below it that
   holds an analysis of its own.

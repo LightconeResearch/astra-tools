@@ -9,10 +9,11 @@ whether it is read through its record or run at a commit (§17). The plan also n
 author may want to tidy, though it breaks no rule (design §4.6): a pin that names another
 analysis's universe only because its file has no entry of that id (§16), a result with two
 names (§18), an output with no planned result (§18), results that are one computation in
-several universes, an output a switch leaves unbuilt in a universe, as it has no case there for
-the option its decision selects (Elements *switch*), and a command that names a path outside its
-analysis's folder, or inside an analysis below it (`CODE_OUTSIDE_ANALYSIS`, §21). Through a switch,
-an entry reads what the case the switch takes names (Elements *takes*), which its read records.
+several universes, an output, or a switch that nothing reads, that a switch leaves unbuilt in a
+universe, as it has no case there for the option its decision selects (Elements *switch*), and a
+command that names a path outside its analysis's folder, or inside an analysis below it
+(`CODE_OUTSIDE_ANALYSIS`, §21). Through a switch, an entry reads what the case the switch takes
+names (Elements *takes*), which its read records.
 
 `api.plan` plans only a valid stack: one that breaks a `MUST` has no plan. On such a stack,
 `plan` gives the results whose planning is determined (design §4.13 case 12), for `check`.
@@ -544,23 +545,27 @@ def _unplanned(
 
 
 def _not_built(context: Context, reached: Run) -> Iterator[Note]:
-    """Each output that the plan's run reaches in a universe where it isn't built, as a switch on
-    the way has no case there for the option its decision selects (Elements *switch*; Results
-    *built*): one note for each output, switch and option, at the output, with the universes.
-    A missing case breaks no rule: this is the plan's own report of it."""
+    """Each output other than a switch that the plan's run reaches in a universe where it isn't
+    built, and each switch it reaches there that nothing it reaches reads there, as one it plans
+    from does (Results *plans*), as a switch on the way, maybe that one, has no case there for
+    the option its decision selects (Elements *switch*; Results *built*): one note for each
+    output or switch, switch and option, at the entry of `outputs`, with the universes. A switch
+    that something reached reads there is left to the note on its reader. A missing case breaks
+    no rule: this is the plan's own report of it."""
+    read = {(entry.element, at) for entry, at in reached.reads if entry.field in ("inputs", "case")}
     found: dict[tuple[Element, Element, str], list[Element]] = {}
     for element, universe in reached.reached:
-        if element.kind != "output" or universe is None:
+        if universe is None or (element.kind == "switch" and (element, universe) in read):
             continue
         cause = context.meaning.cause(element, universe)
         if cause is not None:
             found.setdefault((element, cause.switch, cause.option), []).append(universe)
     for (output, switch, option), universes in found.items():
         whose = "" if switch.analysis == output.analysis else f" of `{switch.analysis}`"
+        which = "it" if switch == output else f"`{switch.id}`{whose}"
         message = (
             f"`{output.id}` isn't built in {context.named(universes, output.analysis)}: "
-            f"`{switch.id}`{whose} has no case there for `{option}`, the option its decision "
-            "selects"
+            f"{which} has no case there for `{option}`, the option its decision selects"
         )
         at = context.at(output.analysis, ("outputs", output.id))
         yield Note(
