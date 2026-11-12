@@ -83,10 +83,12 @@ wheels = [
 [[package]]
 name = "astra-spec"
 source = { editable = "../astra-spec-pinned" }
+dependencies = [
+    { name = "linkml-runtime" },
+]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", marker = "extra == 'pydantic'", specifier = ">=2.11" }]
-provides-extras = ["pydantic"]
+requires-dist = [{ name = "linkml-runtime", specifier = ">=1.9.4" }]
 
 [package.metadata.requires-dev]
 dev = [
@@ -94,7 +96,6 @@ dev = [
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "linkml", specifier = "==1.12.1" },
     { name = "markdown-it-py", specifier = ">=3" },
-    { name = "pydantic", specifier = ">=2.11" },
     { name = "pytest", specifier = ">=8" },
     { name = "rdflib", specifier = ">=7" },
     { name = "ruamel-yaml", specifier = ">=0.18" },

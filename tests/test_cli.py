@@ -99,7 +99,8 @@ def test_an_internal_error_exits_2(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 # --- schema, rules, guide ---
 
 
-SCHEMAS = files("astra.schema") / "generated"
+SCHEMAS = files("astra.schema") / "jsonschema"
+RULES = files("astra.schema") / "rules" / "rules.json"
 
 
 @pytest.mark.parametrize("name", ["analysis", "provenance", "provenance.open"])
@@ -127,7 +128,7 @@ def test_schema_show_refuses_another_name() -> None:
 
 
 def test_rules_lists_every_rule_by_layer() -> None:
-    rules = json.loads((SCHEMAS / "rules.json").read_text("utf-8"))["rules"]
+    rules = json.loads(RULES.read_text("utf-8"))["rules"]
     result = astra("rules")
     assert result.exit_code == 0
     for rule in rules:
@@ -137,7 +138,7 @@ def test_rules_lists_every_rule_by_layer() -> None:
 
 def test_rules_lists_astra_tools_own_codes_as_its_own() -> None:
     """After rules.json's, astra-tools' own three, under a heading of their own."""
-    last = json.loads((SCHEMAS / "rules.json").read_text("utf-8"))["rules"][-1]["code"]
+    last = json.loads(RULES.read_text("utf-8"))["rules"][-1]["code"]
     stdout = astra("rules").stdout
     own = stdout.index("validator, astra-tools' own")
     assert own > stdout.index(f"  {last} ")

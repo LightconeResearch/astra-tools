@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 astra-tools is the **Python CLI and library** for ASTRA 0.1 analyses: validator, planner, checker and a runner's building blocks. It reads only `0.1.x` analyses; older ones need `astra-tools<0.3`.
 
 **Architecture**:
-- **astra-spec** ([separate repo](https://github.com/LightconeResearch/astra-spec)) = the specification. astra-tools reads its JSON Schemas and rule catalogue (`astra.schema`, `generated/rules.json`) at run time, copying nothing.
+- **astra-spec** ([separate repo](https://github.com/LightconeResearch/astra-spec)) = the specification. astra-tools reads its JSON Schemas and rule catalogue (`astra.schema`: `jsonschema/`, `rules/rules.json`) at run time, copying nothing.
 - **astra-tools** (this repo) = tooling layer: validation, planning, checking, records, CLI, papers.
 
 astra-tools is intentionally agnostic to any agentic layer or UI. It answers to the specification: argue from it, its conformance suite and its examples, never from one analysis that uses ASTRA.

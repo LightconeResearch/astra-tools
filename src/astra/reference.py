@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from importlib.resources import files
+from pathlib import Path
 from typing import Any, Literal
 
 _TYPES = "https://w3id.org/astra/types"
@@ -57,8 +58,11 @@ def load_reference() -> tuple[Term, ...]:
             name="reference",
             imports=["linkml:types", "analysis", "provenance"],
             default_range="string",
-            # Need not exist: the imports are read from its folder.
-            source_file=str(files("astra.schema") / "reference.yaml"),
+            # Need not exist: the imports are read from its folder, the one holding analysis.yaml
+            # (an editable install spreads astra.schema over two folders).
+            source_file=str(
+                Path(str(files("astra.schema") / "analysis.yaml")).with_name("reference.yaml")
+            ),
         )
     )
     classes = [

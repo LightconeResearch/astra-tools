@@ -16,11 +16,11 @@ from astra import api
 from astra.plan import Result
 from astra.records import Runner, new_record, write_record
 
-SPEC = Path(str(files("astra.schema") / "generated")).parents[3]
+SPEC = Path(str(files("astra.schema") / "analysis.yaml")).parents[3]
 """The astra-spec the installed `astra.schema` comes from: its conformance suite (`conformance/`)
 and its `examples/` are the oracle."""
 
-DOCUMENTS = SPEC / "conformance" / "documents"
+DOCUMENTS = SPEC / "tests" / "data"
 """The conformance suite's documents: `valid/` and `invalid/`."""
 
 MINIMAL = """\

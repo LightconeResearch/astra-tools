@@ -104,7 +104,7 @@ class Catalogue:
     @classmethod
     def load(cls) -> Catalogue:
         """The catalogue of the installed astra-spec."""
-        path = files("astra.schema") / "generated" / "rules.json"
+        path = files("astra.schema") / "rules" / "rules.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         rules = {
             rule["code"]: Rule(

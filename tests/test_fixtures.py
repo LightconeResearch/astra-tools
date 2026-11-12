@@ -1,4 +1,4 @@
-"""astra-spec's conformance documents (`conformance/documents/`): each invalid one gives exactly
+"""astra-spec's documents (`tests/data/`): each invalid one gives exactly
 the code and pointer its header names, and the `# also:` one where it has one; each valid one
 gives nothing. An `astra.yaml` is validated in a git repository, and a record checked by the
 contract.

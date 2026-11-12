@@ -55,7 +55,7 @@ _VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 
 def schema_file(name: SchemaName) -> Traversable:
     """The JSON Schema `name`, as astra-spec installs it."""
-    return files("astra.schema") / "generated" / f"{name}.schema.json"
+    return files("astra.schema") / "jsonschema" / f"{name}.schema.json"
 
 
 @dataclass(frozen=True)
