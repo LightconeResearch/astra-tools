@@ -1,28 +1,26 @@
-"""§16 Driving and consuming, the rules on selections: a universe's own `decisions` give each
-decision one key (`DUPLICATE_ELEMENT`), and no key goes through a declaration that leads back
+"""The rules on driving. On selections: a universe's own `decisions` give each decision one
+key (`DUPLICATE_ELEMENT`), and no key goes through a declaration that leads back
 (`LOOPING_KEY`); every universe sets every decision it uses, of its analysis and of each analysis
 its analysis's universes drive (`MISSING_DECISION`); and every pin names a universe
 (`UNKNOWN_PIN_UNIVERSE`).
 
-Every universe of every analysis of the stack is checked, a driven analysis's own included
-(§16 *What a validator checks*), with its own analysis driving (Results *uses*). A universe with
-no effective selection is checked by the first two on its own `decisions`, and not by
-`MISSING_DECISION` (design §4.13 case 7), which isn't checked either for a decision of an
-undetermined analysis (case 4), for one whose use is undetermined (case 6), nor through a chain
-whose driving is (case 6, *undetermined driving*). A key or a reference that names nothing is
-checked by none (case 5), but for `LOOPING_KEY`, judged on its declarations as far as they
-resolve (case 10).
+Every universe of every analysis of the stack is checked, a driven analysis's own included,
+with its own analysis driving (Results *uses*). A universe with no effective selection is
+checked by the first two on its own `decisions`, and not by `MISSING_DECISION`, which isn't
+checked either for a decision of an undetermined analysis, for one whose use is undetermined,
+nor through a chain whose driving is. A key or a reference that names nothing is checked by
+none, but for `LOOPING_KEY`, judged on its declarations as far as they resolve.
 
-§16's rules on the universe being built: what something reached reads of another analysis's,
+On the universe being built: what something reached reads of another analysis's,
 an output built per universe or a switch, and the decisions it uses, an output those it lists
 and a switch the one it switches on, belong to an analysis built where it is read
 (`NOT_BUILT_IN_UNIVERSE`); and in the file of the analysis whose universe it is, the file's
 universes drive the address's chain of declarations (`UNDRIVEN_DECLARATION`); and no planned
-result has two names (`RESULT_IN_TWO_PLACES`, §18). The first two hold over what the root reaches
+result has two names (`RESULT_IN_TWO_PLACES`). The first two hold over what the root reaches
 (`universes.run`), in each universe it reaches something in, whether that is, or its analysis
 is, built there or not, through the case each switch takes, and at a switch's own `switch` even
-where it is undetermined; but not in a universe with no effective selection (design §4.13 case
-7), nor through a chain whose driving is undetermined (case 6). A switch read is judged at the
+where it is undetermined; but not in a universe with no effective selection, nor through a
+chain whose driving is undetermined. A switch read is judged at the
 address that reads it, whatever case it takes, and the case it takes at the case, in the
 switch's file. Constraints use nothing. The last holds over the root's planned results
 (`universes.building`).
@@ -125,12 +123,12 @@ def _missing(
     building: Mapping[Identity, tuple[Chain, ...]],
 ) -> Iterator[Diagnostic]:
     """Each decision the universe uses that its effective selection leaves unset, of the
-    universe's analysis and of each analysis its analysis's universes drive (§16 *What a universe
-    sets*; Results *uses*), spelled through the first chain that reaches it."""
+    universe's analysis and of each analysis its analysis's universes drive (Results *uses*),
+    spelled through the first chain that reaches it."""
     name = selection.universe
     used = context.used(name)
     pointer = ("universes", name.id, "decisions") if universe.decisions else ("universes", name.id)
-    location = context.at(name.analysis, pointer)  # design §3
+    location = context.at(name.analysis, pointer)
     for identity, chains in building.items():
         chain = chains[0]
         for id_ in context.stack.analysis(identity).decisions:
@@ -150,11 +148,11 @@ def _missing(
 
 def _pins(context: Context) -> Iterator[Diagnostic]:
     """Each pin whose file has no entry with its id, where the analysis whose element its
-    reference names has no universe with that id either (§16 *Pins and imported universes*)."""
+    reference names has no universe with that id either."""
     stack = context.stack
     for resolution in stack.resolutions:
         pin, element = resolution.pin, resolution.element
-        if pin is None or element is None:  # design §4.13 case 5
+        if pin is None or element is None:  # no pin, or its reference names nothing
             continue
         if pin in stack.analysis(resolution.file).universes or context.pins[resolution] is not None:
             continue
@@ -175,13 +173,13 @@ def _pins(context: Context) -> Iterator[Diagnostic]:
 # --- the universe being built ---
 
 Uses = Mapping[Resolution, tuple[Element, ...]]
-"""Each address that §16's rules on the universe being built hold, with the universes it is read
+"""Each address that the rules on the universe being built hold, with the universes it is read
 in, in the order reached."""
 
 
 def _uses(context: Context) -> Uses:
     """Where the rules on the universe being built apply (`NOT_BUILT_IN_UNIVERSE` and
-    `UNDRIVEN_DECLARATION`, §16 *The rules*), over what the root reaches, built or not
+    `UNDRIVEN_DECLARATION`), over what the root reaches, built or not
     (`universes.run`), each address in the universe it is read in:
 
     - each decision a reached output lists, and the decision a reached switch switches on, even
@@ -190,10 +188,10 @@ def _uses(context: Context) -> Uses:
       evidence reads, pinned or not, that is an output built per universe or a switch, whatever
       case that switch takes.
 
-    Not in a universe with no effective selection (design §4.13 case 7), not for an address that
-    names nothing (case 5), not for one that names an output or a switch on a cycle (case 13),
-    not through a chain whose driving is undetermined (case 6), and not for one that names an
-    element of its own file's analysis, which uses nothing of another (§15)."""
+    Not in a universe with no effective selection, not for an address that names nothing, not
+    for one that names an output or a switch on a cycle, not through a chain whose driving is
+    undetermined, and not for one that names an element of its own file's analysis, which uses
+    nothing of another."""
     found: dict[Resolution, dict[Element, None]] = {}
     per_universe = context.per_universe
     for entry, universe in context.building.reads:
@@ -227,7 +225,7 @@ def _kind(element: Element) -> str:
 
 def _not_built(context: Context, uses: Uses) -> Iterator[Diagnostic]:
     """Each use whose element's analysis isn't built in a universe built that holds it:
-    `NOT_BUILT_IN_UNIVERSE` (§16 *The universe being built*)."""
+    `NOT_BUILT_IN_UNIVERSE`."""
     for entry, universes in uses.items():
         element = entry.element
         assert element is not None
@@ -248,9 +246,9 @@ def _not_built(context: Context, uses: Uses) -> Iterator[Diagnostic]:
 
 def _undriven(context: Context, uses: Uses) -> Iterator[Diagnostic]:
     """Each use of another analysis's element, in the file of the analysis whose universe holds
-    it, whose chain of declarations that file's universes don't drive: `UNDRIVEN_DECLARATION`
-    (§16 *The universe being built*). An address through a declaration back to its file's own
-    analysis names one of its own elements, and consumes nothing (§15)."""
+    it, whose chain of declarations that file's universes don't drive: `UNDRIVEN_DECLARATION`.
+    An address through a declaration back to its file's own analysis names one of its own
+    elements, and consumes nothing."""
     for entry, universes in uses.items():
         element = entry.element
         assert element is not None
@@ -276,11 +274,11 @@ def _undriven(context: Context, uses: Uses) -> Iterator[Diagnostic]:
 def _two_places(context: Context) -> Iterator[Diagnostic]:
     """For each pair of a planned result's names, a warning at the first declaration of each of
     their chains that the other doesn't go through, in the file that holds it, with the other as
-    a related place (§18 *Which analysis a result belongs to, and its name*): one for all the
-    universes the pair names one result in. Not for an output on a cycle (design §4.13 case 13)."""
+    a related place: one for all the universes the pair names one result in. Not for an output
+    on a cycle."""
     pairs: dict[tuple[str, Chain, str, Chain, str], list[Element]] = {}
     for planned in context.building.planned.values():
-        if planned.universe is not None and not context.on_cycle(planned.output):  # case 13
+        if planned.universe is not None and not context.on_cycle(planned.output):
             named = list(zip(planned.chains, planned.names, strict=True))
             for index, (chain, name) in enumerate(named):
                 for other, other_name in named[index + 1 :]:

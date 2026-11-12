@@ -1,10 +1,9 @@
-"""A runner's building blocks (§21, design §4.8): what stops a run in a checkout
-(`records.uncommitted_changes`), a checkout of its own for a run (`Repository.worktree`), and
-landing what a run made there in the main checkout (`records.land`), which the main checkout's
-`check` then judges (phase 3's *Done when*, design §6).
+"""A runner's building blocks: what stops a run in a checkout (`records.uncommitted_changes`), a
+checkout of its own for a run (`Repository.worktree`), and landing what a run made there in the
+main checkout (`records.land`), which the main checkout's `check` then judges.
 
-The stack is §2's worked example, committed with its input and the script its first recipe runs,
-and built as a runner builds it (`conftest.build`).
+The stack is `test_validate`'s worked example, committed with its input and the script its first
+recipe runs, and built as a runner builds it (`conftest.build`).
 """
 
 from __future__ import annotations
@@ -50,19 +49,19 @@ def commit_of(top: Path, record: str) -> str:
     return str(json.loads((top / record).read_text("utf-8"))["generated_by"]["commit"])
 
 
-# --- uncommitted_changes: §21's UNCOMMITTED_CHANGES ---
+# --- uncommitted_changes: the runner's UNCOMMITTED_CHANGES ---
 
 
 def test_the_records_and_results_of_a_run_dont_stop_it(main: Path) -> None:
-    """§21: a checkout whose only changes are the records and results of a run, each result's
-    bytes the recorded ones, can run a recipe; so can one with no change."""
+    """A checkout whose only changes are the records and results of a run, each result's bytes
+    the recorded ones, can run a recipe; so can one with no change."""
     assert uncommitted_changes(main) == ()
     build(main)
     assert uncommitted_changes(main) == ()
 
 
 def test_the_records_and_results_of_any_run_dont_stop_it(main: Path) -> None:
-    """§21: the records and results of any run, not only those of the planned results: here of
+    """The records and results of any run, not only those of the planned results: here of
     a universe that is gone, `u3`, and of an output that is gone, `old`, whose format holds a
     `.`; but not bytes at such a place that no valid record there gives."""
     build(main)
@@ -85,7 +84,7 @@ def test_the_records_and_results_of_any_run_dont_stop_it(main: Path) -> None:
 
 
 def test_a_change_outside_the_records_and_results_stops_a_run(main: Path) -> None:
-    """§21: what `git status` reports, staged or not, tracked or not."""
+    """What `git status` reports, staged or not, tracked or not."""
     build(main)
     (main / "src" / "output1.py").write_text("print('edited')\n")
     (main / "notes.txt").write_text("a note\n")
@@ -96,7 +95,7 @@ def test_a_change_outside_the_records_and_results_stops_a_run(main: Path) -> Non
 
 
 def test_bytes_that_arent_the_recorded_ones_stop_a_run(main: Path) -> None:
-    """§21: each result's bytes the recorded ones, which a record that isn't valid gives none
+    """Each result's bytes the recorded ones, which a record that isn't valid gives none
     of; a record itself changes nothing a recipe reads, so a change at its place doesn't stop a
     run."""
     build(main)
@@ -124,7 +123,7 @@ def with_submodule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_a_change_in_a_submodule_stops_a_run(with_submodule: Path) -> None:
-    """§21, submodules included: in the checkout and its submodules, each change inside one
+    """Submodules included: in the checkout and its submodules, each change inside one
     after its path; the submodule itself where its commit isn't the one the checkout's commit
     pins."""
     top = with_submodule
@@ -140,8 +139,7 @@ def test_a_change_in_a_submodule_stops_a_run(with_submodule: Path) -> None:
 
 
 def test_a_run_gets_a_checkout_of_its_own_with_its_submodules(with_submodule: Path) -> None:
-    """design §4.8: a detached `git worktree add` in the cache, its submodules updated; each run
-    its own."""
+    """A detached `git worktree add` in the cache, its submodules updated; each run its own."""
     commit = head(with_submodule)
     run = Repository(with_submodule).worktree(commit)
     assert run.top.parent == cache.root() / "worktrees"
@@ -152,13 +150,13 @@ def test_a_run_gets_a_checkout_of_its_own_with_its_submodules(with_submodule: Pa
     assert Repository(with_submodule).worktree(commit).top != run.top
 
 
-# --- land, and phase 3's Done when ---
+# --- land, and the main checkout's check ---
 
 
 def test_a_run_in_its_own_checkout_lands_its_results_in_the_main_one(main: Path) -> None:
-    """design §4.8, §6 phase 3: a run in a checkout of its own makes the results there, while
-    the main checkout is edited, which doesn't stop it (§21); `land` moves them into the main
-    checkout, whose `check` judges them unchanged and present, not committed until they are."""
+    """A run in a checkout of its own makes the results there, while the main checkout is
+    edited, which doesn't stop it; `land` moves them into the main checkout, whose `check`
+    judges them unchanged and present, not committed until they are."""
     run = Repository(main).worktree(head(main))
     results = api.plan(run.top).results
     (main / "notes.txt").write_text("an agent keeps editing\n")
@@ -183,8 +181,8 @@ def test_a_run_in_its_own_checkout_lands_its_results_in_the_main_one(main: Path)
 
 
 def test_land_moves_only_finished_results(main: Path) -> None:
-    """design §4.8: a result is finished where its record is there and its bytes are the
-    recorded ones; what isn't stays in the run's checkout."""
+    """A result is finished where its record is there and its bytes are the recorded ones;
+    what isn't stays in the run's checkout."""
     run = Repository(main).worktree(head(main))
     results = api.plan(run.top).results
     build(run.top)
@@ -196,8 +194,8 @@ def test_land_moves_only_finished_results(main: Path) -> None:
 
 
 def test_land_never_replaces_a_record_whose_commit_is_later_than_the_runs(main: Path) -> None:
-    """design §4.8: a run from a later commit replaces the main checkout's records, and one from
-    an earlier commit doesn't."""
+    """A run from a later commit replaces the main checkout's records, and one from an earlier
+    commit doesn't."""
     earlier = head(main)
     first, last = (Repository(main).worktree(earlier) for _ in range(2))
     later = head(repository(main, {"src/output1.py": "print('edited')\n"}))
@@ -228,8 +226,8 @@ def cache_elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
 
 
 def test_land_moves_results_from_another_file_system(main: Path, cache_elsewhere: Path) -> None:
-    """Design §4.8: a run's checkout in a cache on another file system lands its results
-    in the main checkout all the same, where `check` judges them."""
+    """A run's checkout in a cache on another file system lands its results in the main checkout
+    all the same, where `check` judges them."""
     run = Repository(main).worktree(head(main))
     assert run.top.is_relative_to(cache_elsewhere)
     results = api.plan(run.top).results

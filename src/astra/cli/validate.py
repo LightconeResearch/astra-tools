@@ -1,4 +1,4 @@
-"""`astra validate [PATH] [--json] [--offline]`: the validator's report (design §4.12)."""
+"""`astra validate [PATH] [--json] [--offline]`: the validator's report."""
 
 from __future__ import annotations
 

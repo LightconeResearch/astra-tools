@@ -1,4 +1,4 @@
-"""`astra info [PATH]`: the stack in brief (design §4.12)."""
+"""`astra info [PATH]`: the stack in brief."""
 
 from __future__ import annotations
 

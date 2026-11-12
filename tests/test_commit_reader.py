@@ -1,7 +1,7 @@
-"""A commit as Annex B reads it, through `CommitReader` (design §4.3): each entry as the commit's
-tree holds it and each file the blob git stores, a symlink never followed, and what its tree
-tracks; and a submodule's URL resolved as git resolves it. A path through a gitlink at a commit,
-and a commit fetched once and kept, are tested through §17's rules (`test_commits`)."""
+"""A commit read through `CommitReader`: each entry as the commit's tree holds it and each file
+the blob git stores, a symlink never followed, and what its tree tracks; and a submodule's URL
+resolved as git resolves it. A path through a gitlink at a commit, and a commit fetched once and
+kept, are tested through the rules on analyses from a commit (`test_commits`)."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ def tree(tmp_path_factory: pytest.TempPathFactory) -> tuple[CommitReader, Path]:
 
 
 def test_a_path_names_the_entry_of_the_commits_tree(tree: tuple[CommitReader, Path]) -> None:
-    """Annex B *What a path names*, *Bytes*: the commit's tree, not the working tree; names
-    that differ in case are two paths."""
+    """A path names an entry of the commit's tree, not of the working tree; names that differ in
+    case are two paths."""
     reader, _ = tree
     assert reader.stat("data") == Entry("folder")
     assert (reader.read("data/a.csv"), reader.read("data/A.csv")) == (b"1\n", b"2\n")
@@ -44,8 +44,7 @@ def test_a_path_names_the_entry_of_the_commits_tree(tree: tuple[CommitReader, Pa
 
 
 def test_a_symlink_is_an_entry_and_is_never_followed(tree: tuple[CommitReader, Path]) -> None:
-    """Annex B *Symlinks*: a symlink is neither a file nor a folder, and a path through one
-    names nothing."""
+    """A symlink is neither a file nor a folder, and a path through one names nothing."""
     reader, _ = tree
     assert reader.stat("link.csv") == Entry("symlink", "data/a.csv")
     assert reader.stat("linked/a.csv") is None
@@ -56,8 +55,8 @@ def test_a_symlink_is_an_entry_and_is_never_followed(tree: tuple[CommitReader, P
 def test_tracked_is_in_the_commits_tree_through_no_gitlink(
     tree: tuple[CommitReader, Path],
 ) -> None:
-    """Annex B *Tracked*: a file or a symlink of the commit's tree is tracked; one in a
-    submodule isn't, nor one that isn't there."""
+    """A file or a symlink of the commit's tree is tracked; one in a submodule isn't, nor one
+    that isn't there."""
     reader, _ = tree
     paths = ["data/a.csv", "link.csv", "library/astra.yaml", "data/new.csv", "data"]
     assert reader.tracked("", paths) == {"data/a.csv", "link.csv"}
@@ -95,6 +94,6 @@ def test_tracked_is_in_the_commits_tree_through_no_gitlink(
 def test_a_relative_submodule_url_resolves_as_git_resolves_it(
     base: str, url: str, resolved: str
 ) -> None:
-    """Annex B *A gitlink's commit*: `./` and `../` against the superproject's remote, each
-    `../` removing its last segment, or an scp-like remote's path after its `:`."""
+    """`./` and `../` resolve against the superproject's remote, each `../` removing its last
+    segment, or an scp-like remote's path after its `:`."""
     assert resolve(base, url) == resolved

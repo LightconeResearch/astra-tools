@@ -1,14 +1,14 @@
-"""Remote repositories, each in a store of its own in the cache (design §4.3).
+"""Remote repositories, each in a store of its own in the cache.
 
 A store is a bare repository, one per URL, into which each commit asked for is fetched without
 its blobs (`git fetch --filter=blob:none`) and kept by a ref of its own, so that a commit is
-fetched once: a commit kept from an earlier fetch counts as got (§17 *Reading one*).
+fetched once: a commit kept from an earlier fetch counts as got.
 Authentication is git's, and git never waits for a password. Offline, nothing is
 fetched.
 
-A gitlink's commit that the submodule's checkout holds is read there before any fetch (§17
-*Reading one*); otherwise it is got from the URL its `.gitmodules` gives, a
-relative one resolved as git resolves it (Annex B *A gitlink's commit*).
+A gitlink's commit that the submodule's checkout holds is read there before any fetch;
+otherwise it is got from the URL its `.gitmodules` gives, a relative one resolved as git
+resolves it.
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ class Remotes:
     ) -> Repository | None:
         """The repository to read `commit` in: `local`, a local repository that may hold it,
         where it does; or else the store of `url`, holding it, kept or fetched now. None where
-        the commit can't be got (astra-tools' `REMOTE_UNREACHABLE`, design §3)."""
-        # A gitlink's commit the submodule's checkout holds counts as got, before any fetch (§17).
+        the commit can't be got (astra-tools' `REMOTE_UNREACHABLE`)."""
+        # A gitlink's commit the submodule's checkout holds counts as got, before any fetch.
         if local is not None and local.has_commit(commit):
             return local
         if url is None:

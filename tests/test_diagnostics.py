@@ -1,4 +1,4 @@
-"""The catalogue: levels from rules.json, and the codes each check declares (§3, design §3)."""
+"""The catalogue: levels from rules.json, and the codes each check declares."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def test_the_other_declared_codes_are_the_catalogues_or_astra_tools() -> None:
 
 
 def test_astra_tools_own_codes_are_none_of_rules_json() -> None:
-    """Design §3: astra-tools' own three codes, beside rules.json's, which has none of them."""
+    """The three codes astra-tools has of its own, beside rules.json's, which has none of them."""
     catalogue = Catalogue.load()
     assert set(OWN) == {"UNSUPPORTED_SPEC_VERSION", "REMOTE_UNREACHABLE", "COMMIT_NOT_ANCESTOR"}
     assert not set(OWN) & set(catalogue.rules)

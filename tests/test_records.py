@@ -1,6 +1,5 @@
-"""Records, read as Annex A says and checked by the record schema their minor version picks
-(§4, §5 *Versions*, §20, Annex D); and `records`: reading one at a place, writing one, and
-making a result's records from its run (§19, design §4.7, §4.8)."""
+"""Records, read as UTF-8 JSON text and checked by the record schema their minor version picks;
+and `records`: reading one at a place, writing one, and making a result's records from its run."""
 
 from __future__ import annotations
 
@@ -43,7 +42,7 @@ def test_a_record_of_0_1_is_read_by_the_closed_schema(contract: Contract) -> Non
 
 
 def test_a_record_of_a_later_minor_is_read_by_the_open_schema(contract: Contract) -> None:
-    """It ignores the fields that version adds, and is checked for the rest (Annex D)."""
+    """It ignores the fields that version adds, and is checked for the rest."""
     later = {**RECORD, "spec_version": "0.2.0", "extra": 1}
     assert check(contract, later) == []
     del later["size"]
@@ -51,7 +50,7 @@ def test_a_record_of_a_later_minor_is_read_by_the_open_schema(contract: Contract
 
 
 def test_a_record_below_0_1_has_no_schema(contract: Contract) -> None:
-    """Records begin at 0.1.0 (§4): INVALID_RECORD, at its version (§20)."""
+    """Records begin at 0.1.0: INVALID_RECORD, at its version."""
     old = {**RECORD, "spec_version": "0.0.9", "extra": 1}
     assert check(contract, old) == [("INVALID_RECORD", "/spec_version", None)]
 
@@ -67,21 +66,21 @@ def test_a_malformed_version_is_read_by_the_0_1_schema(contract: Contract) -> No
     ['{"size": 1, "size": 2}', '{"size": 1, "\\u0073ize": 2}', '{"size": NaN}', "size: 1"],
 )
 def test_a_record_that_isnt_json_breaks_invalid_syntax(text: str) -> None:
-    """§5, Annex A: RFC 8259 JSON text, in which no object has two equal names; and no `NaN`,
-    which `json.loads` would take (design §4.1)."""
+    """RFC 8259 JSON text, in which no object has two equal names; and no `NaN`, which
+    `json.loads` would take."""
     with pytest.raises(ParseError) as raised:
         load_json(text.encode())
     assert raised.value.code == "INVALID_SYNTAX"
 
 
 def test_a_repeated_name_is_named() -> None:
-    """§5: a repeated name is INVALID_SYNTAX, whose message names it (design §4.1)."""
+    """A repeated name is INVALID_SYNTAX, whose message names it."""
     with pytest.raises(ParseError, match='the name "size" is twice'):
         load_json(b'{"size": 1, "size": 2}')
 
 
 def test_a_record_is_utf_8() -> None:
-    """Annex A: JSON text in UTF-8."""
+    """A record is JSON text in UTF-8."""
     with pytest.raises(ParseError) as raised:
         load_json(b'{"x": "\xe9"}')
     assert raised.value.code == "INVALID_SYNTAX"
@@ -93,7 +92,7 @@ def test_a_record_that_is_json_is_read() -> None:
     }
 
 
-# --- reading, writing and making records (design §4.7, §4.8) ---
+# --- reading, writing and making records ---
 
 
 def test_a_record_is_written_with_sorted_keys_two_spaces_and_a_final_line_break(
@@ -112,8 +111,8 @@ def test_a_record_is_written_with_sorted_keys_two_spaces_and_a_final_line_break(
 def test_reading_a_record_gives_it_or_each_rule_it_breaks(
     tmp_path: Path, contract: Contract
 ) -> None:
-    """§20 *The rules*: a record that breaks a parse or schema rule gives its diagnostic, at its
-    place in the record; nothing at the path, or a symlink there, is no record (Annex B)."""
+    """A record that breaks a parse or schema rule gives its diagnostic, at its place in the
+    record; nothing at the path, or a symlink there, is no record."""
     (tmp_path / "broken.json").write_text(json.dumps({**RECORD, "size": -1}))
     (tmp_path / "bad.json").write_text("{")
     (tmp_path / "link.json").symlink_to("broken.json")
@@ -135,9 +134,9 @@ def test_a_later_minor_versions_fields_are_left_out_of_the_record(contract: Cont
 
 
 def test_new_record_fills_in_each_names_record(tmp_path: Path, contract: Contract) -> None:
-    """§19, design §4.8: the hash and size of the bytes made, at the first name's default place
-    , and of what each entry read, the commit, environment, runner and times; and §18: each
-     name's record has the result's address at that name."""
+    """The hash and size of the bytes made, at the first name's default place, and of what each
+    entry read, the commit, environment, runner and times; and each name's record has the
+    result's address at that name."""
     files = {"astra.yaml": PAIR, "stage/astra.yaml": STAGE, "stage/inner/astra.yaml": INNER}
     top = repository(tmp_path, files)
     commit = git(top, "rev-parse", "HEAD").strip()

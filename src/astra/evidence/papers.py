@@ -1,6 +1,6 @@
-"""The papers that evidence cites by `doi` (§14), kept in the cache (design §4.9).
+"""The papers that evidence cites by `doi`, kept in the cache.
 
-For a `doi`, the cited resource is the work's full text (§14): here, its PDF. The cache keeps
+For a `doi`, the cited resource is the work's full text: here, its PDF. The cache keeps
 one in its `papers` folder for each DOI and the `version` evidence gives, if any. `add` keeps
 one, from bytes the user has or fetched through `urllib`: an arXiv DOI's from arXiv, at its
 version, and any other's from the open-access PDF Unpaywall names as its best. `pages` gives a
@@ -56,8 +56,7 @@ class Cited:
 def evidence(stack: Stack) -> Iterator[tuple[Pointer, str, model.Evidence]]:
     """Each item of the root's evidence that cites a `doi`, with its pointer in the root's file
     and its DOI."""
-    # The root's evidence, as a check covers "the evidence of the analysis it is run
-    # on" (§20 *Evidence*).
+    # The root's evidence, as a check covers the evidence of the analysis it is run on.
     analysis = stack.analysis(stack.root)
     for field, insights in (
         ("prior_insights", analysis.prior_insights),

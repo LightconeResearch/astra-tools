@@ -1,9 +1,8 @@
-"""The validator rules, one module per section of Part II whose codes table states them
-(design §4.4).
+"""The validator rules, in a module for each subject: names, inputs, decisions, and so on.
 
 A rule module has `CODES`, the codes it reports, and `check(context)`, the diagnostics it
 finds in a `Context`. It plugs in by being listed in `MODULES`. `validate()` lists every
-validator code of `rules.json` that no module declares as `unchecked` (design §3).
+validator code of `rules.json` that no module declares as `unchecked`.
 """
 
 from __future__ import annotations
@@ -55,7 +54,7 @@ CODES = frozenset(code for module in MODULES for code in module.CODES)
 def check(context: Context) -> list[Diagnostic]:
     """Every diagnostic of every rule module. A `MUST` this root's pass finds in the files of
     an analysis from a commit, which isn't among those it breaks as its own root there, has the
-    declarations that lead to it as related places (`commits.related`, design §3)."""
+    declarations that lead to it as related places (`commits.related`)."""
     judged = list(commits.check(context))
     found = [d for module in MODULES if module is not commits for d in module.check(context)]
     return [*commits.related(context, found, set(judged)), *judged]

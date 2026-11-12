@@ -1,14 +1,14 @@
-"""The plan (design §4.6): §18's planned results, each after what it reads, with their names,
-owners, places, inputs, decisions and commands; `render_command` (§11 *The command as a
-template*); §17's results read through their records or run at a commit; `api.plan`, its
-shape `astra-plan/1`, and `astra plan`.
+"""The plan: the planned results, each after what it reads, with their names, owners, places,
+inputs, decisions and commands; `render_command`, which fills a command's placeholders; the
+results of an analysis from a commit, read through their records or run at its commit;
+`api.plan`, its shape `astra-plan/1`, and `astra plan`.
 
-The stacks are §2's worked example; astra-spec's `examples/iris_pipeline`; §16's `output5`
-reading §15's `subanalysis` in three universes, where `subanalysis`'s own `v1` drives its
-parent (§18), with an output of every placeholder; an analysis with a declaration no key
-drives, for outputs asked for that aren't built; §18's `inner` reached through `inner` and
-`stage.inner`; §17's analysis from a commit, driven and pinned; an analysis whose recipes ask for
-resources; and one with each note a stack read where the root is can have (design §4.6).
+The stacks are a worked example; astra-spec's `examples/iris_pipeline`; `output5` reading
+`subanalysis` in three universes, where `subanalysis`'s own `v1` drives its parent, with an
+output of every placeholder; an analysis with a declaration no key drives, for outputs asked
+for that aren't built; `inner` reached through `inner` and `stage.inner`; an analysis from a
+commit, driven and pinned; an analysis whose recipes ask for resources; and one with each note
+a stack read where the root is can have.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def astra(*args: str) -> Result:
 
 
 def results(plan: Plan) -> list[tuple[str, str]]:
-    """Each result, in the plan's order: the analysis it belongs to, and its addresses (§18)."""
+    """Each result, in the plan's order: the analysis it belongs to, and its addresses."""
     return [(str(r.owner), ", ".join(p.address for p in r.places)) for r in plan.results]
 
 
@@ -50,7 +50,7 @@ def each_after_what_it_reads(plan: Plan) -> bool:
     return True
 
 
-# --- §2's worked example ---
+# --- The worked example ---
 
 
 @pytest.fixture(scope="module")
@@ -59,9 +59,9 @@ def worked(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return repository(tmp_path_factory.mktemp("worked"), files)
 
 
-def test_the_worked_example_plans_its_three_results_at_section_18s_places(worked: Path) -> None:
-    """§2 *Building* and §18: `output1` in `u1` and in `u2`, then `output2`, which reads both,
-    each with its record and its bytes where §18's tree puts them."""
+def test_the_worked_example_plans_its_three_results_at_their_places(worked: Path) -> None:
+    """`output1` in `u1` and in `u2`, then `output2`, which reads both, each with its record at
+    its place and its bytes at its default place."""
     plan = api.plan(worked)
     assert [
         (r.names, r.universe and r.universe.id, [(p.record, p.bytes) for p in r.places])
@@ -90,8 +90,8 @@ def test_the_worked_example_plans_its_three_results_at_section_18s_places(worked
     ]
 
 
-def test_the_worked_example_builds_as_section_2_says(worked: Path) -> None:
-    """§2 *Building*: `{decisions.decision1}` is `a` in `u1` and `b` in `u2`, `output2` reads
+def test_the_worked_example_renders_its_commands(worked: Path) -> None:
+    """`{decisions.decision1}` is `a` in `u1` and `b` in `u2`, `output2` reads
     the paths of both results, and `{output}` is where each result is written."""
     assert [render_command(result, worked) for result in api.plan(worked).results] == [
         "python src/output1.py 'data/input1.csv' 'a' 'results/u1/output1.json'",
@@ -118,17 +118,17 @@ IRIS = {
     (".", "feature_extraction.features#baseline"),
     (".", "feature_extraction.features#mlp_svm"),
 }
-"""§18, read for `examples/iris_pipeline`: the root's outputs, `iris_data` and `comparison`
-built once and the others in each of its universes; what `summary` and `comparison` read,
-`classification`'s `accuracy` and, through it, `predictions`, in each universe; and what
-`predictions` reads, `feature_extraction`'s `features` and the root's own `split`. The root's
-universes drive both stages, so each result built in them is the root's, named through the
-one driven declaration to its analysis: `classification.feature_extraction` and the stages'
-`iris: {path: ..}` aren't driven and add no name. `iris_data` is read by `split` and, as
-`iris.iris_data`, by `features`; `feature_plot`, which nothing reads, isn't planned."""
+"""The planned results of `examples/iris_pipeline`: the root's outputs, `iris_data` and
+`comparison` built once and the others in each of its universes; what `summary` and
+`comparison` read, `classification`'s `accuracy` and, through it, `predictions`, in each
+universe; and what `predictions` reads, `feature_extraction`'s `features` and the root's own
+`split`. The root's universes drive both stages, so each result built in them is the root's,
+named through the one driven declaration to its analysis: `classification.feature_extraction`
+and the stages' `iris: {path: ..}` aren't driven and add no name. `iris_data` is read by `split`
+and, as `iris.iris_data`, by `features`; `feature_plot`, which nothing reads, isn't planned."""
 
 
-def test_iris_pipeline_plans_with_the_names_and_owners_of_section_18(tmp_path: Path) -> None:
+def test_iris_pipeline_plans_with_its_results_names_and_owners(tmp_path: Path) -> None:
     shutil.copytree(SPEC / "examples" / "iris_pipeline", tmp_path / "pipeline")
     plan = api.plan(repository(tmp_path / "pipeline", {}))
     assert len(plan.results) == len(IRIS)
@@ -153,7 +153,7 @@ def test_iris_pipeline_plans_with_the_names_and_owners_of_section_18(tmp_path: P
     assert predictions.inputs[1].result is by_address["split#mlp_svm"]
 
 
-# --- §16's output5, §18's parent.output1, and §11's placeholders ---
+# --- output5, parent.output1, and the placeholders ---
 
 
 PLACEHOLDERS = """\
@@ -167,8 +167,7 @@ PLACEHOLDERS = """\
         python make.py {{x}} '{inputs.input1}' '{inputs.subanalysis.output1}'
         '{inputs.output1#u1}' '{decisions.subanalysis.decision1}' {inputs} '{output}' }}
 """
-"""An output of every placeholder of §11's table, the entries with dots and `#`, `{{` and
-`}}`."""
+"""An output of every placeholder, the entries with dots and `#`, `{{` and `}}`."""
 
 
 @pytest.fixture(scope="module")
@@ -183,11 +182,10 @@ def pinning(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_output5s_three_pins_read_three_results_each_in_its_owners_folder(pinning: Path) -> None:
-    """§16 *Pins and imported universes* and §18: `subanalysis.output1#u1` reads the root's
-    result, named `subanalysis.output1`; `#subanalysis_u1` and `#v1` read `subanalysis`'s own,
-    in its folder under its universes' own ids; `output1#subanalysis_v1` reads the root's
-    `output1` as `subanalysis`'s `v1` builds it, through `parent: {path: ..}`, named
-    `parent.output1` there, which runs in the root's folder (§11)."""
+    """`subanalysis.output1#u1` reads the root's result, named `subanalysis.output1`;
+    `#subanalysis_u1` and `#v1` read `subanalysis`'s own, in its folder under its universes' own
+    ids; `output1#subanalysis_v1` reads the root's `output1` as `subanalysis`'s `v1` builds it,
+    through `parent: {path: ..}`, named `parent.output1` there, which runs in the root's folder."""
     plan = api.plan(pinning)
     assert set(results(plan)) == {
         (".", "output1#u1"),
@@ -227,11 +225,11 @@ def test_output5s_three_pins_read_three_results_each_in_its_owners_folder(pinnin
     )
 
 
-def test_each_placeholder_renders_as_section_11s_table_says(pinning: Path) -> None:
-    """§11 *The command as a template*: `{{` and `}}` are literal braces; `{inputs.<entry>}`,
-    for entries with dots and `#`, the path of what the entry reads; `{decisions.<entry>}` the
-    option selected; `{inputs}` every entry's path in order; `{output}` where the result is
-    written; each verbatim, relative to the folder the recipe runs in or absolute."""
+def test_each_placeholder_renders_as_it_should(pinning: Path) -> None:
+    """`{{` and `}}` are literal braces; `{inputs.<entry>}`, for entries with dots and `#`, the path
+    of what the entry reads; `{decisions.<entry>}` the option selected; `{inputs}` every entry's
+    path in order; `{output}` where the result is written; each verbatim, relative to the folder the
+    recipe runs in or absolute."""
     plan = api.plan(pinning)
     (one, two) = [result for result in plan.results if result.output.id == "output3"]
     template = (
@@ -261,8 +259,8 @@ def test_each_placeholder_renders_as_section_11s_table_says(pinning: Path) -> No
 
 
 def test_a_driven_analysiss_recipe_runs_in_its_own_folder(pinning: Path) -> None:
-    """§11 and §18: `subanalysis`'s recipe, built in the root's `u1`, runs in `subanalysis`'s
-    folder and reads its own input there, and writes into the root's results."""
+    """`subanalysis`'s recipe, built in the root's `u1`, runs in `subanalysis`'s folder and reads
+    its own input there, and writes into the root's results."""
     plan = api.plan(pinning)
     (built,) = [r for r in plan.results if r.places[0].address == "subanalysis.output1#u1"]
     assert built.workdir == "subanalysis"
@@ -292,7 +290,7 @@ def test_universes_narrow_the_plan_to_what_is_built_there_and_what_it_reads(
 
 
 def test_an_output_nothing_reads_is_built_on_request(pinning: Path) -> None:
-    """An output of a declared analysis that no planned result reads isn't planned (§18), but
+    """An output of a declared analysis that no planned result reads isn't planned, but
     can be asked for: it is planned as the root's own outputs are, in each of the root's
     universes where its analysis is built, and named from the root."""
     assert results(api.plan(pinning, outputs=["subanalysis.unread"])) == [
@@ -337,7 +335,7 @@ universes:
 """
 """A root whose universes drive `stage`, which has no decisions to set, and set no key
 through `stage.lone`; nothing they plan uses `lone`'s decision, so they drive `lone` too, with
-nothing to set (§16; Elements)."""
+nothing to set (Elements)."""
 
 READS_LONE = """\
 spec_version: "0.1.0"
@@ -370,11 +368,10 @@ outputs:
 
 
 def test_an_output_asked_for_with_no_result_to_give_is_a_request_error(tmp_path: Path) -> None:
-    """design §4.6, §16 *The universe being built*: the root's universes drive `stage` and,
-    through it, `lone`, as nothing they plan uses `lone`'s `d` (Elements), so they set it
-    nowhere. `stage.lone.out` lists `d`, and `stage.reader`, built in each, reads `lone.out`:
-    asked for, either would use `d` where it isn't set (Results *uses*). Nothing planned reads
-    either, so the stack breaks no rule."""
+    """The root's universes drive `stage` and, through it, `lone`, as nothing they plan uses
+    `lone`'s `d` (Elements), so they set it nowhere. `stage.lone.out` lists `d`, and `stage.reader`,
+    built in each, reads `lone.out`: asked for, either would use `d` where it isn't set (Results
+    *uses*). Nothing planned reads either, so the stack breaks no rule."""
     files = {"astra.yaml": UNDRIVEN, "stage/astra.yaml": READS_LONE, "lone/astra.yaml": LONE}
     top = repository(tmp_path, files)
     assert api.validate(top).diagnostics == ()
@@ -392,7 +389,7 @@ def test_an_output_asked_for_with_no_result_to_give_is_a_request_error(tmp_path:
         api.plan(top, outputs=["stage.reader"])
 
 
-# --- §18: a result with two names ---
+# --- A result with two names ---
 
 
 INNER = """\
@@ -437,7 +434,7 @@ universes:
   u1: {decisions: {inner.decision1: a}}
   u2: {decisions: {stage.inner.decision1: b}}
 """
-"""§18: the root declares `inner` and `stage`, and `stage` declares the same folder as
+"""The root declares `inner` and `stage`, and `stage` declares the same folder as
 `inner`; keys go through both. The root reads `inner`'s `output1` through each, and `stage`'s
 `staged` reads it through `stage`'s `inner`."""
 
@@ -456,8 +453,7 @@ outputs:
 
 
 def test_a_result_reached_through_two_chains_has_a_place_for_each_name(tmp_path: Path) -> None:
-    """§18 *Which analysis a result belongs to, and its name* and *Where records and bytes go*:
-    `inner`'s `output1` is made once in each universe, and placed and recorded under
+    """`inner`'s `output1` is made once in each universe, and placed and recorded under
     `stage.inner.output1` and `inner.output1`. A recipe writes it at the first name's place, and
     reads it at the place of the name along the entry's declarations from the analysis the result
     belongs to, the root: for `staged`'s `inner.output1`, along the root's `stage`, then `stage`'s
@@ -486,7 +482,7 @@ def test_a_result_reached_through_two_chains_has_a_place_for_each_name(tmp_path:
     )
 
 
-# --- §17: an analysis from a commit ---
+# --- An analysis from a commit ---
 
 
 LIB = """\
@@ -533,10 +529,10 @@ it, pinned to `lib`'s own `v1`, and `lib`'s `once`, built once."""
 def test_an_analysis_from_a_commit_is_read_through_its_records_unless_driven(
     tmp_path: Path,
 ) -> None:
-    """§17 *Using one*: what the root's universes build of `lib` is the
-    root's, run on `lib`'s files at its commit (`run_at`); `lib`'s results in its own `v1`, and
-    its output built once, though driven, are `lib`'s at that commit, read through their
-    records (`read_only`), and no recipe of theirs runs (§21)."""
+    """What the root's universes build of `lib` is the root's, run on `lib`'s files at its commit
+    (`run_at`); `lib`'s results in its own `v1`, and its output built once, though driven, are
+    `lib`'s at that commit, read through their records (`read_only`), and no recipe of theirs
+    runs."""
     top = repository(tmp_path, {"astra.yaml": MINIMAL, "lib/astra.yaml": LIB})
     commit = git(top, "rev-parse", "HEAD").strip()
     repository(top, {"astra.yaml": FROM_COMMIT % commit})
@@ -560,10 +556,10 @@ def test_an_analysis_from_a_commit_is_read_through_its_records_unless_driven(
 
 
 def test_an_entry_read_at_a_commit_is_where_the_runner_put_its_bytes(tmp_path: Path) -> None:
-    """§17, §21: what `result` reads of `lib` at its commit is in that commit's tree, not the
-    checkout's, so its path is git's `<commit>:<path>` until the runner says where it put the
-    bytes it got (`got`), from the checkout's top or absolute; and `new_record` hashes them
-    there, refusing an entry `got` doesn't give."""
+    """What `result` reads of `lib` at its commit is in that commit's tree, not the checkout's, so
+    its path is git's `<commit>:<path>` until the runner says where it put the bytes it got (`got`),
+    from the checkout's top or absolute; and `new_record` hashes them there, refusing an entry `got`
+    doesn't give."""
     top = repository(tmp_path / "repo", {"astra.yaml": MINIMAL, "lib/astra.yaml": LIB})
     commit = git(top, "rev-parse", "HEAD").strip()
     repository(top, {"astra.yaml": FROM_COMMIT % commit})
@@ -664,7 +660,7 @@ def test_astra_plan_shows_each_result_with_its_places_and_command(worked: Path) 
     assert shape == api.plan(worked).to_json()
 
 
-# --- what a recipe asks for, and the plan's notes (design §4.6) ---
+# --- what a recipe asks for, and the plan's notes ---
 
 
 ASKING = """\
@@ -686,7 +682,7 @@ outputs:
 
 
 def test_each_result_carries_what_its_recipe_asks_for(tmp_path: Path) -> None:
-    """§11, design §4.6: a result carries its recipe's `resources`, as written, which a runner
+    """A result carries its recipe's `resources`, as written, which a runner
     schedules with. `astra-plan/1` gives them, and `astra plan` shows them."""
     top = repository(tmp_path, {"astra.yaml": ASKING})
     plan = api.plan(top)
@@ -716,10 +712,9 @@ def test_each_result_carries_what_its_recipe_asks_for(tmp_path: Path) -> None:
 def test_the_plan_notes_a_pin_that_names_another_analysiss_universe_by_the_fallback(
     pinning: Path,
 ) -> None:
-    """design §4.6, §16 *Pins and imported universes*: the root's `subanalysis.output1#v1`
-    names `subanalysis`'s `v1` only because the root's file has no universe `v1`, so adding one
-    would change what it names. That is noted, though it breaks no rule; the pins naming the
-    root's own `u1` and its imports aren't."""
+    """The root's `subanalysis.output1#v1` names `subanalysis`'s `v1` only because the root's file
+    has no universe `v1`, so adding one would change what it names. That is noted, though it breaks
+    no rule; the pins naming the root's own `u1` and its imports aren't."""
     plan = api.plan(pinning)
     (note,) = [note for note in plan.notes if note.kind == "fallback_pin"]
     assert note.results == ()
@@ -760,7 +755,7 @@ def test_the_plan_notes_a_pin_that_names_another_analysiss_universe_by_the_fallb
 
 
 def test_the_plan_notes_each_result_with_two_names(tmp_path: Path) -> None:
-    """design §4.6, §18: `inner`'s `output1`, reached through `inner` and `stage.inner`, has two
+    """`inner`'s `output1`, reached through `inner` and `stage.inner`, has two
     names in each universe. Each is noted, though `RESULT_IN_TWO_PLACES` is only a SHOULD, and
     `astra-plan/1` gives the result by its index."""
     files = {"astra.yaml": PAIR, "stage/astra.yaml": STAGE, "stage/inner/astra.yaml": INNER}
@@ -845,7 +840,7 @@ outputs:
 
 
 def test_the_plan_notes_each_output_with_no_planned_result(pinning: Path, tmp_path: Path) -> None:
-    """design §4.6, §18: an output of a declared analysis that no planned result reads and the
+    """An output of a declared analysis that no planned result reads and the
     root's evidence doesn't cite, and an output of the root built per universe where the root
     has no universes, have no planned result, so a check of the root never covers them. Each is
     noted at the output, in the files read where the root is."""
@@ -870,7 +865,7 @@ def test_the_plan_notes_each_output_with_no_planned_result(pinning: Path, tmp_pa
 def test_the_plan_notes_results_that_are_one_computation_in_several_universes(
     pinning: Path, tmp_path: Path
 ) -> None:
-    """design §4.6: results of one output that read the same files and the same computations,
+    """Results of one output that read the same files and the same computations,
     with the same options selected, are one computation, which a runner can build once and
     place at each. The root's `u1` and `subanalysis`'s own `u1` both select `a` for
     `subanalysis`'s `decision1`, so its `output1` is one computation in both; each result is
@@ -921,17 +916,17 @@ def test_the_plan_notes_results_that_are_one_computation_in_several_universes(
 def test_a_command_names_a_path_outside_its_folder_where_it_climbs_out(
     command: str, climbing: tuple[str, ...]
 ) -> None:
-    """design §4.6, §11: a path climbs out of the folder the recipe runs in where its `..`
-    outnumber the folders before them. A path from a placeholder starts elsewhere, and an
-    absolute path names no folder of the analysis."""
+    """A path climbs out of the folder the recipe runs in where its `..` outnumber the folders
+    before them. A path from a placeholder starts elsewhere, and an absolute path names no folder of
+    the analysis."""
     assert outside(command) == climbing
 
 
 def test_the_plan_notes_each_command_that_names_a_path_outside_its_folder(tmp_path: Path) -> None:
-    """design §4.6, §21 `CODE_OUTSIDE_ANALYSIS`: `first`'s command names `../lib`, outside the
-    root's folder, and `second`'s names `sub/second.py`, inside `sub`, which holds an
-    `astra.yaml` of its own, declared or not. Each is noted at the command, citing the rule,
-    which a runner holds a recipe to; `third`'s `src/third.py` is the root's own."""
+    """`first`'s command names `../lib`, outside the root's folder, and `second`'s names
+    `sub/second.py`, inside `sub`, which holds an `astra.yaml` of its own, declared or not. Each
+    is noted at the command, citing `CODE_OUTSIDE_ANALYSIS`, which a runner holds a recipe to;
+    `third`'s `src/third.py` is the root's own."""
     files = {
         "astra.yaml": NOTED.replace("python src/second.py", "python ./sub/second.py"),
         "data/input1.csv": "1\n",
@@ -1014,7 +1009,7 @@ folder."""
 
 
 def test_the_plan_notes_say_whether_they_concern_what_the_root_builds(tmp_path: Path) -> None:
-    """design §4.6: a fallback pin concerns what the root builds where a planned result reads
+    """A fallback pin concerns what the root builds where a planned result reads
     through it, and an output with no planned result, or a command naming a path outside its
     analysis, where its analysis is the root or one the root drives. `astra plan` counts and
     lists those, and gives the whole stack's count of a kind on a line of its own where it is
@@ -1052,7 +1047,7 @@ def test_the_plan_notes_say_whether_they_concern_what_the_root_builds(tmp_path: 
 
 
 def test_astra_plan_counts_the_notes_by_kind_and_lists_them_on_request(tmp_path: Path) -> None:
-    """design §4.6: `astra plan` counts the notes by kind after the results, and `--notes`
+    """`astra plan` counts the notes by kind after the results, and `--notes`
     lists each one first. The JSON always lists them."""
     top = repository(tmp_path, {"astra.yaml": NOTED, "data/input1.csv": "1\n"})
     plan = api.plan(top)

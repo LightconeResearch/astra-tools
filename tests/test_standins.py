@@ -1,6 +1,6 @@
-"""Stand-ins (§7, design §4.5): each built-in one recognised from what its
-tool keeps in a file's place, committed in a real repository, and another package's, registered
-in the entry-point group `astra.standins` (design §4.10)."""
+"""Stand-ins: each built-in one recognised from what its tool keeps in a file's place,
+committed in a real repository, and another package's, registered in the entry-point group
+`astra.standins`."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def tree(tmp_path_factory: pytest.TempPathFactory) -> WorktreeReader:
 
 
 def test_git_lfs_recognises_its_pointer_file(tree: WorktreeReader) -> None:
-    """design §4.5: `version`, then `oid sha256:…` and `size …`, at the path itself."""
+    """`version`, then `oid sha256:…` and `size …`, at the path itself."""
     assert GitLfs().recognises(tree, "lfs.bin")
     assert GitLfs().place("lfs.bin") == "lfs.bin"
     assert not GitLfs().recognises(tree, "lfs-no-size.bin")
@@ -50,8 +50,8 @@ def test_git_lfs_recognises_its_pointer_file(tree: WorktreeReader) -> None:
 def test_git_annex_recognises_a_symlink_or_a_pointer_into_its_objects(
     tree: WorktreeReader,
 ) -> None:
-    """design §4.5: a locked file, committed as a symlink into `annex/objects/`, whose target
-    needn't be there, and an unlocked pointer file; never another symlink or file."""
+    """A locked file, committed as a symlink into `annex/objects/`, whose target needn't be there,
+    and an unlocked pointer file; never another symlink or file."""
     assert GitAnnex().recognises(tree, "locked.bin")
     assert GitAnnex().recognises(tree, "unlocked.bin")
     assert not GitAnnex().recognises(tree, "link.csv")
@@ -59,7 +59,7 @@ def test_git_annex_recognises_a_symlink_or_a_pointer_into_its_objects(
 
 
 def test_dvc_recognises_its_file_beside_the_path(tree: WorktreeReader) -> None:
-    """design §4.5: `<path>.dvc` beside a path that names nothing, which is what git tracks."""
+    """`<path>.dvc` beside a path that names nothing, which is what git tracks."""
     assert Dvc().place("huge.csv") == "huge.csv.dvc"
     assert Dvc().recognises(tree, "huge.csv")
     assert not Dvc().recognises(tree, "plain.csv")
@@ -68,9 +68,9 @@ def test_dvc_recognises_its_file_beside_the_path(tree: WorktreeReader) -> None:
 def test_each_gives_the_hash_and_size_of_what_it_stands_for_where_it_can(
     tree: WorktreeReader,
 ) -> None:
-    """design §4.5's *Gives*, which the checker compares as an input's content (§20): a Git LFS
-    pointer's `oid` and `size`, a git-annex key of a SHA-256 backend, and nothing of a DVC
-    file, whose hash is an MD5."""
+    """What each stand-in gives, which the checker compares as an input's content: a Git LFS
+    pointer's `oid` and `size`, a git-annex key of a SHA-256 backend, and nothing of a DVC file,
+    whose hash is an MD5."""
     assert GitLfs().gives(tree, "lfs.bin") == (f"sha256:{'a' * 64}", 6)
     assert GitLfs().gives(tree, "plain.csv") is None
     assert GitAnnex().gives(tree, "locked.bin") == (f"sha256:{'5' * 64}", 6)
@@ -104,8 +104,8 @@ STANDIN = Store()
 def test_another_package_registers_a_stand_in(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """design §4.10: an object in the entry-point group `astra.standins` is recognised after the
-    built-in ones, and keeps `MISSING_INPUT_FILE` for what it stands in for."""
+    """An object in the entry-point group `astra.standins` is recognised after the built-in ones,
+    and keeps `MISSING_INPUT_FILE` for what it stands in for."""
     top = repository(tmp_path / "repo", {"store/x": "1\n"})
     (top / "data.raw").symlink_to("store/x")
     repository(top, {"astra.yaml": MINIMAL + "inputs:\n  raw: {path: data.raw}\n"})

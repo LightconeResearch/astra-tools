@@ -18,7 +18,7 @@ from astra.records import Runner, new_record, write_record
 
 SPEC = Path(str(files("astra.schema") / "generated")).parents[3]
 """The astra-spec the installed `astra.schema` comes from: its conformance suite (`conformance/`)
-and its `examples/` are the oracle (design §1, principle 6)."""
+and its `examples/` are the oracle."""
 
 DOCUMENTS = SPEC / "conformance" / "documents"
 """The conformance suite's documents: `valid/` and `invalid/`."""
@@ -32,7 +32,7 @@ outputs:
     recipe:
       command: python make.py '{output}'
 """
-"""A minimal `astra.yaml` that makes something: a `spec_version` and one output (§5)."""
+"""A minimal `astra.yaml` that makes something: a `spec_version` and one output."""
 
 
 def pytest_report_header(config: pytest.Config) -> str:
@@ -126,11 +126,10 @@ def build(
 ) -> tuple[Result, ...]:
     """Build the analysis in `folder`, `top` by default, in the working tree whose top is `top`,
     as a runner would but without running a recipe: each planned result it doesn't read through
-    a record (§17), in the plan's order, gets the bytes `made` gives it at each of its default
-    places, and a record from `records.new_record` at each of its places, naming `commit`
-    (HEAD by default) as the commit its recipe ran from (§18, §19). What an entry reads at a
-    commit is got through `api.history`, outside the checkout. Nothing is committed. Gives the
-    plan's results."""
+    a record, in the plan's order, gets the bytes `made` gives it at each of its default places,
+    and a record from `records.new_record` at each of its places, naming `commit` (HEAD by
+    default) as the commit its recipe ran from. What an entry reads at a commit is got through
+    `api.history`, outside the checkout. Nothing is committed. Gives the plan's results."""
     commit = commit or git(top, "rev-parse", "HEAD").strip()
     results = api.plan(folder or top).results
     kept = Path(tempfile.mkdtemp(prefix="got-"))

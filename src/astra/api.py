@@ -1,5 +1,5 @@
-"""The stable public functions of astra-tools (design §2): `validate`, `bind`, `init`, `plan`,
-`view`, `check` and `history`; and, with the extra `[evidence]`, `papers` and `quotes`."""
+"""The stable public functions of astra-tools: `validate`, `bind`, `init`, `plan`, `view`,
+`check` and `history`; and, with the extra `[evidence]`, `papers` and `quotes`."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ class NoAnalysisError(Exception):
 
 class InvalidAnalysisError(Exception):
     """The analysis breaks a `MUST`, so it has no plan, no view, no history and no papers:
-    `report` says where. `check` gives what statuses it can instead (design §4.7)."""
+    `report` says where. `check` gives what statuses it can instead."""
 
     def __init__(self, report: ValidationReport) -> None:
         super().__init__(f"{report.root} breaks a MUST: `astra validate` says where")
@@ -73,7 +73,7 @@ def validate(
     default. Nothing is searched for: the folder holds the analysis's `astra.yaml`.
 
     It is read in the working tree of the git repository that holds it. A commit is got from a
-    remote into the cache, once (§17); `offline`, nothing is fetched, and only the commits kept
+    remote into the cache, once; `offline`, nothing is fetched, and only the commits kept
     from earlier fetches can be got. Raises NoAnalysisError where there is no analysis,
     GitError where git can't be run, CacheError where the cache can't be used, and OSError
     where a file can't be read.
@@ -84,9 +84,8 @@ def validate(
 
 def bind(path: str | os.PathLike[str] | None = None) -> Bound:
     """The stack whose root is the analysis whose folder is `path`, read as `validate` reads it,
-    with the parse and schema diagnostics of its files (design §4.4). Its `stack` is None where
-    the root's file isn't a valid document, or the root is in no repository. Raises as
-    `validate` does."""
+    with the parse and schema diagnostics of its files. Its `stack` is None where the root's
+    file isn't a valid document, or the root is in no repository. Raises as `validate` does."""
     reader, root = _root(path)
     return bind_reader(reader, root, remotes=Remotes())
 
@@ -98,18 +97,17 @@ def plan(
     outputs: Iterable[str] | None = None,
 ) -> Plan:
     """The planned results of the analysis whose folder is `path`, read as `validate` reads
-    it, in an order a runner can build them in (§18, design §4.6): all of them, or those
-    `universes` and `outputs` ask for (`plan.plan`). Raises InvalidAnalysisError where the
-    analysis breaks a `MUST`, RequestError where a universe or an output asked for isn't there,
-    or is a switch (Elements *switch*), or an output asked for can't be built there, and
-    otherwise as `validate` does."""
+    it, in an order a runner can build them in: all of them, or those `universes` and `outputs`
+    ask for (`plan.plan`). Raises InvalidAnalysisError where the analysis breaks a `MUST`,
+    RequestError where a universe or an output asked for isn't there, or is a switch (Elements
+    *switch*), or an output asked for can't be built there, and otherwise as `validate` does."""
     return plan_stack(_valid(path), universes, outputs)
 
 
 def view(universe: str, path: str | os.PathLike[str] | None = None) -> UniverseView:
     """The analysis whose folder is `path`, read as `validate` reads it, as it is in its
-    universe `universe` (design §4.6). Raises InvalidAnalysisError where the analysis breaks a
-    `MUST`, RequestError where it has no such universe, and otherwise as `validate` does."""
+    universe `universe`. Raises InvalidAnalysisError where the analysis breaks a `MUST`,
+    RequestError where it has no such universe, and otherwise as `validate` does."""
     return view_stack(_valid(path), universe)
 
 
@@ -120,20 +118,19 @@ def check(
     universes: Iterable[str] | None = None,
     outputs: Iterable[str] | None = None,
 ) -> CheckReport:
-    """The checker's report on the analysis whose folder is `path`, read as `validate` reads it
-    (§20, design §4.7): each planned result's record and bytes statuses at each of its places,
-    and its evidence's, all of them or those `universes` and `outputs` narrow it to
-    (`check.check`). With `at`, a revision of the repository that holds the analysis (a commit,
-    a branch, a tag), the analysis is checked as it is at that commit, with its records and
-    bytes read there. Where the analysis breaks a `MUST`, the report holds the errors, and only
-    the results whose planning is determined (design §4.13 case 12) get statuses: none where the
-    root's file isn't a valid document or it is in no repository. Raises RequestError where `at`
-    names no commit or a universe or an output asked for isn't there, or is a switch, and
-    otherwise as `validate` does."""
+    """The checker's report on the analysis whose folder is `path`, read as `validate` reads
+    it: each planned result's record and bytes statuses at each of its places, and its
+    evidence's, all of them or those `universes` and `outputs` narrow it to (`check.check`).
+    With `at`, a revision of the repository that holds the analysis (a commit, a branch, a tag),
+    the analysis is checked as it is at that commit, with its records and bytes read there.
+    Where the analysis breaks a `MUST`, the report holds the errors, and only the results whose
+    planning is determined get statuses: none where the root's file isn't a valid document or
+    it is in no repository. Raises RequestError where `at` names no commit or a universe or an
+    output asked for isn't there, or is a switch, and otherwise as `validate` does."""
     remotes = Remotes()
     reader, report, stack = _read(path, at, remotes)
     errors = tuple(diagnostic for diagnostic in report.diagnostics if diagnostic.level == "error")
-    if stack is None:  # no result's planning is determined (design §4.13 case 12)
+    if stack is None:  # no result's planning is determined
         commit = reader.commit if isinstance(reader, CommitReader) else "worktree"
         return CheckReport(report.root, commit, (), (), errors)
     return check_stack(stack, universes, outputs, remotes, errors)
@@ -141,10 +138,9 @@ def check(
 
 def history(path: str | os.PathLike[str] | None = None) -> History:
     """The history of the records of the planned results of the analysis whose folder is
-    `path`, read as `validate` reads it, and read from git on demand (design §6 *Phase 4*):
-    each query is one call of what this gives, `timeline`, `lineage`, `find` or `get`
-    (`history.History`). Raises InvalidAnalysisError where the analysis breaks a `MUST`, and
-    otherwise as `validate` does."""
+    `path`, read as `validate` reads it, and read from git on demand: each query is one call of
+    what this gives, `timeline`, `lineage`, `find` or `get` (`history.History`). Raises
+    InvalidAnalysisError where the analysis breaks a `MUST`, and otherwise as `validate` does."""
     # The form of the public API.
     remotes = Remotes()
     return History(_valid(path, None, remotes), remotes)
@@ -152,9 +148,9 @@ def history(path: str | os.PathLike[str] | None = None) -> History:
 
 def papers(path: str | os.PathLike[str] | None = None) -> tuple[Cited, ...]:
     """Each work the evidence of the analysis whose folder is `path` cites by DOI, read as
-    `validate` reads it, at each version it cites, once, and whether the cache holds its paper
-    (design §6 *Phase 5*). Raises ImportError where the extra `[evidence]` isn't installed,
-    InvalidAnalysisError where the analysis breaks a `MUST`, and otherwise as `validate` does."""
+    `validate` reads it, at each version it cites, once, and whether the cache holds its paper.
+    Raises ImportError where the extra `[evidence]` isn't installed, InvalidAnalysisError where
+    the analysis breaks a `MUST`, and otherwise as `validate` does."""
     from astra.evidence.papers import cited  # the extra's API
 
     return cited(_valid(path))
@@ -174,7 +170,7 @@ def _valid(
     path: str | os.PathLike[str] | None, at: str | None = None, remotes: Remotes | None = None
 ) -> Stack:
     """The stack whose root is the analysis in `path`, read in the working tree or at the
-    revision `at`, where it is valid (§4). Raises InvalidAnalysisError where it isn't, and
+    revision `at`, where it is valid. Raises InvalidAnalysisError where it isn't, and
     RequestError where `at` names no commit."""
     _, report, stack = _read(path, at, remotes or Remotes())
     if not report.valid:  # no plan and no view of an invalid analysis
@@ -211,7 +207,7 @@ outputs:
     recipe:
       command: python src/result.py '{output}'
 """
-"""What `init` writes: a `spec_version` and one output, `result`, to start from (§5)."""
+"""What `init` writes: a `spec_version` and one output, `result`, to start from."""
 
 
 def init(path: str | os.PathLike[str] | None = None) -> tuple[Path, bool]:

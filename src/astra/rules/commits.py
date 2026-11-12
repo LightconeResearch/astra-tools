@@ -1,25 +1,24 @@
-"""§17 Analyses from another commit or repository: a declaration's `commit` is one the repository
+"""Analyses from another commit or repository: a declaration's `commit` is one the repository
 that holds the declaring file has (`COMMIT_NOT_FOUND`); and an analysis from a commit, with
 everything it declares, is valid at its commit (`DECLARED_ANALYSIS_INVALID`). And astra-tools'
-own two (design §3): the declared commit should be an ancestor of the commit the declaration is
-in or, in the working tree, of HEAD (`COMMIT_NOT_ANCESTOR`); and every commit the stack gets
-from a remote can be got (`REMOTE_UNREACHABLE`).
+own two: the declared commit should be an ancestor of the commit the declaration is in or, in
+the working tree, of HEAD (`COMMIT_NOT_ANCESTOR`); and every commit the stack gets from a
+remote can be got (`REMOTE_UNREACHABLE`).
 
 Binding has followed each declaration and kept what it reached (`astra.stack.Outcome`), and the
 URL and commit that couldn't be got. A commit that can't be got is reported on the declaration
 of the outermost analysis from a commit on the way to it, in a file of the root's own tree,
-which the author can edit, once for each such declaration (design §3). Design §4.13 case 3: a
-declaration that breaks `COMMIT_NOT_FOUND`, or whose own commit can't be got, isn't checked by
-`COMMIT_NOT_ANCESTOR`; one whose analysis can't be got, or on the way through which a commit
-can't be got, isn't checked by `DECLARED_ANALYSIS_INVALID`, nor is an analysis from a commit
-whose file breaks `UNSUPPORTED_SPEC_VERSION`.
+which the author can edit, once for each such declaration. A declaration that breaks
+`COMMIT_NOT_FOUND`, or whose own commit can't be got, isn't checked by `COMMIT_NOT_ANCESTOR`;
+one whose analysis can't be got, or on the way through which a commit can't be got, isn't
+checked by `DECLARED_ANALYSIS_INVALID`, nor is an analysis from a commit whose file breaks
+`UNSUPPORTED_SPEC_VERSION`.
 
-A `MUST` that makes an analysis from a commit invalid, judged as its own root at its commit
-(§17), is reported twice (design §3): `DECLARED_ANALYSIS_INVALID` on the declaration, and the
-rule's own code at its place in the commit's file. Where the rule is one this root's pass finds
-too, `validate` reports it once. A `MUST` that only this root's pass finds in the commit's
-files adds no `DECLARED_ANALYSIS_INVALID`: it is reported under its own code, with the
-declaration as a related place (`related`, design §3).
+A `MUST` that makes an analysis from a commit invalid, judged as its own root at its commit, is
+reported twice: `DECLARED_ANALYSIS_INVALID` on the declaration, and the rule's own code at its place
+in the commit's file. Where the rule is one this root's pass finds too, `validate` reports it once.
+A `MUST` that only this root's pass finds in the commit's files adds no `DECLARED_ANALYSIS_INVALID`:
+it is reported under its own code, with the declaration as a related place (`related`).
 """
 
 from __future__ import annotations
@@ -81,8 +80,7 @@ def check(context: Context) -> Iterator[Diagnostic]:
 
 def _ancestor(context: Context, member: Member, declaration: Declaration) -> Iterator[Diagnostic]:
     """`COMMIT_NOT_ANCESTOR`, in the repository that holds the declaring file: the declared
-    commit is an ancestor of the one the declaration is in, or in the working tree of HEAD
-    (Annex B *The repository that holds a file*)."""
+    commit is an ancestor of the one the declaration is in, or in the working tree of HEAD."""
     commit = declaration.declared.commit
     assert commit is not None
     holder, _ = member.reader.holding(member.identity.folder)
@@ -101,7 +99,7 @@ def _ancestor(context: Context, member: Member, declaration: Declaration) -> Ite
 def related(context: Context, found: list[Diagnostic], judged: set[Diagnostic]) -> list[Diagnostic]:
     """This root's pass's diagnostics, `found`, where each `MUST` in the files of an analysis
     from a commit that its judgment as its own root doesn't find (`judged`) has, as related
-    places, the declarations in the root's own tree that lead to that analysis (§17)."""
+    places, the declarations in the root's own tree that lead to that analysis."""
     stack = context.stack
     leading: dict[tuple[str, str | None], list[Location]] = {}
     for member, _ in stack.determined():
@@ -155,8 +153,8 @@ def _invalid(
     context: Context, member: Member, declaration: Declaration, reached: Identity
 ) -> Iterator[Diagnostic]:
     """`DECLARED_ANALYSIS_INVALID` on `declaration`, with each `MUST` broken at its commit as a
-    related place, and each of those `MUST`s at its place (§17, design §3). A `MUST` only this
-    root's pass finds in the analysis's files adds no `DECLARED_ANALYSIS_INVALID` (`related`)."""
+    related place, and each of those `MUST`s at its place. A `MUST` only this root's pass finds in
+    the analysis's files adds no `DECLARED_ANALYSIS_INVALID` (`related`)."""
     broken = _judged(context, context.stack.analyses[reached])
     if broken:
         codes = ", ".join(sorted({diagnostic.code for diagnostic in broken}))
@@ -172,13 +170,13 @@ def _invalid(
 
 def _judged(context: Context, member: Member) -> tuple[Diagnostic, ...] | None:
     """The `MUST`s broken in the analysis from a commit `member`, with everything it declares,
-    validated as its own root at its commit (§17 *Reading one*). None where that
-    isn't checked: where its file breaks `UNSUPPORTED_SPEC_VERSION` (design §4.13 case 3).
+    validated as its own root at its commit. None where that isn't checked: where its file
+    breaks `UNSUPPORTED_SPEC_VERSION`.
 
     Kept in the cache by the commit, unless the verdict rests on more than the files of the
     commits read: on a `COMMIT_NOT_FOUND`, which the local repository can come to have, or on a
     commit that couldn't be got, which a later fetch can get."""
-    # Judged as its own root, not by the MUSTs broken in its files under this root (§17).
+    # Judged as its own root, not by the MUSTs broken in its files under this root.
     from astra.validate import validate  # it runs these rules, so it is imported when used
 
     identity = member.identity

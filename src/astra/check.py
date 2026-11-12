@@ -1,38 +1,35 @@
 """check(): each planned result's record and bytes statuses, at each of its places, and the
-statuses of the root's evidence and of a declared analysis's that cites a planned result (§20,
-design §4.7).
+statuses of the root's evidence and of a declared analysis's that cites a planned result.
 
-A checker reads records only through planned results (§20): the plan (`plan.plan`) gives each,
-each after what it reads, with its places (§18), what each entry of its output's `inputs` reads
-and the option each entry of its `decisions` selects. At each place:
+A checker reads records only through planned results: the plan (`plan.plan`) gives each, each
+after what it reads, with its places, what each entry of its output's `inputs` reads and the
+option each entry of its `decisions` selects. At each place:
 
 - the record: none is there (`MISSING_RECORD`); it breaks a parse or schema rule, by the record
   schema its minor version picks (`INVALID_RECORD`, each code it breaks a reason); its `address`
   isn't the place's (`MISPLACED_RECORD`); its `inputs` aren't one item for each entry its output
   lists at the commit it names (`MISSING_RECORD_INPUTS`). Each leaves the result `missing`, and
-  the last two are checked only on a record that breaks neither of the first two (design §4.13
-  case 9);
+  the last two are checked only on a record that breaks neither of the first two;
 - the result is then `stale` where something `STALE_RESULT` compares has changed since the
   record's commit, the stack as it was there bound through a CommitReader, from the folder of
-  the analysis the result belongs to, or where that commit can't be read or has no such output
-  (§20); for each switch an entry reads through, that is the decision it switches on, the option
+  the analysis the result belongs to, or where that commit can't be read or has no such output;
+  for each switch an entry reads through, that is the decision it switches on, the option
   selected for it where it is read and the case it takes, whatever bytes result (Results *made
   from*); otherwise it is `unchanged`;
 - its bytes are `present` where those at the default place hash to the record's, and `absent`
-  otherwise: `ABSENT_RESULT` where it has a valid record (§20, design §4.13 case 9).
+  otherwise: `ABSENT_RESULT` where it has a valid record.
 
 A result of an analysis from a commit is read through its record at the declared commit, in the
 analysis it belongs to, and the hashes of the results it reads are taken from their records;
-only one that a planned result reads gets a bytes status (§20 *Results of an analysis from a
-commit*).
-Evidence gets the status of the records it cites (`STALE_EVIDENCE`, §20 *Evidence*), through
-the case a switch it names takes in each of the root's universes (Results *Evidence*): the
-root's, and each item of a declared analysis's evidence that cites a planned result (design
-§4.7). Each record's environment gets what each registered scheme answered for it (design §4.10).
+only one that a planned result reads gets a bytes status.
+Evidence gets the status of the records it cites (`STALE_EVIDENCE`), through the case a switch
+it names takes in each of the root's universes (Results *Evidence*): the root's, and each item
+of a declared analysis's evidence that cites a planned result. Each record's environment gets
+what each registered scheme answered for it.
 
-A stack that breaks a `MUST` is checked too (design §4.7): every result whose planning is
-determined (design §4.13 case 12, `plan.plan`) gets its statuses, and so does the evidence citing
-only such results, while the report holds the validation errors (`api.check`).
+A stack that breaks a `MUST` is checked too: every result whose planning is determined
+(`plan.plan`) gets its statuses, and so does the evidence citing only such results, while the
+report holds the validation errors (`api.check`).
 """
 
 from __future__ import annotations
@@ -68,19 +65,18 @@ CODES = frozenset(
         "STALE_EVIDENCE",
     }
 )
-"""The check layer's codes, which this module reports (§20)."""
+"""The check layer's codes, which this module reports."""
 
 RecordStatus = Literal["unchanged", "stale", "missing"]
 BytesStatus = Literal["present", "absent"]
 
 _WORST: tuple[RecordStatus, ...] = ("missing", "stale", "unchanged")
-"""The record statuses, the worst first (§20 *Evidence*)."""
+"""The record statuses, the worst first."""
 
 
 @dataclass(frozen=True)
 class Reason:
-    """A check rule broken at a place of a planned result, or by evidence (§20), and what
-    breaks it."""
+    """A check rule broken at a place of a planned result, or by evidence, and what breaks it."""
 
     code: str
     level: Level
@@ -92,7 +88,7 @@ class Reason:
 
 @dataclass(frozen=True)
 class Status:
-    """A planned result's statuses at one of its places (§20)."""
+    """A planned result's statuses at one of its places."""
 
     place: Place
     record_status: RecordStatus
@@ -116,7 +112,7 @@ class Checked:
 @dataclass(frozen=True)
 class EvidenceStatus:
     """An item of evidence that cites an output, the root's or a declared analysis's, and the
-    status it gets (§20 *Evidence*, design §4.7)."""
+    status it gets."""
 
     location: Location  # its `artifact`, in the astra.yaml that holds it
     artifact: str  # as written
@@ -145,7 +141,7 @@ class CheckReport:
         return not self.errors and all(status == "unchanged" for status in statuses)
 
     def to_json(self) -> dict[str, Any]:
-        """The report as `astra-check-report/1` (design §4.11)."""
+        """The report as `astra-check-report/1`."""
         # The exact JSON form.
         return {
             "shape": SHAPE,
@@ -195,17 +191,16 @@ def check(
     errors: tuple[Diagnostic, ...] = (),
 ) -> CheckReport:
     """The statuses of every planned result of `stack` at each of its places, and of the root's
-    evidence and each item of a declared analysis's evidence that cites a planned result (§20,
-    design §4.7), its records and bytes read where the stack is: in the working tree, or at
-    the commit its root is read at. Where `stack` breaks a `MUST`, whose `errors` the report
-    holds, only the results whose planning is determined, and the evidence that cites only
-    such results, get statuses (design §4.13 case 12).
+    evidence and each item of a declared analysis's evidence that cites a planned result, its
+    records and bytes read where the stack is: in the working tree, or at the commit its root is
+    read at. Where `stack` breaks a `MUST`, whose `errors` the report holds, only the results
+    whose planning is determined, and the evidence that cites only such results, get statuses.
 
     `universes`, ids of the root's universes, and `outputs`, addresses read in the root's file,
     only narrow the planned results reported to those built in those universes and of those
-    outputs (design §4.7); the evidence is not narrowed (§20 *Evidence*). Commits are got from
-    remotes through `remotes`. Raises RequestError where a universe or an output asked for isn't
-    there, or is a switch, or an output asked for has no planned result there."""
+    outputs; the evidence is not narrowed. Commits are got from remotes through `remotes`.
+    Raises RequestError where a universe or an output asked for isn't there, or is a switch, or
+    an output asked for has no planned result there."""
     results = plan(stack).results
     narrowed = None if universes is None else {root_universe(stack, id_) for id_ in universes}
     named = {root_output(stack, address): address for address in outputs or ()}
@@ -224,8 +219,8 @@ def check(
             )
     catalogue = Catalogue.load()
     checker = _Checker(stack, catalogue, Contract.load(catalogue), remotes or Remotes())
-    # §20 *Results of an analysis from a commit*: of the results of an analysis from a commit,
-    # only those a planned result reads get a bytes status, and so ABSENT_RESULT.
+    # Of the results of an analysis from a commit, only those a planned result reads get a bytes
+    # status, and so ABSENT_RESULT.
     read = {
         (entry.result.output, entry.result.universe)
         for user in results
@@ -255,7 +250,7 @@ def check(
 
 @dataclass(frozen=True)
 class _Then:
-    """A result as the commit its record names has it (§20 *When a result is unchanged*)."""
+    """A result as the commit its record names has it."""
 
     context: Context  # the stack bound there, from the folder of the analysis it belongs to
     output: Element  # the output its name names there
@@ -285,7 +280,7 @@ class _Checker:
     def reason(
         self, code: str, message: str, location: Location, breaks: str | None = None
     ) -> Reason:
-        """`code` broken, at the level its rule's `MUST` or `SHOULD` gives (§4)."""
+        """`code` broken, at the level its rule's `MUST` or `SHOULD` gives."""
         return Reason(code, self.catalogue.level(code), message, location, breaks)
 
     def place(
@@ -322,7 +317,7 @@ class _Checker:
                 )
                 reasons.append(self.reason("MISPLACED_RECORD", message, at))
             then = self._then(result, place, found)
-            if isinstance(then, str):  # stale, since what it is compared with is gone (§20)
+            if isinstance(then, str):  # stale, since what it is compared with is gone
                 if not reasons:
                     reasons.append(self.reason("STALE_RESULT", then, at))
                     status, record = "stale", found
@@ -341,8 +336,7 @@ class _Checker:
         return Status(place, status, bytes_status, committed, tuple(reasons), record, answers)
 
     def _environment(self, iri: str) -> tuple[environments.Answer, ...]:
-        """What each registered scheme that recognises the environment `iri` answered for it
-        (design §4.10)."""
+        """What each registered scheme that recognises the environment `iri` answered for it."""
         # What a scheme answers, and where the report shows it.
         if iri not in self._answers:
             self._answers[iri] = environments.answers(iri, self.schemes)
@@ -352,7 +346,7 @@ class _Checker:
         """`result` as the commit `record` names has it: the stack bound there, from the folder
         of the analysis it belongs to, the output its name at `place` names there, and its
         universe's effective selection there; or why that can't be read, which leaves it
-        `stale` (§20)."""
+        `stale`."""
         commit = record.commit
         member = self.stack.analyses[result.owner]
         repo, folder = member.reader.holding(member.identity.folder)
@@ -398,8 +392,7 @@ class _Checker:
 
     def _inputs(self, record: Record, then: _Then, at: Location) -> Iterable[Reason]:
         """`MISSING_RECORD_INPUTS`: one item of the record's `inputs` for each entry its output
-        lists at the record's commit, matched by `entry`, and no other (§19), in any order
-        (`MISSING_RECORD_INPUTS`, §20 *The rules*)."""
+        lists at the record's commit, matched by `entry`, and no other, in any order."""
         listed = then.context.stack.analysis(then.output.analysis).outputs[then.output.id].inputs
         items = [item.entry for item in record.inputs]
         commit = record.commit[:12]
@@ -431,8 +424,7 @@ class _Checker:
         the output's declaration, the options its decisions select in its universe, for each
         switch an entry reads through the decision it switches on, the option selected for it
         and the case it takes, the content of its inputs, and the results it reads
-        (`STALE_RESULT`, §20 *The rules*; §20 *When a result is unchanged*; Results *made
-        from*)."""
+        (Results *made from*)."""
         commit = record.commit[:12]
         now = self.stack.analysis(result.output.analysis).outputs[result.output.id]
         was = then.context.stack.analysis(then.output.analysis).outputs[then.output.id]
@@ -484,7 +476,7 @@ class _Checker:
             )
             if read.result is None:
                 found = self._content(through.target.analysis, read)
-                if found is None:  # stale, since it can't be compared (§20)
+                if found is None:  # stale, since it can't be compared
                     changes.append(
                         f"the content of `{read.entry}` can't be read at {read.path}: no file "
                         "is there, or only a stand-in that gives no SHA-256"
@@ -509,7 +501,7 @@ class _Checker:
     def _content(self, analysis: Identity, read: Read) -> hashing.Digest | None:
         """The hash and size of an input of `analysis`, which may be another than the switch's
         an entry reads it through: of its file or, where a stand-in is at its path, what the
-        stand-in gives of it, never the stand-in's own (§20); None where neither is there, as
+        stand-in gives of it, never the stand-in's own; None where neither is there, as
         where a stand-in beside its path gives no SHA-256."""
         reader = self.stack.analyses[analysis].reader
         for standin in self.standins:
@@ -522,8 +514,7 @@ class _Checker:
         self, member: Member, place: Place, record: Record | None
     ) -> tuple[BytesStatus, tuple[Reason, ...]]:
         """The bytes' status at `place`, against `record`, the result's record there or None
-        where it has none, and `ABSENT_RESULT` where they are absent and it has one (§18, §20,
-        design §4.13 case 9)."""
+        where it has none, and `ABSENT_RESULT` where they are absent and it has one."""
         if record is None:  # no recorded bytes, so absent, but no ABSENT_RESULT
             return "absent", ()
         found = hashing.digest(member.reader, place.bytes)
@@ -558,15 +549,15 @@ class _Checker:
     def evidence(
         self, entry: Resolution, statuses: Mapping[Key, tuple[Status, ...]]
     ) -> EvidenceStatus | None:
-        """The status of the evidence `entry` (§20 *Evidence*), from the planned results it cites
-        (`_cited`). Each gives the record at the place of its name along the artifact's
-        declarations, then each case's, from the analysis it belongs to (`universes.along`), or,
-        where they give none of its names, the worst of its records. None where its `artifact`
-        names nothing, or what it cites is undetermined or a result whose planning isn't, as
-        only on a stack that breaks a `MUST` (design §4.13 cases 4 to 7, 12 and 13); and for a
-        declared analysis's evidence that cites no planned result, which a check doesn't cover."""
+        """The status of the evidence `entry`, from the planned results it cites (`_cited`). Each
+        gives the record at the place of its name along the artifact's declarations, then each
+        case's, from the analysis it belongs to (`universes.along`), or, where they give none of its
+        names, the worst of its records. None where its `artifact` names nothing, or what it cites
+        is undetermined or a result whose planning isn't, as only on a stack that breaks a `MUST`;
+        and for a declared analysis's evidence that cites no planned result, which a check doesn't
+        cover."""
         element = entry.element
-        if element is None:  # design §4.13 cases 4 and 5
+        if element is None:  # its artifact names nothing
             return None
         cited = self._cited(entry, element)
         if cited is None or (entry.file != self.stack.root and not cited):
@@ -601,21 +592,20 @@ class _Checker:
 
     def _cited(self, entry: Resolution, element: Element) -> list[Through] | None:
         """What the evidence `entry`, the root's or a declared analysis's, reads for each planned
-        result it cites (§20 *Evidence*; Results *Evidence*), each once: one where its `artifact`
-        is pinned or names an output built once; and otherwise, where it names an output built
-        per universe or a switch, in each of the root's universes, its output's result there, or
-        the result of the case the switch takes there, where it is planned.
+        result it cites (Results *Evidence*), each once: one where its `artifact` is pinned or names
+        an output built once; and otherwise, where it names an output built per universe or a
+        switch, in each of the root's universes, its output's result there, or the result of the
+        case the switch takes there, where it is planned.
 
         None where, once or in one of those universes, what it cites is undetermined: its pin
-        names no universe (design §4.13 case 5); a switch on the way is undetermined there
-        (case 6), as one on a cycle is (case 13), or takes a case that names nothing (case 5);
-        or what it reaches is planned by the root's run, but with its planning undetermined
-        (cases 7, 12 and 13) or in a universe that doesn't build its analysis (case 12). Where a
+        names no universe; a switch on the way is undetermined there, as one on a cycle is, or
+        takes a case that names nothing; or what it reaches is planned by the root's run, but
+        with its planning undetermined or in a universe that doesn't build its analysis. Where a
         switch on the way takes no case, or what it reaches isn't built, it cites nothing
         there."""
         context, building = self.context, self.context.building
         if entry.pin is not None and context.pins[entry] is None:
-            return None  # design §4.13 case 5
+            return None  # its pin names no universe
         universes: list[Element | None] = [None]
         if entry.pin is None and (element.kind == "switch" or element in context.per_universe):
             universes = [u for u in building.universes if u.analysis == self.stack.root]
@@ -631,7 +621,7 @@ class _Checker:
             key = (through.target, through.universe)
             if key in building.planned:
                 found.setdefault(key, through)
-            elif key in building.run.planned:  # planned, but not determined (design §4.13 case 12)
+            elif key in building.run.planned:  # planned, but not determined
                 return None
         return list(found.values())
 
@@ -696,8 +686,7 @@ def _which(step: Step) -> tuple[str, str]:
 
 
 def _worst(statuses: Iterable[RecordStatus]) -> RecordStatus:
-    """The worst of `statuses`, `missing` then `stale`; `missing` where there are none (§20
-    *Evidence*)."""
+    """The worst of `statuses`, `missing` then `stale`; `missing` where there are none."""
     found = set(statuses)
     return next((status for status in _WORST if status in found), "missing")
 

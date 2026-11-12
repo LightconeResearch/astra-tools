@@ -1,4 +1,4 @@
-"""The cache (design §4.9): one folder of plain files, outside every repository.
+"""The cache: one folder of plain files, outside every repository.
 
 It is `$ASTRA_CACHE_DIR`, which must be absolute, or else the platform's user cache folder:
 `$XDG_CACHE_HOME/astra` or `~/.cache/astra`, `~/Library/Caches/astra` on macOS, and

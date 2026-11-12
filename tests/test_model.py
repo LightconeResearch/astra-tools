@@ -70,7 +70,7 @@ def test_an_analysis_is_read_whole() -> None:
 
 
 def test_an_import_selects_nothing() -> None:
-    """§12 *Imports*: astra-spec's fixture of universes, whose `stage_alone` imports."""
+    """Elements *imported*: astra-spec's fixture of universes, whose `stage_alone` imports."""
     text = (DOCUMENTS / "valid" / "Analysis-004-universes.yaml").read_bytes()
     universes = model.Analysis.from_json(load_yaml(text).value).universes
     assert universes["stage_alone"].is_import

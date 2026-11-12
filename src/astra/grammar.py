@@ -1,4 +1,4 @@
-"""The forms of a name (§6, Annex C): parse and format.
+"""The forms of a name: parse and format.
 
 ```abnf
 id               = lower *( lower / DIGIT / "_" )
@@ -18,8 +18,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Address:
-    """Ids joined by `.`: the ids of the declarations that lead to an element, then its own
-    (§6 *Addresses*)."""
+    """Ids joined by `.`: the ids of the declarations that lead to an element, then its own."""
 
     segments: tuple[str, ...]
 
@@ -39,8 +38,7 @@ class Address:
 
 @dataclass(frozen=True)
 class Reference:
-    """An address, which may be followed by a pin, `#` and a universe's id (§6 *The forms of a
-    name*, §13)."""
+    """An address, which may be followed by a pin, `#` and a universe's id."""
 
     address: Address
     pin: str | None = None

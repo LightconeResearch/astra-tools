@@ -1,7 +1,7 @@
-"""§11 Recipes: every brace of a recipe's `command` belongs to a `{{`, a `}}` or a placeholder,
+"""Recipes: every brace of a recipe's `command` belongs to a `{{`, a `}}` or a placeholder,
 and every placeholder is one its output gives (`UNDECLARED_TEMPLATE_REF`).
 
-The command is read from the left, as §11 *The command as a template* says: `{{` is a literal
+The command is read from the left: `{{` is a literal
 `{` and `}}` a literal `}`, and any other `{` opens a placeholder, which ends at the next `}`.
 A placeholder is `{inputs}`, `{output}`, or `{inputs.<entry>}` or `{decisions.<entry>}` for an
 entry of the output's `inputs` or `decisions` exactly as written. A switch has no recipe, so
@@ -55,7 +55,8 @@ _FORMS = (
 
 
 def _gives(output: model.Output, placeholder: str) -> bool:
-    """Whether `placeholder`, between its braces, is one of `output`'s (§11's table)."""
+    """Whether `placeholder`, between its braces, is one of `output`'s
+    (`UNDECLARED_TEMPLATE_REF`)."""
     if placeholder in ("inputs", "output"):
         return True
     field, dot, entry = placeholder.partition(".")

@@ -1,8 +1,8 @@
-"""Quotes against papers (design §6 *Phase 5*), with the extra [evidence]: papers kept in the
-cache by DOI and version, and each quote sought in its paper's text, within the page a PDF
-fragment identifier gives (§14 *Evidence*, *Fragment identifiers*), on what `astra.evidence`,
-`api.papers`, `api.quotes` and `astra paper` promise. No test reaches the network: a paper is
-given as a file, or `urllib` is answered from the test's own bytes.
+"""Quotes against papers, with the extra [evidence]: papers kept in the cache by DOI and
+version, and each quote sought in its paper's text, within the page a PDF fragment identifier
+gives, on what `astra.evidence`, `api.papers`, `api.quotes` and `astra paper` promise. No test
+reaches the network: a paper is given as a file, or `urllib` is answered from the test's own
+bytes.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def pdf(*pages: tuple[str, ...]) -> bytes:
 
 
 DOI = "10.5555/12345678"
-"""§14's example of a DOI."""
+"""The specification's example of a DOI."""
 
 PAGE_1 = ("Random forests stay accurate as label noise grows.", "We measured it on held-out data.")
 PAGE_2 = ("In every experiment, the forest lost less", "than one point of accuracy at 20% noise.")
@@ -116,13 +116,13 @@ def at(insight: str, index: int, field: str) -> str:
 
 
 def test_a_quote_in_its_paper_gives_nothing(verified: Mapping[str, Diagnostic]) -> None:
-    """§14: the quote is sought in the work's full text, its line breaks evened out."""
+    """The quote is sought in the work's full text, its line breaks evened out."""
     assert at("whole", 0, "quote") not in verified
     assert at("whole", 1, "quote") not in verified  # across a line break
 
 
 def test_a_quote_not_in_its_paper_is_a_warning(verified: Mapping[str, Diagnostic]) -> None:
-    """Design §3: a quote not found is an `EVIDENCE_` warning, at the evidence's `quote`."""
+    """A quote not found is an `EVIDENCE_` warning, at the evidence's `quote`."""
     found = verified[at("whole", 2, "quote")]
     assert (found.code, found.level) == ("EVIDENCE_QUOTE_NOT_FOUND", "warning")
     assert "sought in its whole text" in found.message
@@ -130,15 +130,14 @@ def test_a_quote_not_in_its_paper_is_a_warning(verified: Mapping[str, Diagnostic
 
 
 def test_a_quote_is_sought_within_its_page(verified: Mapping[str, Diagnostic]) -> None:
-    """§14: with both a quote and a location, the quote is sought within the location; a PDF
+    """With both a quote and a location, the quote is sought within the location; a PDF
     fragment identifier's `page=6` counts pages from 1."""
     assert at("paged", 0, "quote") not in verified
     assert "sought on page 1" in verified[at("paged", 1, "quote")].message
 
 
 def test_a_pdf_fragment_identifiers_parameters(verified: Mapping[str, Diagnostic]) -> None:
-    """§14 *Fragment identifiers*: PDF parameters are joined with `&`, and RFC 3778's IRI means
-    the same as no `conforms_to`."""
+    """PDF parameters are joined with `&`, and RFC 3778's IRI means the same as no `conforms_to`."""
     assert at("paged", 2, "quote") not in verified
     assert "sought on page 1" in verified[at("paged", 3, "quote")].message
 
@@ -146,7 +145,7 @@ def test_a_pdf_fragment_identifiers_parameters(verified: Mapping[str, Diagnostic
 def test_a_location_that_gives_no_page_is_the_whole_text(
     verified: Mapping[str, Diagnostic],
 ) -> None:
-    """§14: another syntax's fragment, and a PDF fragment without `page=`, give no page: the
+    """Another syntax's fragment, and a PDF fragment without `page=`, give no page: the
     cited resource is the work's full text."""
     assert at("paged", 4, "quote") not in verified
     assert at("paged", 5, "quote") not in verified
@@ -175,7 +174,7 @@ def test_a_doi_is_read_without_its_case(verified: Mapping[str, Diagnostic]) -> N
 
 
 def test_the_warnings_are_astra_tools_own(verified: Mapping[str, Diagnostic]) -> None:
-    """Design §3: `EVIDENCE_` warnings, outside `rules.json`, which leave the analysis valid."""
+    """`EVIDENCE_` warnings, outside `rules.json`, which leave the analysis valid."""
     assert set(verified) == {
         at("whole", 2, "quote"),
         at("paged", 1, "quote"),
@@ -232,8 +231,7 @@ def answering(monkeypatch: pytest.MonkeyPatch, answers: Mapping[str, bytes]) -> 
 def test_add_fetches_an_arxiv_doi_from_arxiv_at_its_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Design §6 *Phase 5*: an arXiv DOI's paper is arXiv's, at the version the evidence gives
-    (§14), counted from 1."""
+    """An arXiv DOI's paper is arXiv's, at the version the evidence gives, counted from 1."""
     asked = answering(monkeypatch, {"https://arxiv.org/pdf/1706.03762v5": PAPER})
     assert papers.add("10.48550/arXiv.1706.03762", 5) == 2
     assert asked == ["https://arxiv.org/pdf/1706.03762v5"]
@@ -242,8 +240,8 @@ def test_add_fetches_an_arxiv_doi_from_arxiv_at_its_version(
 
 
 def test_add_fetches_any_other_doi_through_unpaywall(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Design §6 *Phase 5*: any other DOI's paper is the open-access PDF Unpaywall names as its
-    best, asked with the user's email address."""
+    """Any other DOI's paper is the open-access PDF Unpaywall names as its best, asked with the
+    user's email address."""
     record = f"https://api.unpaywall.org/v2/{DOI}?email=me%40example.org"
     best = "https://example.org/forests.pdf"
     found = json.dumps({"best_oa_location": {"url_for_pdf": best}}).encode()
@@ -281,7 +279,7 @@ def test_add_file_keeps_a_paper_that_list_shows(cited: Path) -> None:
 
 
 def test_verify_exits_0_whether_or_not_a_quote_is_found(cited: Path) -> None:
-    """Design §3: the warnings never change an exit code."""
+    """The warnings never change an exit code."""
     assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
     found = astra("paper", "verify", str(cited))
     assert (found.exit_code, found.stdout.splitlines()[-1]) == (

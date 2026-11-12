@@ -1,6 +1,6 @@
-"""§15 Declared analyses: `DECLARATION_OUTSIDE_REPOSITORY`, `MISSING_DECLARED_ANALYSIS` for
-declarations by path, and `CLASHING_RESULT_NAME`, with design §4.13 cases 2 and 3 as they apply to
-them."""
+"""Declared analyses: `DECLARATION_OUTSIDE_REPOSITORY`, `MISSING_DECLARED_ANALYSIS` for
+declarations by path, and `CLASHING_RESULT_NAME`, with what an invalid declared file and a
+declaration that can't be read leave unchecked."""
 
 from __future__ import annotations
 
@@ -30,9 +30,8 @@ def found(report: api.ValidationReport) -> list[tuple[str, str, str, str | None]
 def test_a_path_above_the_top_breaks_declaration_outside_repository(
     tmp_path: Path, path: str
 ) -> None:
-    """§15 *The rules*, Annex B *Tidying*: tidied as text, it goes above the top of the root's
-    working tree, whatever is on disk there. Design §4.13 case 3: MISSING_DECLARED_ANALYSIS isn't
-    checked."""
+    """Tidied as text, the path goes above the top of the root's working tree, whatever is on
+    disk there; MISSING_DECLARED_ANALYSIS isn't checked."""
     top = repository(tmp_path / "repo", {"astra.yaml": declaring(f"{{up: {{path: '{path}'}}}}")})
     report = api.validate(top)
     assert found(report) == [
@@ -43,7 +42,7 @@ def test_a_path_above_the_top_breaks_declaration_outside_repository(
 
 
 def test_a_path_inside_the_working_tree_keeps_it(tmp_path: Path) -> None:
-    """§15: `stage`'s `..` reaches the root, and `../other` its sibling, both inside the root's
+    """`stage`'s `..` reaches the root, and `../other` its sibling, both inside the root's
     working tree; `x/../stage` is `stage`."""
     stage = declaring("{parent: {path: ..}, other: {path: ../other}}", "stage_result")
     files = {
@@ -55,7 +54,7 @@ def test_a_path_inside_the_working_tree_keeps_it(tmp_path: Path) -> None:
 
 
 def test_the_top_is_the_root_working_trees_not_the_roots_folder(tmp_path: Path) -> None:
-    """Annex B *The top*: from a root below the top, `..` stays inside; and from a declared
+    """From a root below the top, `..` stays inside; and from a declared
     analysis, a path above the top breaks the rule in its own file."""
     files = {
         "stage/astra.yaml": declaring("{parent: {path: ..}, inner: {path: inner}}"),
@@ -96,9 +95,8 @@ def missing(tmp_path_factory: pytest.TempPathFactory) -> api.ValidationReport:
 def test_a_folder_without_an_astra_yaml_file_breaks_missing_declared_analysis(
     missing: api.ValidationReport,
 ) -> None:
-    """§15 *The rules*, Annex B *Symlinks*: no folder, no astra.yaml in it, an
-    astra.yaml that is a symlink, or a folder reached through one; in the root's file, and in
-    `sub`'s for its `nested`."""
+    """No folder, no astra.yaml in it, an astra.yaml that is a symlink, or a folder reached
+    through one; in the root's file, and in `sub`'s for its `nested`."""
     assert found(missing) == [
         ("MISSING_DECLARED_ANALYSIS", "astra.yaml", "/analyses/gone/path", None),
         ("MISSING_DECLARED_ANALYSIS", "astra.yaml", "/analyses/empty/path", None),
@@ -112,7 +110,7 @@ def test_a_folder_without_an_astra_yaml_file_breaks_missing_declared_analysis(
 def test_a_folder_or_a_submodule_holding_an_astra_yaml_keeps_it(
     missing: api.ValidationReport,
 ) -> None:
-    """§15: a declared analysis can be a git submodule, read as Annex B says."""
+    """A declared analysis can be a git submodule, whose entries are read in its own repository."""
     assert not any("/sub/" in d.location.pointer for d in missing.diagnostics)
     assert not any("library" in d.location.pointer for d in missing.diagnostics)
 
@@ -120,8 +118,8 @@ def test_a_folder_or_a_submodule_holding_an_astra_yaml_keeps_it(
 def test_an_invalid_declared_file_is_there_and_its_declarations_arent_followed(
     tmp_path: Path,
 ) -> None:
-    """design §4.13 case 2: `sub`'s file breaks a schema rule, which is reported; it isn't missing,
-    and its own declaration of a folder that isn't there isn't checked."""
+    """`sub`'s file breaks a schema rule, which is reported; it isn't missing, and its own
+    declaration of a folder that isn't there isn't checked."""
     files = {
         "astra.yaml": declaring("{sub: {path: sub}}"),
         "sub/astra.yaml": declaring("{gone: {path: gone}}", "sub_result") + "name: x\n",
@@ -136,8 +134,8 @@ def test_an_invalid_declared_file_is_there_and_its_declarations_arent_followed(
 def test_an_output_sharing_its_id_with_a_declaration_breaks_clashing_result_name(
     tmp_path: Path,
 ) -> None:
-    """§6 *Ids and maps*: reported at the output, with the declaration
-    as a related place, in whichever file of the stack has both."""
+    """Reported at the output, with the declaration as a related place, in whichever file of
+    the stack has both."""
     files = {
         "astra.yaml": declaring("{sub: {path: sub}}", "sub"),
         "sub/astra.yaml": declaring("{parent: {path: ..}}", "parent"),
@@ -154,8 +152,8 @@ def test_an_output_sharing_its_id_with_a_declaration_breaks_clashing_result_name
 
 
 def test_ids_of_other_kinds_may_be_the_same(tmp_path: Path) -> None:
-    """§6 *Ids and maps*: only an input and an output, and an output and a declaration, never
-    share an id; a decision may share one with a declaration."""
+    """Only an input and an output, and an output and a declaration, never share an id; a
+    decision may share one with a declaration."""
     text = declaring("{sub: {path: sub}}") + "decisions:\n  sub:\n    options: {a: {}}\n"
     files = {"astra.yaml": text, "sub/astra.yaml": MINIMAL}
     assert found(api.validate(repository(tmp_path, files))) == []

@@ -1,19 +1,19 @@
-"""Binding: the analysis stack, read once each, with every address resolved (design §4.4).
+"""Binding: the analysis stack, read once each, with every address resolved.
 
-`bind` reads the root's `astra.yaml` and follows every declaration (§15), reading each analysis
-once by its identity (§17 *Identity*): its folder, from the top of the root's working tree or of
-the repository it is read in, and the commit it is read at, or None for the working tree. A
+`bind` reads the root's `astra.yaml` and follows every declaration, reading each analysis once
+by its identity: its folder, from the top of the root's working tree or of the repository it
+is read in, and the commit it is read at, or None for the working tree. A
 declaration by `path` alone is read as the declaring analysis is; one with a `commit` at that
 commit, through a `CommitReader`, in the repository that holds the declaring file or, in a file
 read from a remote, from that remote; one with a `url` at the top of that repository, from its
 store in the cache (`sources.remote`). Each file is loaded (`load`) and checked by the contract
 (`contract`); one that breaks a parse or schema rule, or `UNSUPPORTED_SPEC_VERSION`, isn't a
-valid document, its declarations aren't followed and its analysis is undetermined (design §4.13
-cases 1 and 2). Inside an analysis read at a commit, each diagnostic's location carries the
-commit, and the URL it was got from (design §3).
+valid document, its declarations aren't followed and its analysis is undetermined. Inside an
+analysis read at a commit, each diagnostic's location carries the commit, and the URL it was
+got from.
 
 Each declaration keeps what it reached, or why it reached nothing. Every address of every valid
-file is then resolved through its chain of declarations (§15) to an element, an analysis's
+file is then resolved through its chain of declarations to an element, an analysis's
 identity, a kind and an id, or to nothing. A switch is an element of its own kind, and its
 addresses, its `switch` and its cases by option, are also kept by switch (`Stack.switches`;
 Elements *switch*). Binding reports nothing about addresses or declarations: the rules do
@@ -47,7 +47,7 @@ Pointer = tuple[str | int, ...]
 
 @dataclass(frozen=True)
 class Identity:
-    """What an analysis is known by (§17 *Identity*): its folder, as a path from the top of the
+    """What an analysis is known by (Elements *identity*): its folder, as a path from the top of the
     repository it is read in or, read in the working tree, from the top of the root's working
     tree ("" for the top), and the commit it is read at, None for the working tree."""
 
@@ -63,7 +63,7 @@ Outcome = Literal["reached", "invalid", "outside", "missing", "absent", "unreach
 """What a declaration reached:
 
 - `reached`: an analysis whose `astra.yaml` is a valid document;
-- `invalid`: an analysis whose file isn't one, so undetermined (design §4.13 case 2);
+- `invalid`: an analysis whose file isn't one, so undetermined;
 - `outside`: nothing, since its `path` goes above the top (`DECLARATION_OUTSIDE_REPOSITORY`);
 - `missing`: nothing, since its folder holds no `astra.yaml` file, reached through no symlink
   (`MISSING_DECLARED_ANALYSIS`);
@@ -72,7 +72,7 @@ Outcome = Literal["reached", "invalid", "outside", "missing", "absent", "unreach
 - `unreachable`: nothing, since a commit its analysis is read from can't be got from its
   remote (`REMOTE_UNREACHABLE`).
 
-Every outcome but `reached` leaves the declared analysis undetermined (design §4.13 cases 3, 4).
+Every outcome but `reached` leaves the declared analysis undetermined.
 """
 
 
@@ -111,7 +111,7 @@ meets no switch, and each field that takes an output takes a switch too (`TAKES`
 @dataclass(frozen=True)
 class Element:
     """An element an address resolves to: an analysis, known by its identity, a kind and an id.
-    Two addresses that resolve to one Element are two spellings of it (§15)."""
+    Two addresses that resolve to one Element are two spellings of it."""
 
     analysis: Identity
     kind: Kind
@@ -129,7 +129,7 @@ Field = Literal[
     "artifact",
     "import",
 ]
-"""Where an address is written (§6 *Addresses*): `Output.inputs`; `Output.decisions`; `switch`,
+"""Where an address is written: `Output.inputs`; `Output.decisions`; `switch`,
 a switch's `switch`; `case`, a value of a switch's `cases`; `Option.requires` and
 `Option.incompatible_with`; a key of `Universe.decisions` (`selection`); `Evidence.artifact`;
 and an import's `analysis` then `.` and its `universe`."""
@@ -147,23 +147,23 @@ TAKES: Mapping[Field, tuple[Kind, ...]] = MappingProxyType(
         "import": ("universe",),
     }
 )
-"""The kinds of element each field's address resolves to (§6's table; Rules
-`UNRESOLVED_ADDRESS`). An address whose id is an element of more than one of them, as an input
-and an output or a switch sharing an id (`AMBIGUOUS_ID`), names nothing (design §4.13 case 5)."""
+"""The kinds of element each field's address resolves to (Rules `UNRESOLVED_ADDRESS`). An
+address whose id is an element of more than one of them, as an input and an output or a switch
+sharing an id (`AMBIGUOUS_ID`), names nothing."""
 
 
 @dataclass(frozen=True)
 class Resolution:
     """One address as written, and what it resolves to."""
 
-    file: Identity  # the analysis whose astra.yaml writes it, where it is read (§6)
+    file: Identity  # the analysis whose astra.yaml writes it, where it is read
     owner: Element | None  # the output, switch, decision or entry of `universes` it is written
     # in; None for evidence
     field: Field
     pointer: Pointer  # where it is written; for a key of Universe.decisions, the map
     key: str | None  # the key of Universe.decisions; otherwise None
     written: str  # the value as written; for an import, `analysis.universe`
-    address: Address  # without a pin or an option (§6)
+    address: Address  # without a pin or an option
     pin: str | None  # a reference's pin
     option: str | None  # the option a constraint or a selection names or, for a case, the option
     # it is keyed by
@@ -183,7 +183,7 @@ class Switch:
 
 @dataclass(frozen=True)
 class Stack:
-    """The root and every analysis it declares, directly or through others (§15)."""
+    """The root and every analysis it declares, directly or through others (Rules *stack*)."""
 
     root: Identity
     analyses: Mapping[Identity, Member]  # in the order they were reached, the root first
@@ -193,19 +193,19 @@ class Stack:
 
     def analysis(self, identity: Identity) -> model.Analysis:
         """The content of `identity`'s file, which is a valid document: every analysis an
-        address resolves into, or a key drives, is one (design §4.13 cases 2 and 4)."""
+        address resolves into, or a key drives, is one."""
         analysis = self.analyses[identity].analysis
         assert analysis is not None
         return analysis
 
     def element(self, address: str, kind: Kind) -> Element | None:
-        """The element of kind `kind` that `address` names, read in the root's file (§6
-        *Addresses*); None where it names none."""
+        """The element of kind `kind` that `address` names, read in the root's file; None
+        where it names none."""
         return _resolve(self.analyses, self.root, parse_address(address), (kind,))[1]
 
     def determined(self) -> Iterator[tuple[Member, model.Analysis]]:
         """Each analysis whose file is a valid document, with its content: those the validator
-        layer checks (design §4.13 cases 2 and 4)."""
+        layer checks."""
         for member in self.analyses.values():
             if member.analysis is not None:
                 yield member, member.analysis
@@ -223,7 +223,7 @@ class Stack:
 class Bound:
     """What binding gives: the stack, and the parse and schema diagnostics of its files. The
     stack is None where the root's file isn't a valid document, and where the root is in no
-    repository, whose declarations aren't followed (design §4.13 cases 2 and 11)."""
+    repository, whose declarations aren't followed."""
 
     stack: Stack | None
     diagnostics: tuple[Diagnostic, ...]
@@ -298,8 +298,8 @@ def bind(
 def _check(
     data: bytes, file: str, contract: Contract, catalogue: Catalogue
 ) -> tuple[Document | None, tuple[Diagnostic, ...]]:
-    """The document, and its parse and schema diagnostics (design §4.13 case 1: a file that can't be
-    read is checked no further)."""
+    """The document, and its parse and schema diagnostics: a file that can't be read is checked
+    no further."""
     try:
         document = load_yaml(data)
     except ParseError as error:
@@ -311,12 +311,11 @@ def _check(
 def _follow(
     remotes: Remotes, owner: _Place, id_: str, declared: model.AnalysisDeclaration
 ) -> tuple[Declaration, _Place | None]:
-    """What a declaration of `owner`'s file reaches, and where that analysis is read (§15, §17,
-    Annex B): by `path` alone, as `owner` is read; with a `commit`,
-    the `path` at that commit, in the repository that holds the declaring file or, in a file
-    read from a remote, from that remote; with a `url`, the top of that repository at its
-    commit. At a commit, a path that crosses a gitlink is read in the submodule's repository,
-    at the commit the gitlink pins (§17 *Identity*)."""
+    """What a declaration of `owner`'s file reaches, and where that analysis is read: by `path`
+    alone, as `owner` is read; with a `commit`, the `path` at that commit, in the repository that
+    holds the declaring file or, in a file read from a remote, from that remote; with a `url`,
+    the top of that repository at its commit. At a commit, a path that crosses a gitlink is read
+    in the submodule's repository, at the commit the gitlink pins."""
 
     def stop(
         outcome: Outcome, folder: str | None, unreachable: tuple[str | None, str] | None = None
@@ -370,7 +369,7 @@ def _follow(
 def _resolutions(
     members: Mapping[Identity, Member], file: Identity, analysis: model.Analysis
 ) -> Iterator[Resolution]:
-    """Every address `analysis`'s file writes, each resolved (§6's table)."""
+    """Every address `analysis`'s file writes, each resolved (`TAKES`)."""
 
     def resolve(
         owner: Element | None,
@@ -385,7 +384,7 @@ def _resolutions(
     ) -> Resolution:
         chain, element, undetermined = _resolve(members, file, address, TAKES[field])
         if field == "import" and element is not None and element.analysis == file:
-            element = None  # an import names another analysis's universe (§16)
+            element = None  # an import names another analysis's universe
         return Resolution(
             file, owner, field, pointer, key, written, address, pin, option, chain, element,
             undetermined,
@@ -453,8 +452,8 @@ def _resolve(
     members: Mapping[Identity, Member], file: Identity, address: Address, kinds: Sequence[Kind]
 ) -> tuple[tuple[Declaration, ...], Element | None, bool]:
     """The chain of declarations `address` goes through from `file`, the element it resolves
-    to, and whether it goes through an undetermined analysis (§6 *Addresses*, design §4.13 case
-    4). An id that is an element of more than one of `kinds` resolves to none (case 5)."""
+    to, and whether it goes through an undetermined analysis. An id that is an element of more
+    than one of `kinds` resolves to none."""
     chain: list[Declaration] = []
     current = file
     for id_ in address.declarations:

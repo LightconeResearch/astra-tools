@@ -1,4 +1,4 @@
-"""`astra view U [PATH] [--json]`: the stack as it is in one universe (design §4.6, §4.12)."""
+"""`astra view U [PATH] [--json]`: the stack as it is in one universe."""
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ def command(universe: str, path: Path | None, as_json: bool) -> None:
     """Show the analysis in PATH as it is in UNIVERSE, one of its universes.
 
     PATH is the analysis's folder, the current one by default. Each analysis of its stack is
-    shown, with whether it is built in UNIVERSE (§16), the option selected for each decision, or
-    that UNIVERSE doesn't use it (Results), each output's result there and its places (§18), or
-    why it has none, and the case each switch takes there (Elements). Exits 1 where the analysis
+    shown, with whether it is built in UNIVERSE, the option selected for each decision, or that
+    UNIVERSE doesn't use it (Results), each output's result there and its places, or why it has
+    none, and the case each switch takes there (Elements). Exits 1 where the analysis
     breaks a MUST, which is shown as `astra validate` shows it, and 2 where it can't be read or
     has no universe UNIVERSE.
     """

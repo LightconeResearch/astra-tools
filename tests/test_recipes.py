@@ -1,5 +1,5 @@
-"""§11 Recipes: `UNDECLARED_TEMPLATE_REF`, the command read from the left as *The command as a
-template* says, `{{` and `}}` included."""
+"""Recipes: `UNDECLARED_TEMPLATE_REF`, each brace of the command, read from the left, in `{{`,
+`}}` or a placeholder."""
 
 from __future__ import annotations
 
@@ -62,11 +62,10 @@ BREAKING = {
     "inside": "python make.py '{inputs.{input1}' '{output}'",
     "once_decided": "python make.py '{decisions.decision1}' '{output}'",
 }
-"""§11's examples of a placeholder naming an entry the output doesn't list, one of none of the
-forms, and a stray brace; an entry not as written, its spelling or its pin changed; `{{`
-read first from the left, leaving a stray `}`; a placeholder ending at the next `}`, a `{`
-inside it; and a `{decisions.<entry>}` in an output that lists no decisions (§11 *The command as
-a template*)."""
+"""A placeholder naming an entry the output doesn't list, one of none of the forms, and a stray
+brace; an entry not as written, its spelling or its pin changed; `{{` read first from the left,
+leaving a stray `}`; a placeholder ending at the next `}`, a `{` inside it; and a
+`{decisions.<entry>}` in an output that lists no decisions."""
 
 
 @pytest.fixture(scope="module")
@@ -78,8 +77,8 @@ def report(tmp_path_factory: pytest.TempPathFactory) -> api.ValidationReport:
 def test_every_brace_outside_a_placeholder_it_gives_breaks_it(
     report: api.ValidationReport,
 ) -> None:
-    """§11 *The command as a template*: one report for each placeholder or stray brace, at the
-    command; `{input}` and `{decision.decision1}` are two."""
+    """One report for each placeholder or stray brace, at the command; `{input}` and
+    `{decision.decision1}` are two."""
     assert broken(report) == [
         f"/outputs/{id_}/recipe/command"
         for id_ in BREAKING
@@ -108,13 +107,12 @@ KEEPING = {
     "literals": "awk '{{print $1}}' '{inputs.input1}' > '{output}'; echo ${{HOME}} }}{{",
     "once_plain": "python make.py '{inputs.input1}' '{output}'",
 }
-"""§11's table and example, `{inputs}`, and `{{` and `}}` as literal braces."""
+"""Every form of placeholder, `{inputs}`, and `{{` and `}}` as literal braces."""
 
 
 def test_placeholders_the_output_gives_keep_it(tmp_path: Path) -> None:
-    """§11's table: `{inputs.<entry>}` and `{decisions.<entry>}` for each entry as written, dots
-    and `#` included, `{inputs}` and `{output}`. A switch has no recipe to check (Elements
-    *switch*)."""
+    """`{inputs.<entry>}` and `{decisions.<entry>}` for each entry as written, dots and `#`
+    included, `{inputs}` and `{output}`. A switch has no recipe to check (Elements *switch*)."""
     switch = "  switch1:\n    switch: decision1\n    cases: {a: output0, b: input1}\n"
     files = {"astra.yaml": analysis(KEEPING) + switch, "input1.csv": "1\n", "sub/astra.yaml": SUB}
     assert broken(api.validate(repository(tmp_path, files))) == []

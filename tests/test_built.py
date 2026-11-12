@@ -1,12 +1,13 @@
-"""§16's rules on the universe being built, `NOT_BUILT_IN_UNIVERSE` and `UNDRIVEN_DECLARATION`,
-and `RESULT_IN_TWO_PLACES` (§16, §18), with design §4.13 cases 5 and 7.
+"""The rules on the universe being built, `NOT_BUILT_IN_UNIVERSE` and `UNDRIVEN_DECLARATION`,
+and `RESULT_IN_TWO_PLACES`, with what isn't checked where a name names nothing or a universe has
+no effective selection.
 
-The stacks are §16's: the root drives §15's `subanalysis`, which consumes the root's `decision1`
-through `parent: {path: ..}`, and `stage`, which declares `inner` and a second `inner_undriven`
-of one folder; `other` is never driven, and has a universe `v1` of its own. The breaking stack
-adds §16's `undriven: {path: subanalysis}`, `stage_undriven: {path: stage}` and a root `inner`
-that keys drive beside `stage.inner` (§18). The last stack is §17's `previous`, the analysis's
-own folder at an earlier commit.
+In the stacks, the root drives `subanalysis`, which consumes the root's `decision1` through
+`parent: {path: ..}`, and `stage`, which declares `inner` and a second `inner_undriven` of one
+folder; `other` is never driven, and has a universe `v1` of its own. The breaking stack adds
+`undriven: {path: subanalysis}`, `stage_undriven: {path: stage}` and a root `inner` that keys drive
+beside `stage.inner`. The last stack declares `previous`, the analysis's own folder at an earlier
+commit.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ outputs:
     recipe:
       command: python make.py '{decisions.decision1}' '{decisions.parent.decision1}' '{output}'
 """
-"""§15's `subanalysis`, which consumes its parent's `decision1` (§16 *The universe being built*)."""
+"""`subanalysis`, which consumes its parent's `decision1`."""
 
 INNER = """\
 spec_version: "0.1.0"
@@ -93,7 +94,7 @@ outputs:
     recipe:
       command: python make.py '{output}'
 """
-"""§16's `stage`, with `inner` declared twice."""
+"""`stage`, with `inner` declared twice."""
 
 BROKEN_STAGE = (
     STAGE
@@ -191,10 +192,10 @@ universes:
     derived_from: u9
 """
 )
-"""§16's reads through undriven declarations, uses of `other`'s output and decision in the
+"""Reads through undriven declarations, uses of `other`'s output and decision in the
 root's universes, in each place a use can be written, and `u3`'s key `inner.d`, which drives the
-root's `inner` beside `stage.inner` (§18). `output8` reads through `nothere`, which names nothing
-(design §4.13 case 5), and `u4` has no effective selection (case 7)."""
+root's `inner` beside `stage.inner`. `output8` reads through `nothere`, which names nothing,
+and `u4` has no effective selection."""
 
 
 def files(root: str, stage: str) -> dict[str, str]:
@@ -224,22 +225,21 @@ def found(report: api.ValidationReport, code: str) -> list[tuple[str, str]]:
 
 
 def test_reads_through_driven_declarations_keep_both_rules(kept: api.ValidationReport) -> None:
-    """§16: the root's universes drive `subanalysis`, `stage` and `stage.inner`, so its
+    """The root's universes drive `subanalysis`, `stage` and `stage.inner`, so its
     `output6` reads their outputs built per universe without a pin, or pinned to `u1`; it reads
     `other`'s in `other`'s own `v1`, where `other` is the driver; and `subanalysis` consumes
     the root's `decision1` as `parent.decision1`, since the analysis whose universe is being
-    built is always built in it (§16 *The universe being built*)."""
+    built is always built in it."""
     assert kept.diagnostics == ()
 
 
 def test_a_read_through_an_undriven_declaration_breaks_undriven_declaration(
     broken: api.ValidationReport,
 ) -> None:
-    """§16 *A second declaration of one folder*: `undriven.output1` and `undriven.output1#u1`
-    break it, though `subanalysis`'s folder is driven through `subanalysis`; so do
-    `stage.inner_undriven.out`, though the root drives `stage`, and `stage_undriven.inner.out`,
-    though it drives `stage.inner`. Each is built in the root's universes, so
-    `NOT_BUILT_IN_UNIVERSE` holds."""
+    """`undriven.output1` and `undriven.output1#u1` break `UNDRIVEN_DECLARATION`, though
+    `subanalysis`'s folder is driven through `subanalysis`; so do `stage.inner_undriven.out`, though
+    the root drives `stage`, and `stage_undriven.inner.out`, though it drives `stage.inner`. Each is
+    built in the root's universes, so `NOT_BUILT_IN_UNIVERSE` holds."""
     reads = {("astra.yaml", f"/outputs/output7/inputs/{index}") for index in range(4)}
     assert reads <= set(found(broken, "UNDRIVEN_DECLARATION"))
     assert not reads & set(found(broken, "NOT_BUILT_IN_UNIVERSE"))
@@ -254,12 +254,12 @@ def test_a_read_through_an_undriven_declaration_breaks_undriven_declaration(
 def test_each_use_of_an_analysis_not_built_breaks_both_rules_in_the_drivers_file(
     broken: api.ValidationReport,
 ) -> None:
-    """§16 *The universe being built*: `other` isn't built in the root's universes, so in the
-    root's file its output read without a pin or pinned to `u1`, and its decision listed by a
-    planned result's output, break both rules; in `stage`'s file, where `stage_other` reads its
-    output and lists its decision, NOT_BUILT_IN_UNIVERSE alone holds them. Reads through driven
-    declarations, `other`'s output in its own `v1`, and the root's constraint naming `other`'s
-    decision, which uses nothing (Rules), break neither."""
+    """`other` isn't built in the root's universes, so in the root's file its output read without a
+    pin or pinned to `u1`, and its decision listed by a planned result's output, break both rules;
+    in `stage`'s file, where `stage_other` reads its output and lists its decision,
+    NOT_BUILT_IN_UNIVERSE alone holds them. Reads through driven declarations, `other`'s output in
+    its own `v1`, and the root's constraint naming `other`'s decision, which uses nothing (Rules),
+    break neither."""
     uses = [
         ("astra.yaml", "/outputs/output7/inputs/4"),
         ("astra.yaml", "/outputs/output7/inputs/5"),
@@ -285,7 +285,7 @@ def test_each_use_of_an_analysis_not_built_breaks_both_rules_in_the_drivers_file
 def test_a_result_reached_through_two_driven_chains_breaks_result_in_two_places(
     broken: api.ValidationReport,
 ) -> None:
-    """§18: keys go through the root's `inner` and `stage.inner`, so `inner`'s `out`, planned in
+    """Keys go through the root's `inner` and `stage.inner`, so `inner`'s `out`, planned in
     each of the root's universes, has two names; it is reported, as a warning, at the root's
     `inner` and `stage`, each with the other as a related place. Driven through `stage.inner`
     alone, as in the keeping stack, it has one."""
@@ -303,11 +303,11 @@ def test_a_result_reached_through_two_driven_chains_breaks_result_in_two_places(
     )
 
 
-def test_nothing_is_checked_where_annex_d_leaves_it_undetermined(
+def test_nothing_is_checked_where_it_is_undetermined(
     broken: api.ValidationReport,
 ) -> None:
-    """design §4.13: no rule on the universe being built in `u4`, which has no effective selection
-    (case 7), nor through `nothere`, which names nothing (case 5)."""
+    """No rule on the universe being built is checked in `u4`, which has no effective
+    selection, nor through `nothere`, which names nothing."""
     ours = [
         d for d in broken.diagnostics if d.code in ("NOT_BUILT_IN_UNIVERSE", "UNDRIVEN_DECLARATION")
     ]
@@ -359,11 +359,10 @@ universes:
 
 
 def test_an_earlier_commits_result_is_read_through_an_import(tmp_path: Path) -> None:
-    """§17 *Using one*: where `previous` names the analysis's own folder at a commit and both
-    have a `u1`, `previous.output1#u1` names the analysis's own `u1`, which doesn't build
-    `previous`, so it breaks `UNDRIVEN_DECLARATION` and `NOT_BUILT_IN_UNIVERSE`, and plans
-    nothing more (design §4.13 case 12); with the import, `previous.output1#previous_u1` reads
-    `output1` in `previous`'s own `u1`."""
+    """Where `previous` names the analysis's own folder at a commit and both have a `u1`,
+    `previous.output1#u1` names the analysis's own `u1`, which doesn't build `previous`, so it
+    breaks `UNDRIVEN_DECLARATION` and `NOT_BUILT_IN_UNIVERSE`, and plans nothing more; with the
+    import, `previous.output1#previous_u1` reads `output1` in `previous`'s own `u1`."""
     top = repository(tmp_path, {"astra.yaml": PREVIOUS, "data/input1.csv": "1\n"})
     commit = git(top, "rev-parse", "HEAD").strip()
     declared = f"analyses:\n  previous:\n    path: .\n    commit: {commit}\ninputs:\n"

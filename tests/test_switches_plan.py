@@ -1,4 +1,4 @@
-"""Switches in the plan, the view and the check (design §4.6, §4.7, §4.11): a result read
+"""Switches in the plan, the view and the check: a result read
 through a switch (Elements *takes*; Results *plans*, *made from*, *Evidence*), the plan's note
 on an output a switch leaves unbuilt, what a universe uses and what is built there, and what a
 switch makes stale.
@@ -86,7 +86,7 @@ def test_an_entry_naming_a_switch_reads_the_case_it_takes(running: Path) -> None
 
 
 def test_the_plan_notes_an_output_a_switch_leaves_unbuilt(running: Path) -> None:
-    """Design §4.6: the plan says which outputs aren't built in which universe, and why: the
+    """The plan says which outputs aren't built in which universe, and why: the
     switch with no case there, and the option its decision selects. A missing case breaks no
     rule."""
     (note,) = [n for n in api.plan(running).notes if n.kind == "not_built"]
@@ -99,7 +99,7 @@ def test_the_plan_notes_an_output_a_switch_leaves_unbuilt(running: Path) -> None
 
 
 def test_the_plan_as_astra_plan_1_reads_through_switches(running: Path) -> None:
-    """Design §4.11: each read says which cases it went through (`via`), and each note which
+    """Each read says which cases it went through (`via`), and each note which
     universes, switch and option it concerns, none for a note of another kind."""
     shape = api.plan(running).to_json()
     index = {
@@ -208,7 +208,7 @@ def test_an_output_a_case_names_is_planned_only_where_it_is_taken(tmp_path: Path
     """Results *plans*: the driving analysis plans from its own switches that nothing of its own
     reads, and from its own outputs that no case of its own names, so `sw` plans the case it
     takes where it is built, and `out_a`, `out_b` and `out_c` only there. `out_c`, never taken,
-    has no planned result, which the plan notes (design §4.6)."""
+    has no planned result, which the plan notes."""
     plan = api.plan(repository(tmp_path, {"astra.yaml": TAKEN}))
     assert results(plan) == {(".", "out_a#u1"), (".", "out_b#u2")}
     (note,) = [n for n in plan.notes if n.kind == "unplanned"]
@@ -302,7 +302,7 @@ def test_an_output_built_in_none_of_the_roots_universes_has_no_result_to_give(
     tmp_path: Path,
 ) -> None:
     """Results *built*: `reader` reads `gap` without a pin, and `gap` has no case for `a`, so it
-    has no planned result, which the plan notes twice (design §4.6), and asked for, it has none
+    has no planned result, which the plan notes twice, and asked for, it has none
     to give; `base`, which only a case of `gap` names, is planned only where something planned
     reads it."""
     top = repository(tmp_path, {"astra.yaml": GAP})
@@ -361,7 +361,7 @@ universes:
 
 
 def test_the_plan_notes_a_switch_nothing_reads_where_it_takes_nothing(tmp_path: Path) -> None:
-    """Design §4.6: a switch the plan plans from, which nothing reads (Results *plans*), gets a
+    """A switch the plan plans from, which nothing reads (Results *plans*), gets a
     `not_built` note where it takes nothing, as an output does: `gap` has no case for `a` in
     `u1`, and in `u3` takes `inner`, which has no case for `y`. `inner`, which `gap`'s case
     reads, is left to `gap`'s note."""
@@ -404,7 +404,7 @@ def test_the_view_says_what_a_universe_uses_and_what_is_built_there(running: Pat
 def test_the_view_as_astra_universe_view_1_says_what_is_used_built_and_taken(
     running: Path,
 ) -> None:
-    """Design §4.11: a decision's `used` and `selected`; an output's `built`, `takes` (a
+    """A decision's `used` and `selected`; an output's `built`, `takes` (a
     switch's) and `result`."""
     shape = api.view("u2", running).to_json()
     for analysis in shape["analyses"]:

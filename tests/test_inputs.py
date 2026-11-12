@@ -1,9 +1,9 @@
-"""§7 Inputs: `MISSING_INPUT_FILE`, `INPUT_NOT_TRACKED`, `INPUT_IN_ANOTHER_ANALYSIS` and
-`RESERVED_PATH` (with §5 *The folder*), read as Annex B says, and design §4.13 case 8.
+"""Inputs: `MISSING_INPUT_FILE`, `INPUT_NOT_TRACKED`, `INPUT_IN_ANOTHER_ANALYSIS` and
+`RESERVED_PATH`, each path read against git, and no `INPUT_NOT_TRACKED` where there is no file.
 
 The breaking cases share one stack, each of whose inputs breaks one rule or two; the keeping
 ones another, whose every input is one file, tracked, inside its own analysis: as a file, staged,
-in a submodule analysis's own index, or through a stand-in (design §4.5)."""
+in a submodule analysis's own index, or through a stand-in."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def found(report: api.ValidationReport, code: str) -> list[tuple[str, str]]:
 
 @pytest.fixture(scope="module")
 def broken(tmp_path_factory: pytest.TempPathFactory) -> api.ValidationReport:
-    """A root whose inputs each break a rule of §7, a declared analysis `sub` with one, and a
+    """A root whose inputs each break a rule, a declared analysis `sub` with one, and a
     submodule analysis `stage` whose input is tracked in no index but the root's."""
     data = repository(tmp_path_factory.mktemp("data"), {"x.csv": "1\n"})
     stage = repository(
@@ -81,9 +81,9 @@ def broken(tmp_path_factory: pytest.TempPathFactory) -> api.ValidationReport:
 
 
 def test_a_path_naming_no_file_breaks_missing_input_file(broken: api.ValidationReport) -> None:
-    """§7, Annex B: nothing there, a folder, a symlink (never followed, and no stand-in), a
-    path through a symlinked folder, and a submodule's gitlink. Design §4.13, *Added since*: a
-    path above the top isn't checked by MISSING_INPUT_FILE."""
+    """Nothing there, a folder, a symlink (never followed, and no stand-in), a path through a
+    symlinked folder, and a submodule's gitlink. A path above the top isn't checked by
+    MISSING_INPUT_FILE."""
     assert found(broken, "MISSING_INPUT_FILE") == [
         ("astra.yaml", f"/inputs/{id_}/path")
         for id_ in ("gone", "folder", "linked", "through", "module")
@@ -92,9 +92,9 @@ def test_a_path_naming_no_file_breaks_missing_input_file(broken: api.ValidationR
 
 
 def test_a_file_not_in_the_index_breaks_input_not_tracked(broken: api.ValidationReport) -> None:
-    """Annex B *Tracked*: untracked, ignored, inside a plain data submodule, or with a DVC
-    stand-in that isn't tracked either; and in a submodule analysis, a file its own index
-    lacks. design §4.13 case 8: no input that names no file is checked."""
+    """Untracked, ignored, inside a plain data submodule, or with a DVC stand-in that isn't
+    tracked either; and in a submodule analysis, a file its own index lacks. No input that
+    names no file is checked."""
     assert found(broken, "INPUT_NOT_TRACKED") == [
         *(
             ("astra.yaml", f"/inputs/{id_}/path")
@@ -107,9 +107,9 @@ def test_a_file_not_in_the_index_breaks_input_not_tracked(broken: api.Validation
 def test_a_file_outside_its_analysis_breaks_input_in_another_analysis(
     broken: api.ValidationReport,
 ) -> None:
-    """§7: a file above the analysis's folder, and files inside `sub`, a folder below it that
-    holds an astra.yaml file of its own. Annex B: `above`, whose `..` has no segment before it,
-    goes above the top, and so outside the analysis's folder."""
+    """A file above the analysis's folder, and files inside `sub`, a folder below it that
+    holds an astra.yaml file of its own. `above`, whose `..` has no segment before it, goes
+    above the top, and so outside the analysis's folder."""
     assert found(broken, "INPUT_IN_ANOTHER_ANALYSIS") == [
         ("astra.yaml", f"/inputs/{id_}/path") for id_ in ("above", "nested", "theirs")
     ]
@@ -118,9 +118,8 @@ def test_a_file_outside_its_analysis_breaks_input_in_another_analysis(
 
 
 def test_a_path_in_a_runners_folder_breaks_reserved_path(broken: api.ValidationReport) -> None:
-    """§5 *The folder*: inputs in the analysis's own `.astra/` and `results/`, and in `sub`'s;
-    declarations inside the root's `results/` and `sub`'s `.astra/`; and `sub`'s own input in
-    its `results/`."""
+    """Inputs in the analysis's own `.astra/` and `results/`, and in `sub`'s; declarations inside
+    the root's `results/` and `sub`'s `.astra/`; and `sub`'s own input in its `results/`."""
     assert found(broken, "RESERVED_PATH") == [
         ("astra.yaml", "/analyses/old/path"),
         ("astra.yaml", "/analyses/hidden/path"),
@@ -176,18 +175,17 @@ def kept(tmp_path_factory: pytest.TempPathFactory) -> api.ValidationReport:
 
 
 def test_a_tracked_file_inside_its_analysis_keeps_every_rule(kept: api.ValidationReport) -> None:
-    """§7: a committed or staged file, tidied as text; outside every folder holding an
-    astra.yaml (`notes`, `docs`), and outside every `results/` (`results2` isn't one, Annex B
-    *Lies inside*); and a submodule analysis's input, tracked in its own index (Annex B *The
-    repository that holds a file*)."""
+    """A committed or staged file, tidied as text; outside every folder holding an astra.yaml
+    (`notes`, `docs`), and outside every `results/` (`results2` isn't one); and a submodule
+    analysis's input, tracked in its own index."""
     assert [d for d in kept.diagnostics if d.code in inputs.CODES] == []
 
 
 def test_a_stand_in_keeps_missing_input_file_and_input_not_tracked(
     kept: api.ValidationReport,
 ) -> None:
-    """§7, Annex B *Symlinks*: a git-annex symlink into annex/objects/, committed; a DVC file
-    beside a path that names nothing, or an ignored file. A Git LFS pointer is a file kept at
-    the path, so it keeps both rules as any file does."""
+    """A git-annex symlink into annex/objects/, committed; a DVC file beside a path that names
+    nothing, or an ignored file. A Git LFS pointer is a file kept at the path, so it keeps both
+    rules as any file does."""
     pointers = {f"/inputs/{id_}/path" for id_ in ("annexed", "dvc", "pulled")}
     assert not any(d.location.pointer in pointers for d in kept.diagnostics)

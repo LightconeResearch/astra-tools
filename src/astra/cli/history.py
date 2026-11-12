@@ -1,6 +1,6 @@
 """`astra history timeline ADDR | lineage ADDR [--used-by] | find (--hash H | --environment IRI)
-| get ADDR@REV`, each with `[PATH]`: what git holds of the records of the planned results
-(design §6 *Phase 4*, §4.12). Text alone, as `info` and `universe` are; `get` writes the bytes.
+| get ADDR@REV`, each with `[PATH]`: what git holds of the records of the planned results. Text
+alone, as `info` and `universe` are; `get` writes the bytes.
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ def get(asked: str, path: Path | None) -> None:
     checked against its record there."""
     from astra import api
 
-    address, at, revision = asked.partition("@")  # an address holds no `@` (Annex C)
+    address, at, revision = asked.partition("@")  # an address holds no `@`
     if not (address and at and revision):
         raise click.BadParameter("give a result's address and a revision", param_hint="ADDR@REV")
     with _answering("ADDR@REV"):

@@ -1,4 +1,4 @@
-"""Paths, tidied as text, never through the file system (Annex B).
+"""Paths, tidied as text, never through the file system.
 
 A path is measured from the top of the root's working tree or, at a commit, from the top of the
 repository read: segments joined by `/`, and "" for the top itself.

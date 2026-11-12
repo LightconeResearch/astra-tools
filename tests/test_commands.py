@@ -1,6 +1,5 @@
-"""The commands of phase 1, `info`, `universe`, `init` and `cache`, and the `astra.api` functions
-they call, on what they promise: output, exit codes and what they leave on disk (design §4.12).
-"""
+"""The commands `info`, `universe`, `init` and `cache`, and the `astra.api` functions
+they call, on what they promise: output, exit codes and what they leave on disk."""
 
 from __future__ import annotations
 
@@ -23,7 +22,7 @@ def astra(*args: str) -> Result:
 
 def test_bind_gives_the_stack_and_its_files_diagnostics(tmp_path: Path) -> None:
     """Every analysis of the stack, the root first, with the schema diagnostics of a declared
-    file that isn't a valid document (design §4.4); none where the root's file isn't one."""
+    file that isn't a valid document; none where the root's file isn't one."""
     root = MINIMAL + "analyses: {sub: {path: sub}}\n"
     top = repository(tmp_path, {"astra.yaml": root, "sub/astra.yaml": MINIMAL + "name: x\n"})
     bound = api.bind(top)
@@ -82,7 +81,7 @@ outputs:
 
 
 def test_info_shows_each_analysis_of_the_stack_in_brief(tmp_path: Path) -> None:
-    """The root first, then each analysis it declares, by path and at a commit (§15, §17), each
+    """The root first, then each analysis it declares, by path and at a commit, each
     with its declarations, inputs, outputs, decisions and universes; a switch with the decision
     it switches on and its cases (Elements *switch*). It checks nothing, so a declaration that
     reaches nothing is shown, not reported."""
@@ -162,8 +161,7 @@ universes:
     analysis: subanalysis
     universe: v1
 """
-"""§12's three universes and its import, and one with no effective selection (design §4.13
-case 7)."""
+"""Three universes and an import, and one with no effective selection."""
 
 
 @pytest.fixture(scope="module")
@@ -206,7 +204,7 @@ def test_universe_list_shows_the_universes_and_imports(universes: Path) -> None:
 def test_universe_show_gives_the_effective_selection(
     universes: Path, universe: str, selects: list[str]
 ) -> None:
-    """§12's table: what each universe selects once `derived_from` is resolved, each inherited
+    """What each universe selects once `derived_from` is resolved, each inherited
     selection with the universe it comes from; `u3` replaces the `decision1` it inherits from
     `u2`."""
     result = astra("universe", "show", universe, str(universes))
@@ -217,7 +215,8 @@ def test_universe_show_gives_the_effective_selection(
 
 
 def test_universe_show_of_a_universe_with_no_effective_selection_exits_1(universes: Path) -> None:
-    """design §4.13 case 7, and design §4.12."""
+    """`u4`'s `derived_from` names nothing, so it has no effective selection to show: the
+    command says so and exits 1."""
     result = astra("universe", "show", "u4", str(universes))
     assert result.exit_code == 1
     assert "no effective selection" in result.stderr
@@ -227,7 +226,7 @@ def test_universe_show_of_a_universe_with_no_effective_selection_exits_1(univers
 def test_universe_show_of_an_import_or_of_nothing_is_a_usage_error(
     universes: Path, universe: str
 ) -> None:
-    """An import selects nothing and isn't one of the analysis's universes (§12)."""
+    """An import selects nothing and isn't one of the analysis's universes."""
     result = astra("universe", "show", universe, str(universes))
     assert result.exit_code == 2
     assert "u1, u2, u3, u4" in result.stderr

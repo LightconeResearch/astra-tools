@@ -1,6 +1,6 @@
 """astra-spec's conformance suite (`conformance/analyses/`): each analysis case, built and
-compared as astra-spec's `conformance/README.md` says, gives the verdict its `expected.json` gives
-(§4). Its documents are `test_fixtures.py`'s."""
+compared as astra-spec's `conformance/README.md` says, gives the verdict its `expected.json`
+gives. Its documents are `test_fixtures.py`'s."""
 
 from __future__ import annotations
 

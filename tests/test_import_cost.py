@@ -1,4 +1,4 @@
-"""What importing each module, and running the light commands, may pull in (design §4.12).
+"""What importing each module, and running the light commands, may pull in.
 
 `astra --help`, completion and `validate --json` import neither rich nor the extras' packages,
 and rich is imported only under `astra/cli/text/`. Each run is a fresh interpreter, since this

@@ -1,11 +1,10 @@
-"""§8 Decisions and options: every option named by an option reference, a universe's own
+"""Decisions and options: every option named by an option reference, a universe's own
 selection or a key of a switch's `cases` is one of its decision's options (`UNKNOWN_OPTION`).
 
 Binding has resolved each address to its decision (`astra.stack`). Under an address that names
-nothing, no option is checked (design §4.13 case 5); a key that loops still names its decision, and
-its option is checked (design §4.13 case 10). A key of `cases` names an option of the decision its
-switch's `switch` names, and is reported at the key (Elements *switch*); under a `switch` that names
-nothing, no key is checked (case 5).
+nothing, no option is checked; a key that loops still names its decision, and its option is
+checked. A key of `cases` names an option of the decision its switch's `switch` names, and is
+reported at the key (Elements *switch*); under a `switch` that names nothing, no key is checked.
 """
 
 from __future__ import annotations

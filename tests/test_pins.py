@@ -1,7 +1,8 @@
-"""§13 Pins, and outputs built per universe or once. Its rules went with `when`.
+"""Pins, and outputs built per universe or once. `UNKNOWN_PIN_UNIVERSE` and `PIN_NOT_BUILT`
+are tested with driving and switches.
 
-The stack is §2's worked example with §10's `output3`, an `output4` built per universe, and
-`output6`, which reads `output4` unpinned and pinned to `u2`, and pins an input.
+The stack is the worked example with an `output3` built once, an `output4` built per universe,
+and `output6`, which reads `output4` unpinned and pinned to `u2`, and pins an input.
 """
 
 from __future__ import annotations
@@ -64,8 +65,8 @@ universes:
   u2:
     decisions: {decision1: b}
 """
-"""§2's worked example, §10's `output3` and an `output4` built per universe; `output6` reads
-`output4` unpinned and pinned to `u2`, and pins an input."""
+"""The worked example, an `output3` built once and an `output4` built per universe; `output6`
+reads `output4` unpinned and pinned to `u2`, and pins an input."""
 
 KEPT = (
     ROOT + "findings:\n  insight1:\n    claim: Figure 4.\n    evidence: [{artifact: output4#u2}]\n"
@@ -82,7 +83,7 @@ def kept(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_outputs_built_per_universe_and_once(kept: Path) -> None:
-    """§13 *Built per universe or built once*: `output1` and `output4` list `decisions`, and
+    """`output1` and `output4` list `decisions`, and
     `output6` reads `output4` without a pin; `output2` reads `output1` pinned to each universe,
     and `output3` reads only `input1`, so both are built once."""
     stack = bind(WorktreeReader(kept, Repository(kept)), "").stack
@@ -93,6 +94,6 @@ def test_outputs_built_per_universe_and_once(kept: Path) -> None:
 
 
 def test_a_stack_whose_pins_name_universes_is_valid(kept: Path) -> None:
-    """§13 *Pins*: `output6` and the evidence (§14) pin `output4` to `u2`; a pin on an input
+    """`output6` and the evidence pin `output4` to `u2`; a pin on an input
     names a universe and changes nothing else."""
     assert api.validate(kept).diagnostics == ()

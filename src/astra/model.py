@@ -1,10 +1,10 @@
-"""The analysis document, `astra.yaml`, as frozen dataclasses (§5–§17, the field reference).
+"""The analysis document, `astra.yaml`, as frozen dataclasses (Elements, the field reference).
 
 `Analysis.from_json` makes one from the JSON value of a document the contract accepted, so
 every field has the type its schema gives it. Each class has the fields of its schema class,
 named as the schema names them. An optional field left out is None; a list or a map left out
-is empty, which the schema allows for neither, so the two never mean different things (§5).
-Maps keep their entries in the file's order, which carries no meaning (§6).
+is empty, which the schema allows for neither, so the two never mean different things.
+Maps keep their entries in the file's order, which carries no meaning.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def _map(make: Callable[[Any], T]) -> Callable[[Any], Mapping[str, T]]:
 
 @dataclass(frozen=True)
 class Input:
-    """A file the analysis reads (§7)."""
+    """A file the analysis reads."""
 
     path: str
     label: str | None = None
@@ -53,7 +53,7 @@ class Input:
 
 @dataclass(frozen=True)
 class Option:
-    """One of a decision's options (§8)."""
+    """One of a decision's options."""
 
     label: str | None = None
     description: str | None = None
@@ -70,7 +70,7 @@ class Option:
 
 @dataclass(frozen=True)
 class Decision:
-    """A choice the analysis makes, between its options (§8)."""
+    """A choice the analysis makes, between its options."""
 
     options: Mapping[str, Option]
     label: str | None = None
@@ -84,7 +84,7 @@ class Decision:
 
 @dataclass(frozen=True)
 class Resources:
-    """What a recipe asks for (§11)."""
+    """What a recipe asks for."""
 
     cpus: float | None = None
     memory: str | None = None
@@ -99,7 +99,7 @@ class Resources:
 
 @dataclass(frozen=True)
 class Recipe:
-    """How an output is made: a command, a template (§11)."""
+    """How an output is made: a command, a template."""
 
     command: str
     resources: Resources | None = None
@@ -137,7 +137,7 @@ class Output:
 @dataclass(frozen=True)
 class Universe:
     """An entry of `universes`: a universe, or an import, which has `analysis` and `universe`
-    and selects nothing (§12)."""
+    and selects nothing."""
 
     label: str | None = None
     description: str | None = None
@@ -158,7 +158,7 @@ class Universe:
 
 @dataclass(frozen=True)
 class TextQuoteSelector:
-    """A passage quoted exactly (§14)."""
+    """A passage quoted exactly."""
 
     exact: str
     prefix: str | None = None
@@ -171,7 +171,7 @@ class TextQuoteSelector:
 
 @dataclass(frozen=True)
 class FragmentSelector:
-    """A place in a work or an output, as a fragment identifier (§14)."""
+    """A place in a work or an output, as a fragment identifier."""
 
     value: str
     conforms_to: str | None = None
@@ -183,7 +183,7 @@ class FragmentSelector:
 
 @dataclass(frozen=True)
 class Evidence:
-    """What a claim rests on: a work by its `doi`, or an output as an `artifact` (§14)."""
+    """What a claim rests on: a work by its `doi`, or an output as an `artifact`."""
 
     doi: str | None = None
     version: int | None = None
@@ -199,7 +199,7 @@ class Evidence:
 
 @dataclass(frozen=True)
 class Insight:
-    """A claim backed by evidence (§14)."""
+    """A claim backed by evidence."""
 
     claim: str
     evidence: tuple[Evidence, ...]
@@ -215,7 +215,7 @@ class Insight:
 
 @dataclass(frozen=True)
 class AnalysisDeclaration:
-    """An entry of `analyses`: a `path` or a `url`, and maybe a `commit` (§15, §17)."""
+    """An entry of `analyses`: a `path` or a `url`, and maybe a `commit`."""
 
     path: str | None = None
     url: str | None = None
@@ -228,7 +228,7 @@ class AnalysisDeclaration:
 
 @dataclass(frozen=True)
 class Analysis:
-    """The content of an `astra.yaml` (§5)."""
+    """The content of an `astra.yaml`."""
 
     spec_version: str
     label: str | None = None

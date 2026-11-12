@@ -1,8 +1,8 @@
-"""§17 Analyses from another commit or repository: `COMMIT_NOT_FOUND`, `COMMIT_NOT_ANCESTOR`,
+"""Analyses from another commit or repository: `COMMIT_NOT_FOUND`, `COMMIT_NOT_ANCESTOR`,
 `REMOTE_UNREACHABLE` and `DECLARED_ANALYSIS_INVALID`; `MISSING_DECLARED_ANALYSIS`,
 `DECLARATION_OUTSIDE_REPOSITORY`, `RESERVED_PATH` and `INPUT_NOT_TRACKED` where they meet a
-commit; identity, gitlinks crossed at a commit (Annex B), and design §4.13 case 3. Another local
-repository, reached by a `file://` URL, stands for a remote."""
+commit; identity, gitlinks crossed at a commit, and what a declaration that can't be read leaves
+unchecked. Another local repository, reached by a `file://` URL, stands for a remote."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def reading(paths: dict[str, str]) -> str:
 
 
 UNRESOLVED = MINIMAL.replace("    recipe:", "    inputs: [nothing]\n    recipe:")
-"""An analysis whose output reads an address that names nothing (§6)."""
+"""An analysis whose output reads an address that names nothing."""
 
 
 def commit(top: Path, files: dict[str, str | bytes], remove: tuple[str, ...] = ()) -> str:
@@ -115,11 +115,10 @@ def broken(
 def test_a_commit_that_cant_be_got_breaks_remote_unreachable(
     broken: api.ValidationReport,
 ) -> None:
-    """§17 *Reading one*: a URL nothing answers at, a commit the remote
-    hasn't, and two declarations of one commit, each reported once; and a `path` with a
-    `commit` in a file read from a remote, got from that remote (`wrong`'s, further in).
-    design §4.13 case 3: none is checked by MISSING_DECLARED_ANALYSIS or DECLARED_ANALYSIS_INVALID,
-    and no address through them by UNRESOLVED_ADDRESS (case 4)."""
+    """A URL nothing answers at, a commit the remote hasn't, and two declarations of one commit,
+    each reported once; and a `path` with a `commit` in a file read from a remote, got from that
+    remote (`wrong`'s, further in). None is checked by MISSING_DECLARED_ANALYSIS or
+    DECLARED_ANALYSIS_INVALID, and no address through them by UNRESOLVED_ADDRESS."""
     unreachable = {item for item in found(broken) if item[0] == "REMOTE_UNREACHABLE"}
     assert unreachable == {
         ("REMOTE_UNREACHABLE", "astra.yaml", f"/analyses/{name}", None)
@@ -133,9 +132,9 @@ def test_a_commit_that_cant_be_got_breaks_remote_unreachable(
 def test_a_must_broken_at_a_commit_is_reported_twice(
     broken: api.ValidationReport, upstream: dict[str, str]
 ) -> None:
-    """§17 *Reading one*, *The rules*: DECLARED_ANALYSIS_INVALID on the declaration, and the
-    rule's own code at its place in the commit's file, with the commit and the URL (design
-    §3); a schema rule too, and one broken in an analysis it declares."""
+    """DECLARED_ANALYSIS_INVALID on the declaration, and the rule's own code at its place in the
+    commit's file, with the commit and the URL; a schema rule too, and one broken in an analysis
+    it declares."""
     for name in ("unresolved", "schema", "staged"):
         assert ("DECLARED_ANALYSIS_INVALID", "astra.yaml", f"/analyses/{name}", None) in found(
             broken
@@ -197,16 +196,15 @@ universes:
   u1:
     decisions: {e: a}
 """
-"""An analysis whose own `u1` reads `lib.out` through a `lib` it doesn't drive (§16), and uses
-its key `e` through `uses_e`, which nothing reads (Results *uses*)."""
+"""An analysis whose own `u1` reads `lib.out` through a `lib` it doesn't drive, and uses its key
+`e` through `uses_e`, which nothing reads (Results *uses*)."""
 
 
 def test_a_must_found_only_as_its_own_root_is_reported_at_its_place(tmp_path: Path) -> None:
-    """§17 *Reading one*, design §3: validated as its own root, `remote`
-    builds its `u1`, where `result` reads `lib.out` though `lib` isn't built there; this root
-    builds no universe of `remote`'s, so only that pass finds the two rules broken. Each is
-    reported at its place in the commit's file, beside DECLARED_ANALYSIS_INVALID, which names
-    them as related places."""
+    """Validated as its own root, `remote` builds its `u1`, where `result` reads `lib.out`
+    though `lib` isn't built there; this root builds no universe of `remote`'s, so only that
+    pass finds the two rules broken. Each is reported at its place in the commit's file, beside
+    DECLARED_ANALYSIS_INVALID, which names them as related places."""
     files = {"astra.yaml": OWN_UNIVERSE, "lib/astra.yaml": LIBRARY}
     remote = repository(tmp_path / "remote", files)
     head = git(remote, "rev-parse", "HEAD").strip()
@@ -252,7 +250,7 @@ universes:
 def test_a_must_found_only_under_this_root_has_the_declaration_as_a_related_place(
     tmp_path: Path,
 ) -> None:
-    """Design §3: `remote` is valid as its own root, so it isn't DECLARED_ANALYSIS_INVALID;
+    """`remote` is valid as its own root, so it isn't DECLARED_ANALYSIS_INVALID;
     under this root, whose `u1` drives it but not its `lib`, its `result` reads `lib.out` where
     `lib` isn't built. That `MUST`, which only this root's pass finds in the commit's file, is
     reported there under its own code, with the declaration that leads to it as a related
@@ -275,8 +273,8 @@ def test_a_must_found_only_under_this_root_has_the_declaration_as_a_related_plac
 def test_a_file_whose_version_has_no_schema_isnt_judged_invalid(
     broken: api.ValidationReport, upstream: dict[str, str]
 ) -> None:
-    """design §4.13 case 3: DECLARED_ANALYSIS_INVALID isn't checked on an analysis from a commit
-    whose file breaks UNSUPPORTED_SPEC_VERSION, which is reported in that file."""
+    """DECLARED_ANALYSIS_INVALID isn't checked on an analysis from a commit whose file breaks
+    UNSUPPORTED_SPEC_VERSION, which is reported in that file."""
     commit = upstream["unsupported"]
     assert ("UNSUPPORTED_SPEC_VERSION", "astra.yaml", "/spec_version", commit) in found(broken)
     assert not any(item[2] == "/analyses/unsupported" for item in found(broken))
@@ -285,8 +283,8 @@ def test_a_file_whose_version_has_no_schema_isnt_judged_invalid(
 def test_a_url_whose_top_holds_no_analysis_breaks_missing_declared_analysis(
     broken: api.ValidationReport,
 ) -> None:
-    """§17: the folder a `url` names is the top of its repository, which holds an astra.yaml
-    file. design §4.13 case 3: its analysis is undetermined, so it isn't judged invalid."""
+    """The folder a `url` names is the top of its repository, which holds an astra.yaml file.
+    Its analysis is undetermined, so it isn't judged invalid."""
     assert ("MISSING_DECLARED_ANALYSIS", "astra.yaml", "/analyses/empty/url", None) in found(broken)
     assert not any(
         item[2] in ("/analyses/empty", "/outputs/result/inputs/2") for item in found(broken)
@@ -301,7 +299,7 @@ def test_nothing_else_is_reported(broken: api.ValidationReport) -> None:
 def test_a_commit_of_a_remote_with_a_valid_analysis_keeps_every_rule(
     tmp_path: Path, upstream: dict[str, str]
 ) -> None:
-    """§17: `up` is the top of the remote's repository at the commit, whose input and output
+    """`up` is the top of the remote's repository at the commit, whose input and output
     the root reads; `older` declares a `path` and an earlier `commit`, got from the remote its
     file was read from, an ancestor of the commit the declaration is in."""
     url = upstream["url"]
@@ -315,8 +313,8 @@ def test_a_commit_of_a_remote_with_a_valid_analysis_keeps_every_rule(
 
 
 def test_a_commit_kept_from_an_earlier_fetch_counts_as_got(tmp_path: Path) -> None:
-    """§17 *Reading one*: once fetched, the commit is got, though the remote
-    is gone, and offline; design §4.3: offline, nothing is fetched."""
+    """Once fetched, the commit is got, though the remote is gone, and offline; offline, nothing
+    is fetched."""
     remote = repository(tmp_path / "remote", {"astra.yaml": MINIMAL})
     head = git(remote, "rev-parse", "HEAD").strip()
     text = declaring(f"{{up: {{url: '{remote.as_uri()}', commit: '{head}'}}}}", "[up.result]")
@@ -331,11 +329,10 @@ def test_a_commit_kept_from_an_earlier_fetch_counts_as_got(tmp_path: Path) -> No
 
 
 def test_a_commit_further_in_is_reported_on_the_outermost_declaration(tmp_path: Path) -> None:
-    """§17's example: the root declares `stage` by path, `stage` declares `upstream` by url,
-    and `upstream` declares `nested` by url, whose commit can't be got: the error is on
-    `stage`'s declaration of `upstream`. design §4.13 case 3: DECLARED_ANALYSIS_INVALID isn't
-    checked on it, and only `nested` is undetermined: `upstream`'s MISSING_DECLARED_ANALYSIS
-    and addresses into it are checked."""
+    """The root declares `stage` by path, `stage` declares `upstream` by url, and `upstream`
+    declares `nested` by url, whose commit can't be got: the error is on `stage`'s declaration
+    of `upstream`. DECLARED_ANALYSIS_INVALID isn't checked on it, and only `nested` is
+    undetermined: `upstream`'s MISSING_DECLARED_ANALYSIS and addresses into it are checked."""
     nested = f"nested: {{url: '{NOWHERE}', commit: '{ZERO}'}}, gone: {{path: nothere}}"
     remote = repository(
         tmp_path / "remote", {"astra.yaml": declaring(f"{{{nested}}}", "[nested.result]")}
@@ -357,7 +354,7 @@ def test_a_commit_further_in_is_reported_on_the_outermost_declaration(tmp_path: 
 def test_the_cli_shows_a_commits_file_with_its_commit(
     upstream: dict[str, str], tmp_path: Path
 ) -> None:
-    """design §4.12: text grouped by file, a file read at a commit named with it; `--json`
+    """Text grouped by file, a file read at a commit named with it; `--json`
     gives each location's commit and URL."""
     url, commit = upstream["url"], upstream["unresolved"]
     text = declaring(f"{{up: {{url: '{url}', commit: '{commit}'}}}}")
@@ -412,10 +409,10 @@ def history(
 def test_a_commit_the_repository_hasnt_breaks_commit_not_found(
     history: tuple[api.ValidationReport, dict[str, str]],
 ) -> None:
-    """§17: a `path` with a `commit`, in a file not read from a remote, names a commit of the
+    """A `path` with a `commit`, in a file not read from a remote, names a commit of the
     repository that holds the declaring file: in the working tree, and in a file read at a
-    local commit. design §4.13 case 3: neither MISSING_DECLARED_ANALYSIS, DECLARED_ANALYSIS_INVALID
-    nor COMMIT_NOT_ANCESTOR is checked on it, nor any address through it."""
+    local commit. Neither MISSING_DECLARED_ANALYSIS, DECLARED_ANALYSIS_INVALID nor
+    COMMIT_NOT_ANCESTOR is checked on it, nor any address through it."""
     report, commits = history
     assert {item for item in found(report) if item[0] == "COMMIT_NOT_FOUND"} == {
         ("COMMIT_NOT_FOUND", "astra.yaml", "/analyses/zero/commit", None),
@@ -433,7 +430,7 @@ def test_a_commit_the_repository_hasnt_breaks_commit_not_found(
 def test_a_commit_off_the_history_breaks_commit_not_ancestor(
     history: tuple[api.ValidationReport, dict[str, str]],
 ) -> None:
-    """Design §3, COMMIT_NOT_ANCESTOR: the commit should be an ancestor of HEAD, for a
+    """COMMIT_NOT_ANCESTOR: the commit should be an ancestor of HEAD, for a
     declaration in the working tree, or of the commit the declaration is in. A SHOULD: a
     warning, and the analysis at `late` stays valid, so isn't judged invalid."""
     report, commits = history
@@ -448,7 +445,7 @@ def test_a_commit_off_the_history_breaks_commit_not_ancestor(
 
 
 def test_a_folder_read_at_its_commit(history: tuple[api.ValidationReport, dict[str, str]]) -> None:
-    """§17: the folder a declaration with a `commit` names is read at that commit, where
+    """The folder a declaration with a `commit` names is read at that commit, where
     `later` holds no astra.yaml (MISSING_DECLARED_ANALYSIS), and measured from the top of the
     repository that holds it (DECLARATION_OUTSIDE_REPOSITORY)."""
     report, _ = history
@@ -462,10 +459,10 @@ def test_a_folder_read_at_its_commit(history: tuple[api.ValidationReport, dict[s
 def test_reserved_path_and_input_not_tracked_at_a_commit(
     history: tuple[api.ValidationReport, dict[str, str]],
 ) -> None:
-    """§7, read at a commit: an input in `results/` (RESERVED_PATH), and one in a plain data
+    """Read at a commit: an input in `results/` (RESERVED_PATH), and one in a plain data
     submodule, which is no file of that commit's tree, reached through no gitlink
-    (INPUT_NOT_TRACKED, Annex B *Tracked*), though a path that looks for a file goes on through
-    the gitlink, so it is no MISSING_INPUT_FILE; each reported twice (§17)."""
+    (INPUT_NOT_TRACKED), though a path that looks for a file goes on through the gitlink, so it
+    is no MISSING_INPUT_FILE; each reported twice, once as DECLARED_ANALYSIS_INVALID."""
     report, commits = history
     assert found(report) >= {
         ("RESERVED_PATH", "astra.yaml", "/inputs/x/path", commits["reserved"]),
@@ -483,10 +480,10 @@ def test_nothing_else_is_reported_at_the_commits(
 
 
 def test_a_verdict_that_rests_on_the_local_repository_isnt_kept(tmp_path: Path) -> None:
-    """§17: COMMIT_NOT_FOUND, in a file read at a local commit, reads the repository that holds
-    it, which can come to have the commit. `prev` is invalid while its `side` is missing, and
-    valid once it is fetched, with the warning that `side` isn't in its history; the first
-    verdict isn't kept for the second (design §4.9)."""
+    """COMMIT_NOT_FOUND, in a file read at a local commit, reads the repository that holds it,
+    which can come to have the commit. `prev` is invalid while its `side` is missing, and valid
+    once it is fetched, with the warning that `side` isn't in its history; the first verdict
+    isn't kept for the second."""
     other = repository(tmp_path / "other", {"astra.yaml": MINIMAL})
     side = git(other, "rev-parse", "HEAD").strip()
     top = tmp_path / "top"
@@ -503,9 +500,9 @@ def test_a_verdict_that_rests_on_the_local_repository_isnt_kept(tmp_path: Path) 
 
 
 def test_an_earlier_commit_of_the_history_keeps_every_rule(tmp_path: Path) -> None:
-    """§17: `previous` names the root's own folder at an earlier commit, and `stage` a folder
-    there, both read at it: an input and a folder removed since are there, tracked in that
-    commit's tree (Annex B *Tracked*), and the commit is an ancestor of HEAD."""
+    """`previous` names the root's own folder at an earlier commit, and `stage` a folder there,
+    both read at it: an input and a folder removed since are there, tracked in that commit's
+    tree, and the commit is an ancestor of HEAD."""
     top = tmp_path / "repo"
     files = {
         "astra.yaml": reading({"old": "data/old.csv"}),
@@ -526,8 +523,8 @@ def test_an_earlier_commit_of_the_history_keeps_every_rule(tmp_path: Path) -> No
 def test_the_repository_that_holds_a_file_in_a_submodule_is_the_submodules(
     tmp_path: Path,
 ) -> None:
-    """Annex B *The repository that holds a file*: COMMIT_NOT_FOUND and COMMIT_NOT_ANCESTOR
-    read the submodule's own repository, where HEAD is the submodule's."""
+    """For a file in a submodule, COMMIT_NOT_FOUND and COMMIT_NOT_ANCESTOR read the submodule's
+    own repository, where HEAD is the submodule's."""
     library = tmp_path / "library"
     first = commit(library, {"astra.yaml": MINIMAL})
     commit(library, {"astra.yaml": MINIMAL + "label: later\n"})
@@ -577,11 +574,10 @@ def linked(
 def test_a_path_through_a_gitlink_at_a_commit_is_read_in_the_submodule(
     linked: tuple[api.ValidationReport, Path],
 ) -> None:
-    """§17 *Identity*: a path to the top of a submodule, read at a commit, names the same
-    analysis as a `url` declaration of the submodule's repository at the commit the gitlink
-    pins: its rule broken is reported once, in the submodule's file at that commit, read in the
-    submodule's checkout, which holds it, so got from no remote (§17); and each
-    declaration is judged invalid."""
+    """A path to the top of a submodule, read at a commit, names the same analysis as a `url`
+    declaration of the submodule's repository at the commit the gitlink pins: its rule broken
+    is reported once, in the submodule's file at that commit, read in the submodule's checkout,
+    which holds it, so got from no remote; and each declaration is judged invalid."""
     report, _ = linked
     inside = [d for d in report.diagnostics if d.location.commit is not None]
     assert [(d.code, d.location.file, d.location.url) for d in inside] == [
@@ -594,11 +590,10 @@ def test_a_path_through_a_gitlink_at_a_commit_is_read_in_the_submodule(
 def test_a_gitlinks_commit_a_local_repository_holds_counts_as_got(
     linked: tuple[api.ValidationReport, Path],
 ) -> None:
-    """§17 *Reading one*: a gitlink's commit that the submodule's checkout
-    holds is got before any fetch, though the URL `.gitmodules` gives at `moved` answers
-    nothing. Annex B *A gitlink's commit*: one the checkout hasn't is got from that URL, so at
-    `gone` it can't be got (REMOTE_UNREACHABLE); design §4.13 case 3: its analysis is
-    undetermined, and the address through it isn't checked."""
+    """A gitlink's commit that the submodule's checkout holds is got before any fetch, though
+    the URL `.gitmodules` gives at `moved` answers nothing. One the checkout hasn't is got from
+    that URL, so at `gone` it can't be got (REMOTE_UNREACHABLE); its analysis is undetermined,
+    and the address through it isn't checked."""
     report, _ = linked
     assert ("DECLARED_ANALYSIS_INVALID", "astra.yaml", "/analyses/moved", None) in found(report)
     root = {item for item in found(report) if item[3] is None}
@@ -609,9 +604,9 @@ def test_a_gitlinks_commit_a_local_repository_holds_counts_as_got(
 
 
 def test_a_relative_submodule_url_is_resolved_as_git_resolves_it(tmp_path: Path) -> None:
-    """Annex B *A gitlink's commit*: `../library` against the remote a commit was got from,
-    and, for a local commit with no remote, against its repository's folder, where the
-    submodule isn't checked out to hold the commit (§17)."""
+    """`../library` resolves against the remote a commit was got from, and, for a local commit
+    with no remote, against its repository's folder, where the submodule isn't checked out to
+    hold the commit."""
     commit(tmp_path / "library", {"astra.yaml": MINIMAL})
     remote = repository(tmp_path / "remote", {"astra.yaml": declaring("{lib: {path: lib}}")})
     git(remote, "submodule", "--quiet", "add", "../library", "lib")

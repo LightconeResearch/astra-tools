@@ -1,7 +1,7 @@
-"""History (design §6 *Phase 4*): `timeline`, `lineage`, `find` and `get` over the git history of
-the records of the root's planned results (§18, §19), `api.history`, and `astra history`.
+"""History: `timeline`, `lineage`, `find` and `get` over the git history of the records of the
+root's planned results, `api.history`, and `astra history`.
 
-The repository is §2's worked example with a few commits of records, records and bytes both
+The repository is the worked example with a few commits of records, records and bytes both
 committed: built and committed (`first`); `data/input1.csv` changed, `output1` made again in
 both universes and then `output2`, each with other bytes (`second`); then `output1` in `u2`
 alone, in another environment (`third`).
@@ -85,8 +85,8 @@ def copied(recorded: Recorded, tmp_path: Path) -> Path:
 
 
 def test_timeline_gives_each_version_of_a_record_newest_first(recorded: Recorded) -> None:
-    """Each commit that changed the record at the result's place (§18), and what the record
-    says there (§19): `output1#u2` was made three times, `output1#u1` twice."""
+    """Each commit that changed the record at the result's place, and what the record says
+    there: `output1#u2` was made three times, `output1#u1` twice."""
     history = api.history(recorded.top)
     versions = history.timeline("output1#u2")
     assert [v.commit for v in versions] == [recorded.third, recorded.second, recorded.first]
@@ -107,7 +107,7 @@ def test_timeline_gives_each_version_of_a_record_newest_first(recorded: Recorded
 
 
 def test_timeline_says_where_a_version_isnt_a_valid_record(copied: Path) -> None:
-    """A version is read as a checker reads a record (§20 `INVALID_RECORD`): one that breaks a
+    """A version is read as a checker reads a record (`INVALID_RECORD`): one that breaks a
     parse rule gives its code, and a commit that removes the record gives none."""
     (copied / ".astra" / "records" / "output2.json").write_text("{")
     broken = commit(copied)
@@ -129,7 +129,7 @@ def test_a_record_never_committed_has_no_version(tmp_path: Path) -> None:
 
 
 def test_an_address_names_a_planned_results_place(recorded: Recorded) -> None:
-    """A result's address (§18), not an output's: `output1` is built per universe, so its
+    """A result's address, not an output's: `output1` is built per universe, so its
     results' addresses name a universe."""
     history = api.history(recorded.top)
     for address in ("output1", "output3", "output1#u3", "decision1"):
@@ -143,7 +143,7 @@ def test_an_address_names_a_planned_results_place(recorded: Recorded) -> None:
 def test_lineage_gives_the_versions_a_record_was_made_from(recorded: Recorded) -> None:
     """`output2`'s record at HEAD was made from the second versions of `output1#u1` and
     `output1#u2`, not `output1#u2`'s third, the latest; and each of those from
-    `data/input1.csv`, a leaf, with its hash (§19 `inputs`)."""
+    `data/input1.csv`, a leaf, with its hash."""
     lineage = api.history(recorded.top).lineage("output2")
     assert lineage.version is not None and lineage.version.commit == recorded.second
     assert lineage.users == ()
@@ -174,7 +174,7 @@ def test_lineage_where_no_version_has_the_hash_recorded(copied: Path) -> None:
 def test_lineage_never_gives_a_version_committed_after_the_record_that_lists_it(
     recorded: Recorded, copied: Path
 ) -> None:
-    """§19: a result made again that reproduces has the same `content_hash`. `output1#u2`, made
+    """A result made again that reproduces has the same `content_hash`. `output1#u2`, made
     again after `output2`'s record with its second version's bytes, gives the hash `output2`'s
     record lists, but `output2`'s recipe can't have read a later run: both ways, the version
     read is still the second."""
@@ -253,8 +253,8 @@ def test_get_where_the_commit_holds_no_record(recorded: Recorded) -> None:
 
 
 def test_get_where_the_bytes_arent_in_git(copied: Path) -> None:
-    """Results are often left out of git (§18: "A record at a commit can be read whether or not
-    the commit holds the bytes")."""
+    """Results are often left out of git, and a record at a commit can be read whether or not
+    the commit holds the bytes."""
     git(copied, "rm", "--quiet", "--cached", "results/output2.csv")
     git(copied, "commit", "--quiet", "--message", "results left out")
     left_out = head(copied)
@@ -278,14 +278,14 @@ def test_get_at_a_revision_that_names_no_commit(recorded: Recorded) -> None:
 
 
 def test_an_invalid_analysis_has_no_history(tmp_path: Path) -> None:
-    """As for the plan (design §2); `check` gives what statuses it can (design §4.7)."""
+    """Like `plan`, it raises `InvalidAnalysisError`; `check` gives what statuses it can."""
     top = repository(tmp_path, {"astra.yaml": MINIMAL.replace("type: metric", "type: plot")})
     with pytest.raises(api.InvalidAnalysisError):
         api.history(top)
 
 
 def test_a_result_of_an_analysis_from_a_commit_has_its_one_version(tmp_path: Path) -> None:
-    """§17: its records are read at the declared commit, which is its one version, and
+    """Its records are read at the declared commit, which is its one version, and
     `get` reads at a revision of the repository that holds it."""
     top = repository(tmp_path, {"astra.yaml": MINIMAL, "lib/astra.yaml": LIB})
     build(top, top / "lib")

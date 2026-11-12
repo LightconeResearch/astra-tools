@@ -2,7 +2,8 @@
 on some branch*), and the validator's rules on them (Rules): `UNRESOLVED_ADDRESS`,
 `UNKNOWN_OPTION`, `OUTPUT_CYCLE`, `UNUSED_DECISION`, `INACTIVE_DECISION`, `MISSING_DECISION`,
 `MISSING_REQUIRED_OPTION`, `INCOMPATIBLE_OPTIONS`, `PIN_NOT_BUILT`, `NOT_BUILT_IN_UNIVERSE`
-and `UNDRIVEN_DECLARATION`, with design §4.13 cases 5, 6, 7 and 13.
+and `UNDRIVEN_DECLARATION`, with what a name that names nothing, a switch undetermined in a
+universe, a universe with no effective selection and an output on a cycle leave unchecked.
 
 Binding first (`api.bind`), then the validator (`api.validate`). Which files are valid is the
 conformance suite's to say; these tests pin astra-tools' own part: where each diagnostic is
@@ -448,9 +449,9 @@ def test_unresolved_address_at_a_switch(
 ) -> None:
     """Rules, `UNRESOLVED_ADDRESS`: a switch's `switch` names a decision, and no output; each of
     its `cases` an input or an output (a switch is one); and an `artifact` naming a switch needs
-    each of its cases, through nested switches, to name an output other than a switch. Design
-    §4.13 case 5: where a case names nothing, that is what is reported, and the evidence citing
-    the switch isn't judged."""
+    each of its cases, through nested switches, to name an output other than a switch. Where a
+    case names nothing, that is what is reported, and the evidence citing the switch isn't
+    judged."""
     report = validated(tmp_path, {"astra.yaml": NAMES + added, "data/input1.csv": "1\n"})
     assert found(report) == ordered(
         ("UNRESOLVED_ADDRESS", "astra.yaml", pointer, key) for pointer, key in expected
@@ -509,8 +510,7 @@ def test_a_case_on_a_cycle_breaks_output_cycle(
     tmp_path: Path, added: str, expected: list[str]
 ) -> None:
     """Rules, `OUTPUT_CYCLE`: no output reads itself through `inputs` and `cases`, a case taken
-    or not, on an excluded option too. It is reported at each entry and case on the cycle (design
-    §4.13 case 13)."""
+    or not, on an excluded option too. It is reported at each entry and case on the cycle."""
     report = validated(tmp_path, {"astra.yaml": NAMES + added, "data/input1.csv": "1\n"})
     assert found(report) == ordered(
         ("OUTPUT_CYCLE", "astra.yaml", pointer, None) for pointer in expected
@@ -681,9 +681,9 @@ def test_a_case_on_an_excluded_option_is_a_branch(tmp_path: Path) -> None:
 def test_a_universe_with_no_effective_selection_is_judged_for_keys_no_branch_uses(
     tmp_path: Path,
 ) -> None:
-    """Design §4.13 case 7: `u9` has no effective selection, so what it takes and uses is
-    undetermined, and `INACTIVE_DECISION` isn't judged on `decision3`; whether a key is used on
-    some branch doesn't depend on the selection, so `UNUSED_DECISION` is, on `decision2`."""
+    """`u9` has no effective selection, so what it takes and uses is undetermined, and
+    `INACTIVE_DECISION` isn't judged on `decision3`; whether a key is used on some branch
+    doesn't depend on the selection, so `UNUSED_DECISION` is, on `decision2`."""
     text = variant(
         UNUSED,
         ("{decision1: a, decision2: a, decision3: a}", "{decision1: b, decision3: a}"),
@@ -695,9 +695,9 @@ def test_a_universe_with_no_effective_selection_is_judged_for_keys_no_branch_use
 
 
 def test_an_address_that_names_nothing_leaves_every_key_unjudged(tmp_path: Path) -> None:
-    """Design §4.13 case 5: what a branch through a case that names nothing would use is
-    unknown, so no key of the analysis's universes is judged `UNUSED_DECISION`; the case is
-    reported, and nothing else. Where the case names `output1`, `decision2` is."""
+    """What a branch through a case that names nothing would use is unknown, so no key of the
+    analysis's universes is judged `UNUSED_DECISION`; the case is reported, and nothing else.
+    Where the case names `output1`, `decision2` is."""
     text = """\
 spec_version: "0.1.0"
 decisions:
@@ -1149,9 +1149,9 @@ def test_a_pin_to_a_universe_where_its_target_is_built_keeps_pin_not_built(tmp_p
 
 
 def test_a_pin_to_an_undetermined_switch_is_reported_by_its_cause(tmp_path: Path) -> None:
-    """Design §4.13 case 6: `u3` leaves `gate`'s decision unset, so whether `gate` is built
-    there is undetermined, and `PIN_NOT_BUILT` isn't judged; the pin reaches `gate` in `u3`,
-    which so uses `decision1`: `MISSING_DECISION`."""
+    """`u3` leaves `gate`'s decision unset, so whether `gate` is built there is undetermined,
+    and `PIN_NOT_BUILT` isn't judged; the pin reaches `gate` in `u3`, which so uses
+    `decision1`: `MISSING_DECISION`."""
     text = """\
 spec_version: "0.1.0"
 decisions:
@@ -1374,8 +1374,7 @@ def test_another_analysiss_switch_read_through_an_undriven_chain(tmp_path: Path)
     """Rules, `NOT_BUILT_IN_UNIVERSE` and `UNDRIVEN_DECLARATION`: reading another analysis's
     switch needs that analysis built where it reads, whatever case the switch takes, so both
     are reported at `stage.switch3` in the root's file, though `switch3` is undetermined in
-    `u1` (design §4.13 case 6); `MISSING_DECISION` isn't, as no key drives `stage`. With a key,
-    nothing is."""
+    `u1`; `MISSING_DECISION` isn't, as no key drives `stage`. With a key, nothing is."""
     root = (
         'spec_version: "0.1.0"\nanalyses:\n  stage: {path: stage}\n'
         "decisions:\n  decision1:\n    options: {a: {}, b: {}}\n"
@@ -1395,7 +1394,7 @@ def test_another_analysiss_switch_read_through_an_undriven_chain(tmp_path: Path)
 def test_a_switch_on_an_undriven_analysiss_decision(tmp_path: Path) -> None:
     """Rules: a switch uses the decision it switches on. The root's own `s` switches on
     `stage.decision2`, and no key drives `stage`: both rules are reported at its `switch`,
-    though `s` is undetermined (design §4.13 case 6)."""
+    though `s` is undetermined."""
     root = (
         'spec_version: "0.1.0"\nanalyses:\n  stage: {path: stage}\n'
         "decisions:\n  decision1:\n    options: {a: {}, b: {}}\n"
@@ -1458,9 +1457,9 @@ O1_STAGE = (
 
 
 def test_driving_one_universe_determines_is_judged_there(tmp_path: Path) -> None:
-    """Design §4.13 case 6, *undetermined driving*: `u1` definitely uses `stage.decision2`, so
-    `stage`, which no key drives, is undriven, and `u1`'s read of `stage.o1` breaks both rules
-    at the case; `u2` leaves `decision1` unset (`MISSING_DECISION`)."""
+    """`u1` definitely uses `stage.decision2`, so `stage`, which no key drives, is undriven, and
+    `u1`'s read of `stage.o1` breaks both rules at the case; `u2` leaves `decision1` unset
+    (`MISSING_DECISION`)."""
     files = {"astra.yaml": UNDETERMINED, "stage/astra.yaml": O1_STAGE}
     assert found(validated(tmp_path, files)) == ordered(
         [
@@ -1472,8 +1471,8 @@ def test_driving_one_universe_determines_is_judged_there(tmp_path: Path) -> None
 
 
 def test_driving_no_universe_determines_isnt_judged(tmp_path: Path) -> None:
-    """Design §4.13 case 6, *undetermined driving*: with `u2` alone, whether `stage` is used,
-    and so driven, is undetermined, and only the cause is reported."""
+    """With `u2` alone, whether `stage` is used, and so driven, is undetermined, and only the
+    cause is reported."""
     root = variant(UNDETERMINED, ("  u1:\n    decisions: {decision1: a}\n", ""))
     files = {"astra.yaml": root, "stage/astra.yaml": O1_STAGE}
     assert found(validated(tmp_path, files)) == [
@@ -1570,7 +1569,7 @@ def test_what_a_switch_between_analyses_breaks_once_changed(tmp_path: Path, name
     - with no key for `fast`, `fast.fit` is still planned in `q`, and uses `fast.decision5`, so
       `fast` needs one: both driving rules at the case `q` takes, and no `MISSING_DECISION`;
     - `model` switching on `fast.decision5`, which no key sets, gets both at its `switch`,
-      though it is undetermined in every universe (design §4.13 case 6)."""
+      though it is undetermined in every universe."""
     edits, expected = CHOOSING_VARIANTS[name]
     files = {**CHOOSING_FILES, "astra.yaml": variant(CHOOSING, *edits)}
     assert found(validated(tmp_path, files)) == ordered(expected)

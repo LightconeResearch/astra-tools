@@ -1,9 +1,9 @@
-"""Diagnostics, and the rule catalogue they take their levels from (design §3).
+"""Diagnostics, and the rule catalogue they take their levels from.
 
-The catalogue is astra-spec's `rules.json` (Annex D), read at run time from the namespace
+The catalogue is astra-spec's `rules.json` (Schema files), read at run time from the namespace
 package `astra.schema`: every rule's code, layer, level and statement, and the code of each
-JSON Schema error. Beside it are astra-tools' own three codes (`OWN`, design §3). A `MUST`
-broken is an error and a `SHOULD` a warning, in every layer (§4).
+JSON Schema error. Beside it are astra-tools' own three codes (`OWN`). A `MUST`
+broken is an error and a `SHOULD` a warning, in every layer.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ class Location:
     pointer: str  # JSON Pointer into it; "" for the whole file
     line: int | None
     column: int | None
-    key: str | None = None  # the map key or field the diagnostic names (Annex D)
+    key: str | None = None  # the map key or field the diagnostic names
     commit: str | None = None  # set when the file was read at a commit
     url: str | None = None  # set when it came from a remote
 
@@ -47,7 +47,7 @@ class Diagnostic:
 
 @dataclass(frozen=True)
 class Rule:
-    """One row of a codes table of Part II, as `rules.json` gives it."""
+    """One row of the specification's table of rules, as `rules.json` gives it."""
 
     code: str
     layer: str  # parse, schema, validator, check or runner
@@ -89,7 +89,7 @@ OWN: Mapping[str, Rule] = MappingProxyType(
     }
 )
 """astra-tools' own codes, which the specification left to tools, with their layer, level and
-statement (design §3): the first two are errors, since without them the stack can't be read."""
+statement: the first two are errors, since without them the stack can't be read."""
 
 
 @dataclass(frozen=True)
@@ -137,13 +137,13 @@ class Catalogue:
         return tuple(rule.code for rule in rules if rule.layer == layer)
 
     def level(self, code: str) -> Level:
-        """The level of `code`: an error for a `MUST`, a warning for a `SHOULD` (§4)."""
+        """The level of `code`: an error for a `MUST`, a warning for a `SHOULD`."""
         return "error" if self.rule(code).level == "MUST" else "warning"
 
     def diagnostic(
         self, code: str, message: str, location: Location, related: Iterable[Location] = ()
     ) -> Diagnostic:
-        """A diagnostic for `code`, at the level its rule's `MUST` or `SHOULD` gives (§4)."""
+        """A diagnostic for `code`, at the level its rule's `MUST` or `SHOULD` gives."""
         return Diagnostic(code, self.level(code), message, location, tuple(related))
 
 

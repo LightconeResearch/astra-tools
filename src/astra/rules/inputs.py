@@ -1,15 +1,14 @@
-"""§7 Inputs: an input's `path` names a file, or a stand-in for one (`MISSING_INPUT_FILE`),
+"""Inputs: an input's `path` names a file, or a stand-in for one (`MISSING_INPUT_FILE`),
 tracked in the repository that holds its analysis (`INPUT_NOT_TRACKED`), inside its analysis's
 folder and outside every analysis below it (`INPUT_IN_ANOTHER_ANALYSIS`); and no input's or
 declaration's `path` is, or lies inside, the `results/` or `.astra/` of an analysis of the
-stack (`RESERVED_PATH`, §5 *The folder*).
+stack (`RESERVED_PATH`).
 
 A path is joined to its file's folder and tidied as text, and names the entry at exactly that
-path, a symlink never followed (Annex B). Each analysis is read through its own Reader, in the
-working tree or at a commit. Stand-ins are those `sources.standins` registers. An input that
-breaks `MISSING_INPUT_FILE` isn't checked by `INPUT_NOT_TRACKED` (design §4.13 case 8). One whose
-tidied path goes above the top breaks `INPUT_IN_ANOTHER_ANALYSIS` only (design §4.13, *Added
-since*).
+path, a symlink never followed. Each analysis is read through its own Reader, in the working tree
+or at a commit. Stand-ins are those `sources.standins` registers. An input that breaks
+`MISSING_INPUT_FILE` isn't checked by `INPUT_NOT_TRACKED`. One whose tidied path goes above the
+top breaks `INPUT_IN_ANOTHER_ANALYSIS` only.
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ CODES = frozenset(
 )
 
 RESERVED = ("results", ".astra")
-"""The folders of an analysis that belong to runners (§5 *The folder*)."""
+"""The folders of an analysis that belong to runners (`RESERVED_PATH`)."""
 
 
 def check(context: Context) -> Iterator[Diagnostic]:

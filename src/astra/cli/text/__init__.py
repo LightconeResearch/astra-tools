@@ -32,8 +32,8 @@ def file_named(location: Location) -> str:
 def rule_line(
     location: Location, level: Level, code: str, message: str, breaks: str | None = None
 ) -> Text:
-    """A rule broken, as `line:col level CODE message` under its file (design §4.12), with the
-    parse or schema code a record breaks after its code."""
+    """A rule broken, as `line:col level CODE message` under its file, with the parse or schema
+    code a record breaks after its code."""
     line = Text("  ")
     if location.line is not None:
         line.append(f"{location.line}:{location.column} ")

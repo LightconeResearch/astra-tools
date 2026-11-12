@@ -1,4 +1,4 @@
-"""`astra init [DIR]`: a minimal analysis, in a new git repository (design §4.12)."""
+"""`astra init [DIR]`: a minimal analysis, in a new git repository."""
 
 from __future__ import annotations
 

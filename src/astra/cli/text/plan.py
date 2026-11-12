@@ -1,7 +1,7 @@
 """The plan as text: each planned result, each after what it reads, with its places, what its
-recipe asks for and the command run in its analysis's folder, its placeholders filled in (§11),
-or the commit whose record it is read through (§17); then the plan's notes, counted by kind and,
-on request, each one (design §4.6). The notes counted and listed are those that concern what the
+recipe asks for and the command run in its analysis's folder, its placeholders filled in, or the
+commit whose record it is read through; then the plan's notes, counted by kind and, on request,
+each one. The notes counted and listed are those that concern what the
 root builds (`Note.built`); for `fallback_pin`, `unplanned` and `outside_folder`, a line gives the
 whole stack's count where it is more."""
 

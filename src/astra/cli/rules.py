@@ -1,5 +1,4 @@
-"""`astra rules [CODE]`: the rule catalogue, `rules.json` (Annex D), and astra-tools' own
-codes (design §3)."""
+"""`astra rules [CODE]`: the rule catalogue, `rules.json`, and astra-tools' own codes."""
 
 from __future__ import annotations
 

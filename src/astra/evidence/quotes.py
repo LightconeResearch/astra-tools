@@ -1,11 +1,11 @@
-"""Quotes sought in the papers they are taken from (§14), advisory only (design §3).
+"""Quotes sought in the papers they are taken from, advisory only.
 
 For a `doi`, the cited resource is the work's full text, and with both a `quote` and a
-`location`, the quote is sought within the location (§14). `verify` seeks each quote's `exact`
+`location`, the quote is sought within the location. `verify` seeks each quote's `exact`
 in the text of the work's PDF, kept in the cache by `astra paper add` (`papers`): within the
-page that a PDF fragment identifier's `page=` gives (§14 *Fragment identifiers*, RFC 8118), or
+page that a PDF fragment identifier's `page=` gives (RFC 8118), or
 in the whole text. Its warnings are codes of astra-tools' own, outside `rules.json`: always
-warnings, which never change a verdict, a status or an exit code (design §3).
+warnings, which never change a verdict, a status or an exit code.
 """
 
 from __future__ import annotations
@@ -33,8 +33,7 @@ THRESHOLD = 90
 score of the best match of the quote in that text."""
 
 PDF = (None, "http://tools.ietf.org/rfc/rfc3778")
-"""The `conforms_to` of a PDF fragment identifier: none, or the IRI Web Annotation gives it
-(§14 *Fragment identifiers*)."""
+"""The `conforms_to` of a PDF fragment identifier: none, or the IRI Web Annotation gives it."""
 
 
 def verify(stack: Stack) -> tuple[Diagnostic, ...]:
@@ -72,8 +71,8 @@ def verify(stack: Stack) -> tuple[Diagnostic, ...]:
 
 def _page(location: model.FragmentSelector | None) -> int | None:
     """The page, counted from 1, that the first `page=` of a PDF fragment identifier gives, its
-    parameters joined with `&` (§14 *Fragment identifiers*); None where the location gives none
-    or follows another syntax."""
+    parameters joined with `&`; None where the location gives none or follows another
+    syntax."""
     # Any other location is sought in the whole text.
     if location is None or location.conforms_to not in PDF:
         return None
@@ -98,5 +97,5 @@ def _found(exact: str, text: str) -> bool:
 
 def _warning(code: str, message: str, stack: Stack, pointer: Pointer) -> Diagnostic:
     """`code`'s warning at `pointer` in the root's file: a code of astra-tools' own, always a
-    warning (design §3)."""
+    warning."""
     return Diagnostic(code, "warning", message, stack.location(stack.root, pointer))

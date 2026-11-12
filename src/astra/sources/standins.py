@@ -1,4 +1,4 @@
-"""Stand-ins: what a large-file tool keeps in a file's place (§7, design §4.5).
+"""Stand-ins: what a large-file tool keeps in a file's place.
 
 Which stand-ins count is the validator's to say. astra-tools recognises three, and never
 fetches what they stand for:
@@ -10,10 +10,10 @@ fetches what they stand for:
 - DVC: a `<path>.dvc` file beside the path.
 
 A stand-in isn't the content, but it can give the content's hash and size, which the checker
-compares (§20): a Git LFS pointer gives both, a git-annex link both for a key of its `SHA256` and
+compares: a Git LFS pointer gives both, a git-annex link both for a key of its `SHA256` and
 `SHA256E` backends, and a DVC file no SHA-256.
 
-They are an extension point (design §4.10): another package adds one by registering an object
+They are an extension point: another package adds one by registering an object
 that has `StandIn`'s members in the entry-point group `astra.standins`.
 """
 
@@ -26,7 +26,7 @@ from typing import Protocol
 from astra.sources.reader import Reader
 
 GROUP = "astra.standins"
-"""The entry-point group other packages register their stand-ins in (design §4.10)."""
+"""The entry-point group other packages register their stand-ins in."""
 
 
 class StandIn(Protocol):
@@ -136,7 +136,7 @@ class Dvc:
 
 
 BUILT_IN: tuple[StandIn, ...] = (GitLfs(), GitAnnex(), Dvc())
-"""The stand-ins astra-tools recognises itself (design §4.5)."""
+"""The stand-ins astra-tools recognises itself."""
 
 
 def registered() -> tuple[StandIn, ...]:

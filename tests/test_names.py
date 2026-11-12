@@ -1,10 +1,10 @@
-"""§6 Names: `UNRESOLVED_ADDRESS`, in every field §6's table lists, a switch's `switch` and cases
-too, and in an `artifact` that names a switch with a case on an input (Rules), with design §4.13
-cases 4, 5 and 13.
+"""Names: `UNRESOLVED_ADDRESS`, in every field its rows list (Rules), a switch's `switch` and
+cases too, and in an `artifact` that names a switch with a case on an input; and where it isn't
+checked: through an undetermined analysis, under a name that names nothing, or on a cycle.
 
 The breaking cases share one stack, whose every address names nothing but the switch an
 `artifact` cites; the keeping ones another, whose every address resolves, through spellings,
-`self: {path: .}` and `..` too (§15)."""
+`self: {path: .}` and `..` too."""
 
 from __future__ import annotations
 
@@ -37,8 +37,8 @@ universes:
     decisions: {decision1: a}
   sub_v1: {analysis: parent, universe: u1}
 """
-"""§15's `subanalysis`, with a universe `v1` of its own, an import, and an output reading one
-of its parent's through `..`."""
+"""The declared analysis `sub`, with a universe `v1` of its own, an import, and an output
+reading one of its parent's through `..`."""
 
 BROKEN = """\
 spec_version: "0.1.0"
@@ -141,10 +141,10 @@ def broken(tmp_path_factory: pytest.TempPathFactory) -> api.ValidationReport:
     return api.validate(repository(tmp_path_factory.mktemp("broken"), files))
 
 
-def test_every_field_of_sixs_table_breaks_it(broken: api.ValidationReport) -> None:
-    """§6 *Addresses*: an address that doesn't resolve to an element of its field's kind, in
-    each field of the table; each written address is reported once, not again in the
-    universe that inherits it (§12)."""
+def test_every_address_field_breaks_it(broken: api.ValidationReport) -> None:
+    """An address that doesn't resolve to an element of its field's kind, in each field the
+    rule's rows list; each written address is reported once, not again in the universe that
+    inherits it."""
     assert unresolved(broken) == [
         ("astra.yaml", "/decisions/decision1/options/a/requires/0", None),
         ("astra.yaml", "/decisions/decision1/options/a/incompatible_with/0", None),
@@ -169,8 +169,7 @@ def test_every_field_of_sixs_table_breaks_it(broken: api.ValidationReport) -> No
 
 
 def test_it_is_reported_where_it_is_written(broken: api.ValidationReport) -> None:
-    """At the value, or for a key of Universe.decisions at its map, naming the key (design §3,
-    Annex D)."""
+    """At the value, or for a key of Universe.decisions at its map, naming the key."""
     found = {
         (d.location.pointer, d.location.key): d
         for d in broken.diagnostics
@@ -204,8 +203,7 @@ def test_a_switch_names_a_decision_and_its_cases_an_input_or_output(
 
 
 def test_an_import_names_another_analysiss_universe(broken: api.ValidationReport) -> None:
-    """§12 *Imports*: never an import in its file, nor a universe of the
-    importing analysis itself."""
+    """Never an import in its file, nor a universe of the importing analysis itself."""
     found = {d.location.pointer: d.message for d in broken.diagnostics}
     assert "`sub` has no universe `sub_v1`" in found["/universes/imp3/universe"]
     assert "leads back to this one" in found["/universes/imp4/analysis"]
@@ -227,8 +225,8 @@ every case of either names an output; `on_inputs`'s cases name inputs."""
 
 
 def test_every_field_keeps_it_where_its_address_resolves(tmp_path: Path) -> None:
-    """§6, §15: through two spellings of `sub`, `self: {path: .}`, and `sub`'s `..` back to the
-    root; and an import whose `analysis` leads through the parent to a sibling (§16). A switch's
+    """Through two spellings of `sub`, `self: {path: .}`, and `sub`'s `..` back to the root;
+    and an import whose `analysis` leads through the parent to a sibling. A switch's
     `switch` and cases too, and an `artifact` that names a switch each of whose cases names an
     output or a switch like it (Elements *switch*, Rules `UNRESOLVED_ADDRESS`)."""
     text = KEPT.replace("universes:\n", SWITCHES + "universes:\n", 1).replace(
@@ -262,7 +260,7 @@ outputs:
 
 
 def test_an_id_an_input_and_a_switch_share_breaks_only_ambiguous_id(tmp_path: Path) -> None:
-    """design §4.13 case 5: an entry of `inputs`, or a case, whose id is both an input and a
+    """An entry of `inputs`, or a case, whose id is both an input and a
     switch names nothing, as one an input and an output share, and breaks `AMBIGUOUS_ID`, not
     this rule."""
     report = api.validate(repository(tmp_path, {"astra.yaml": AMBIGUOUS}))
@@ -302,7 +300,7 @@ findings:
 def test_an_artifact_on_a_switch_whose_case_names_nothing_or_cycles_isnt_judged(
     tmp_path: Path,
 ) -> None:
-    """design §4.13 cases 5 and 13: a switch with a case that names nothing, or on a cycle, isn't
+    """A switch with a case that names nothing, or on a cycle, isn't
     judged as an `artifact`, though another case names an input: the case's own cause is
     reported."""
     report = api.validate(repository(tmp_path, {"astra.yaml": CYCLING}))
@@ -321,7 +319,7 @@ def test_an_artifact_on_a_switch_whose_case_names_nothing_or_cycles_isnt_judged(
 def test_no_address_through_an_undetermined_analysis_is_checked(
     tmp_path: Path, analyses: str, outcome: str | None
 ) -> None:
-    """design §4.13 case 4: in the files that declare an undetermined analysis, no address through
+    """In the files that declare an undetermined analysis, no address through
     that declaration is checked; the declaration's own code is reported."""
     text = (
         KEPT.replace(

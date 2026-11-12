@@ -1,5 +1,5 @@
 """Universes as text: an analysis's universes and imports, and one universe's effective
-selection (§12)."""
+selection."""
 
 from __future__ import annotations
 

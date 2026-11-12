@@ -1,5 +1,5 @@
 """`astra check [PATH] [--at REV] [--json]`: each planned result's record and bytes statuses,
-and the evidence's (§20, design §4.12)."""
+and the evidence's."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def command(path: Path | None, at: str | None, as_json: bool) -> None:
 
     PATH is the analysis's folder, the current one by default. Each planned result is shown at
     each of its places with its record's status, unchanged, stale or missing, and its bytes',
-    present or absent, and why; then each evidence with the status of what it cites (§20).
+    present or absent, and why; then each evidence with the status of what it cites.
     Where the analysis breaks a MUST, its errors come first, as `astra validate` shows them,
     and only the results they leave determined are shown. Exits 0 when the analysis is valid
     and every planned result and evidence is unchanged, 1 when one isn't or the analysis breaks

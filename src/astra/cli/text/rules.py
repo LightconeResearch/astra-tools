@@ -14,7 +14,7 @@ LAYERS = ("parse", "schema", "validator", "check", "runner")
 
 
 def show_rules(catalogue: Catalogue) -> None:
-    """`rules.json`'s rules by layer, then astra-tools' own (design §3)."""
+    """`rules.json`'s rules by layer, then astra-tools' own."""
     out = console()
     for layer in LAYERS:
         _section(out, layer, (rule for rule in catalogue.rules.values() if rule.layer == layer))

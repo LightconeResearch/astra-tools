@@ -1,10 +1,9 @@
-"""The universe view (design §4.6): the stack as it is in one of the root's universes, each
-analysis built there or not (§16), each decision, whether the universe uses it (Results *uses*)
-and its option selected (§12), each output, whether it is built there (Results *built*), and its
-planned result there and its places (§18); `api.view`, its shape `astra-universe-view/1`, and
-`astra view`.
+"""The universe view: the stack as it is in one of the root's universes, each analysis built
+there or not, each decision, whether the universe uses it (Results *uses*) and its option
+selected, each output, whether it is built there (Results *built*), and its planned result
+there and its places; `api.view`, its shape `astra-universe-view/1`, and `astra view`.
 
-The stack is §2's worked example, with a `subanalysis` the root's universes drive (§16), and an
+The stack is the worked example, with a `subanalysis` the root's universes drive, and an
 `other` they drive with nothing to set, as no universe of the root uses its decisions (Elements),
 read pinned to its own `v1`.
 """
@@ -131,8 +130,8 @@ def state(view: UniverseView) -> dict[str, object]:
 
 
 def test_the_view_in_u1(top: Path) -> None:
-    """§16: the root's universes drive `subanalysis`, so it is built in `u1`, with its
-    `decision1` set to `a` and used; its `output1` has the root's result there (§18), and
+    """The root's universes drive `subanalysis`, so it is built in `u1`, with its
+    `decision1` set to `a` and used; its `output1` has the root's result there, and
     `unread`, built once, which nothing reads, none. `other` is built in `u1` though no key drives
     it. The root reads it only pinned to `other`'s own `v1`, which counts for `v1`, so no universe
     of the root uses its decisions and it has nothing to set (Elements). `u1` neither uses nor
@@ -165,7 +164,7 @@ def test_the_view_in_u1(top: Path) -> None:
 
 
 def test_the_view_in_u2(top: Path) -> None:
-    """§12: `u2` selects `decision1: b`, and `output1`'s result there is `output1#u2`."""
+    """`u2` selects `decision1: b`, and `output1`'s result there is `output1#u2`."""
     root = state(api.view("u2", top))["."]
     assert root == (
         True,
@@ -238,8 +237,8 @@ def test_astra_view_shows_the_stack_in_one_universe(top: Path) -> None:
 
 
 def test_astra_view_names_the_commit_of_an_analysis_from_a_commit(tmp_path: Path) -> None:
-    """§17: the root's universes drive `lib`, read at a commit, so it is built in `u1`, where
-    its `out` is the root's; its `once`, built once, is `lib`'s, at that commit (§18)."""
+    """The root's universes drive `lib`, read at a commit, so it is built in `u1`, where its
+    `out` is the root's; its `once`, built once, is `lib`'s, at that commit."""
     top = repository(tmp_path, {"astra.yaml": MINIMAL, "lib/astra.yaml": LIB})
     commit = git(top, "rev-parse", "HEAD").strip()
     repository(top, {"astra.yaml": FROM_COMMIT % commit})

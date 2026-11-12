@@ -1,4 +1,4 @@
-"""Environments, an extension point (design §4.10): no scheme is built in; another package
+"""Environments, an extension point: no scheme is built in; another package
 registers one in the entry-point group `astra.environments`, and the check report shows what
 each registered scheme answered for each record's environment."""
 
@@ -65,7 +65,7 @@ def test_no_scheme_is_built_in() -> None:
 
 
 def test_another_package_registers_a_scheme(plugin: None) -> None:
-    """design §4.10: a scheme says, for an IRI it recognises, what the environment holds and
+    """A scheme says, for an IRI it recognises, what the environment holds and
     whether it can be recreated; one it doesn't recognise gets no answer."""
     schemes = registered()
     assert [scheme.name for scheme in schemes] == ["example"]

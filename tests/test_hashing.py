@@ -1,4 +1,4 @@
-"""A file's SHA-256 and size, as a record gives them (§19), through the cache (design §4.7)."""
+"""A file's SHA-256 and size, as a record gives them, through the cache."""
 
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ HASH = f"sha256:{hashlib.sha256(DATA).hexdigest()}"
 
 
 def test_a_file_is_hashed_as_sha256_and_its_size(tmp_path: Path) -> None:
-    """§19: `sha256:`, then the digest in lowercase hexadecimal, and the size in bytes."""
+    """`sha256:`, then the digest in lowercase hexadecimal, and the size in bytes."""
     (tmp_path / "data.csv").write_bytes(DATA)
     assert hashing.digest_file(tmp_path / "data.csv") == hashing.Digest(HASH, len(DATA))
     assert hashing.digest_bytes(DATA) == hashing.Digest(HASH, len(DATA))
 
 
 def test_an_unchanged_file_costs_a_stat(tmp_path: Path) -> None:
-    """design §4.7: kept by its device and inode with its size and modification time, so a file
-    whose size and modification time are as they were isn't read again."""
+    """Kept by its device and inode with its size and modification time, so a file whose size and
+    modification time are as they were isn't read again."""
     file = tmp_path / "data.csv"
     file.write_bytes(DATA)
     os.utime(file, ns=(10**18, 10**18))
@@ -59,7 +59,7 @@ def test_cache_clear_deletes_the_hashes(tmp_path: Path) -> None:
 
 
 def test_a_file_is_hashed_in_the_working_tree_or_at_a_commit(tmp_path: Path) -> None:
-    """At a commit, the blob git stores, hashed as it is read; a symlink is no file (Annex B)."""
+    """At a commit, the blob git stores, hashed as it is read; a symlink is no file."""
     top = repository(tmp_path, {"data.csv": DATA})
     commit = git(top, "rev-parse", "HEAD").strip()
     (top / "link.csv").symlink_to("data.csv")

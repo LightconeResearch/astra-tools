@@ -1,11 +1,11 @@
-"""§12 Universes: a universe's `derived_from` names another of its analysis's universes
+"""Universes: a universe's `derived_from` names another of its analysis's universes
 (`UNKNOWN_DERIVED_FROM`) and its chain doesn't loop (`DERIVED_FROM_CYCLE`); its own `decisions`
 set only decisions it uses on some branch (`UNUSED_DECISION`), and should set only those it uses
 (`INACTIVE_DECISION`); its effective selection keeps every constraint of the options it selects,
 among the decisions in play (`MISSING_REQUIRED_OPTION`, `INCOMPATIBLE_OPTIONS`), and selects no
 excluded one (`EXCLUDED_OPTION_SELECTED`).
 
-Every universe of every analysis of the stack is checked (§16 *What a validator checks*), on its
+Every universe of every analysis of the stack is checked, on its
 effective selection (`universes.selections`), with its own analysis driving (Results *uses*,
 `Context.runs`). A universe uses on some branch each decision listed or switched on by what its
 analysis would reach there were every case of every switch followed, and each that a universe
@@ -16,9 +16,9 @@ analysis's universe, those that something the root reaches through a pin uses th
 a decision outside these selects nothing, so a `requires` naming it fails and an
 `incompatible_with` naming it holds. Constraints never make a decision used.
 
-None of the last four is checked for a universe that has no effective selection (design §4.13
-case 7), for a selection that names nothing, nor against a constraint that names nothing (case
-5). Where a decision's use is undetermined (case 6), neither `INACTIVE_DECISION` nor a
+None of the last four is checked for a universe that has no effective selection, for a selection
+that names nothing, nor against a constraint that names nothing. Where a decision's use is
+undetermined, neither `INACTIVE_DECISION` nor a
 constraint on or naming its options is checked; where what an analysis uses on some branch is
 (an address or a pin on the way names nothing), `UNUSED_DECISION` isn't checked on its
 universes' keys. It is checked on a universe with no effective selection, as it doesn't turn on
@@ -153,7 +153,7 @@ def _derived_from(
 def _loop(analysis: model.Analysis, id_: str) -> tuple[str, ...] | None:
     """The chain of `derived_from` from `id_` back to it, where `id_` is on a loop; None where
     it isn't, though its chain may reach one: only a universe on the loop breaks
-    DERIVED_FROM_CYCLE (§12)."""
+    DERIVED_FROM_CYCLE."""
     chain = [id_]
     while True:
         named = analysis.universes[chain[-1]].derived_from
@@ -232,7 +232,7 @@ def _at(
 ) -> tuple[Location, list[Location]]:
     """Where a rule broken by a selection is reported, and the places related: at its key, where
     the universe sets it itself; or at the universe's `derived_from`, with the key where it is
-    written beside it, where the universe inherits it (design §3)."""
+    written beside it, where the universe inherits it."""
     written = context.at(entry.file, entry.pointer, entry.key)
     if selection.own(entry):
         return written, []

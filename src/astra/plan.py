@@ -1,24 +1,23 @@
 """plan(): the root's planned results, in an order a runner can build them in, and
-render_command (§11 *The command as a template*, §13, §16, §17, §18; design §4.6).
+render_command, which fills in a command's placeholders.
 
 A thin layer over `universes.building`, which gives the planned results, their names and the
 universe each entry reads in: each result here adds what a runner reads from it, its owner and
-places (§18), what each entry of its output's `inputs` reads, the option each entry of its
-`decisions` selects, its command, the folder it runs in and what its recipe asks for (§11), and
-whether it is read through its record or run at a commit (§17). The plan also notes what an
-author may want to tidy, though it breaks no rule (design §4.6): a pin that names another
-analysis's universe only because its file has no entry of that id (§16), a result with two
-names (§18), an output with no planned result (§18), results that are one computation in
-several universes, an output, or a switch that nothing reads, that a switch leaves unbuilt in a
-universe, as it has no case there for the option its decision selects (Elements *switch*), and a
-command that names a path outside its analysis's folder, or inside an analysis below it
-(`CODE_OUTSIDE_ANALYSIS`, §21). Through a switch, an entry reads what the case the switch takes
-names (Elements *takes*), which its read records.
+places, what each entry of its output's `inputs` reads, the option each entry of its
+`decisions` selects, its command, the folder it runs in and what its recipe asks for, and
+whether it is read through its record or run at a commit. The plan also notes what an author
+may want to tidy, though it breaks no rule: a pin that names another analysis's universe only
+because its file has no entry of that id, a result with two names, an output with no planned
+result, results that are one computation in several universes, an output, or a switch that
+nothing reads, that a switch leaves unbuilt in a universe, as it has no case there for the option
+its decision selects (Elements *switch*), and a command that names a path outside its analysis's
+folder, or inside an analysis below it (`CODE_OUTSIDE_ANALYSIS`). Through a switch, an entry
+reads what the case the switch takes names (Elements *takes*), which its read records.
 
 `api.plan` plans only a valid stack: one that breaks a `MUST` has no plan. On such a stack,
-`plan` gives the results whose planning is determined (design §4.13 case 12), for `check`.
-Every path is a path from the top of the tree its analysis is read in (§17 *Identity*): the
-root's working tree, or the repository a commit is read in.
+`plan` gives the results whose planning is determined, for `check`. Every path is a path from
+the top of the tree its analysis is read in: the root's working tree, or the repository a commit
+is read in.
 """
 
 from __future__ import annotations
@@ -61,9 +60,8 @@ class RequestError(ValueError):
 
 @dataclass(frozen=True)
 class Read:
-    """One entry of an output's `inputs`, as written, and what it reads (§10): an input's file,
-    or a planned result's bytes, through the case each switch on the way takes (Elements
-    *takes*)."""
+    """One entry of an output's `inputs`, as written, and what it reads: an input's file, or a
+    planned result's bytes, through the case each switch on the way takes (Elements *takes*)."""
 
     entry: str
     path: str  # the input's file, or the default place of the result's bytes
@@ -76,22 +74,22 @@ class Read:
 
 @dataclass(frozen=True)
 class Result:
-    """A planned result, as a runner builds it (design §4.6)."""
+    """A planned result, as a runner builds it."""
 
     names: tuple[str, ...]
-    owner: Identity  # the analysis it belongs to (§18)
+    owner: Identity  # the analysis it belongs to
     output: Element
     universe: Element | None  # the universe it is built in; None for an output built once
-    places: tuple[Place, ...]  # one for each name (§18)
+    places: tuple[Place, ...]  # one for each name
     inputs: tuple[Read, ...]  # one for each entry of its output's `inputs`, in their order
     decisions: Mapping[str, str | None]  # each entry of its output's `decisions`, and its option
-    command: str  # its recipe's `command`, a template (§11)
-    workdir: str  # the folder its recipe runs in: its output's analysis's (§11)
+    command: str  # its recipe's `command`, a template
+    workdir: str  # the folder its recipe runs in: its output's analysis's
     read_only: bool  # it belongs to an analysis read at another commit than the root's, one
-    # from a commit or reached from it: read through its record (§17)
+    # from a commit or reached from it: read through its record
     run_at: str | None  # for a driven analysis from a commit, the commit its recipe runs on, on
-    # that analysis's files; never the commit its record names, which is the driver's (§19)
-    resources: Resources | None  # what its recipe asks for (§11)
+    # that analysis's files; never the commit its record names, which is the driver's
+    resources: Resources | None  # what its recipe asks for
 
 
 NoteKind = Literal[
@@ -101,7 +99,7 @@ NoteKind = Literal[
 
 @dataclass(frozen=True)
 class Note:
-    """Something an author may want to tidy, which breaks no rule (design §4.6)."""
+    """Something an author may want to tidy, which breaks no rule."""
 
     kind: NoteKind
     message: str
@@ -123,7 +121,7 @@ class Plan:
     notes: tuple[Note, ...] = ()
 
     def to_json(self) -> dict[str, Any]:
-        """The plan as `astra-plan/1` (design §4.11)."""
+        """The plan as `astra-plan/1`."""
         # The exact JSON form.
         index = {(result.output, result.universe): at for at, result in enumerate(self.results)}
 
@@ -187,12 +185,11 @@ class Plan:
 def plan(
     stack: Stack, universes: Iterable[str] | None = None, outputs: Iterable[str] | None = None
 ) -> Plan:
-    """The planned results of `stack` (§18), each after every result it reads. Where `stack`
-    breaks a `MUST`, those whose planning is determined: a result is left out where an entry of
-    its output's `inputs` names nothing (design §4.13 cases 4 and 5), gives an input's path above
-    the top, names an output with no result planned there (`NOT_BUILT_IN_UNIVERSE`), or reads a
-    result that is left out or that reads it back (`OUTPUT_CYCLE`), as `check` reads them
-    (design §4.7).
+    """The planned results of `stack`, each after every result it reads. Where `stack` breaks a
+    `MUST`, those whose planning is determined: a result is left out where an entry of its
+    output's `inputs` names nothing, gives an input's path above the top, names an output with
+    no result planned there (`NOT_BUILT_IN_UNIVERSE`), or reads a result that is left out or
+    that reads it back (`OUTPUT_CYCLE`), as `check` reads them.
 
     `universes`, ids of the root's universes, narrows them to the results built in those
     universes and what they read. `outputs`, addresses read in the root's file, names outputs
@@ -307,7 +304,7 @@ def _unset(
         if universe.analysis == stack.root and wanted is not None and universe not in wanted:
             continue
         selection = context.selections.get(universe)
-        if selection is None:  # design §4.13 case 7
+        if selection is None:  # the universe has no effective selection
             continue
         known = before.get(universe, frozenset())
         for decision in sorted(decisions - known, key=_order):
@@ -322,7 +319,7 @@ def _order(element: Element) -> tuple[str, str, str]:
 
 def _spelled(context: Context, decision: Element, universe: Element) -> str:
     """`decision`, in backticks, as a key of `universe`'s `decisions` would set it: through the
-    first chain its analysis's universes drive that reaches the decision's analysis (§16)."""
+    first chain its analysis's universes drive that reaches the decision's analysis."""
     reaching = built(context.driven[universe.analysis], universe.analysis).get(decision.analysis)
     if not reaching:
         return f"`{decision.id}` of `{decision.analysis}`"
@@ -331,7 +328,7 @@ def _spelled(context: Context, decision: Element, universe: Element) -> str:
 
 def root_universe(stack: Stack, id_: str) -> Element:
     """The root's universe `id_`. Raises RequestError where the root has none, or `id_` is an
-    import, which selects nothing (§12)."""
+    import, which selects nothing."""
     entry = stack.analysis(stack.root).universes.get(id_)
     if entry is None or entry.is_import:
         own = [key for key, u in stack.analysis(stack.root).universes.items() if not u.is_import]
@@ -368,7 +365,7 @@ def _reads(
     breaks a `MUST`: it names nothing, gives a path above the top, reads through a switch that
     is undetermined or takes nothing, or names an output with no result planned there. Where
     outputs are `requested`, those last two raise RequestError instead: an output asked for can
-    read what isn't built (§13, §16)."""
+    read what isn't built."""
     reads: list[tuple[Resolution, Through, Planned | str]] = []
     for entry in context.written[result.output]:
         if entry.field != "inputs":
@@ -436,14 +433,14 @@ def _result(context: Context, result: Planned, reads: Reads, made: Mapping[Key, 
 
 
 def _notes(context: Context, found: Building, results: tuple[Result, ...]) -> tuple[Note, ...]:
-    """What the plan notes (design §4.6), kind by kind. Those about files are about the files
-    read where the root is, which an author can edit; those about results, about `results`.
-    `fallback_pin`, `unplanned` and `outside_folder` notes say whether they concern what the root
-    builds (`Note.built`): the root, and every analysis its universes drive (`built`). In a stack
-    the plan accepts, that is every analysis: one whose decisions a universe of the root uses is
-    built there (`NOT_BUILT_IN_UNIVERSE`), and one with none it uses has nothing to set, so is
-    driven without a key (Elements). Only a `fallback_pin` that no planned result reads through
-    concerns something else."""
+    """What the plan notes, kind by kind. Those about files are about the files read where the root
+    is, which an author can edit; those about results, about `results`. `fallback_pin`, `unplanned`
+    and `outside_folder` notes say whether they concern what the root builds (`Note.built`): the
+    root, and every analysis its universes drive (`built`). In a stack the plan accepts, that is
+    every analysis: one whose decisions a universe of the root uses is built there
+    (`NOT_BUILT_IN_UNIVERSE`), and one with none it uses has nothing to set, so is driven without a
+    key (Elements). Only a `fallback_pin` that no planned result reads through concerns something
+    else."""
     stack = context.stack
     editable = [
         (member, analysis)
@@ -468,9 +465,8 @@ Editable = list[tuple[Member, Analysis]]
 def _fallback_pins(context: Context, read: set[Resolution]) -> Iterator[Note]:
     """Each pin in a file read where the root is that names another analysis's universe only
     because the file's `universes` has no entry of its id, so that adding one would change what
-    it names (§16 *Pins and imported universes*). It concerns what the root builds where the
-    plan reads through it (`read`): an entry of a planned result's `inputs`, or of the root's
-    evidence."""
+    it names. It concerns what the root builds where the plan reads through it (`read`): an
+    entry of a planned result's `inputs`, or of the root's evidence."""
     stack = context.stack
     for entry, universe in context.pins.items():
         file = entry.file
@@ -489,7 +485,7 @@ def _fallback_pins(context: Context, read: set[Resolution]) -> Iterator[Note]:
 
 
 def _two_names(root: Identity, results: Iterable[Result]) -> Iterator[Note]:
-    """Each of `results` with two names (§18 *Which analysis a result belongs to, and its name*)."""
+    """Each of `results` with two names."""
     for result in results:
         if len(result.names) > 1:
             addresses = ", ".join(f"`{place.address}`" for place in result.places)
@@ -507,7 +503,7 @@ def _unplanned(
     builds: frozenset[Identity],
 ) -> Iterator[Note]:
     """Each output other than a switch of an analysis read where the root is with no planned
-    result (§18): an output of a declared analysis that no planned result reads and the root's
+    result: an output of a declared analysis that no planned result reads and the root's
     evidence doesn't cite; one of the root's that only a case of its own switches names, so that
     it is planned only where something planned reads it (Results *plans*); or another of the
     root's, built in none of its universes, as where it is built per universe and the root has
@@ -614,12 +610,12 @@ def _outside_folder(
     context: Context, editable: Editable, builds: frozenset[Identity]
 ) -> Iterator[Note]:
     """Each command of an analysis read where the root is that names a path climbing out of the
-    analysis's folder, where the recipe runs (§11), or one inside a folder below it that holds
-    an `astra.yaml` of its own: the code a recipe runs is tracked in its analysis's folder,
-    outside every analysis below it, or its output's inputs give it (`CODE_OUTSIDE_ANALYSIS`,
-    §21). Whether a folder holds an `astra.yaml` is read through the analysis's Reader, once
-    for each folder: every analysis read where the root is is read in one tree. It concerns
-    what the root builds where its analysis is one of `builds`."""
+    analysis's folder, where the recipe runs, or one inside a folder below it that holds an
+    `astra.yaml` of its own: the code a recipe runs is tracked in its analysis's folder, outside
+    every analysis below it, or its output's inputs give it (`CODE_OUTSIDE_ANALYSIS`). Whether
+    a folder holds an `astra.yaml` is read through the analysis's Reader, once for each folder:
+    every analysis read where the root is is read in one tree. It concerns what the root builds
+    where its analysis is one of `builds`."""
     holds: dict[str, bool] = {}
 
     def below(member: Member, path: str) -> str | None:
@@ -709,8 +705,8 @@ def selected(entries: Iterable[Resolution], selection: Selection | None) -> dict
 
 
 _TEMPLATE = re.compile(r"\{\{|\}\}|\{([^}]*)\}")
-"""§11 *The command as a template*, read from the left: `{{`, `}}`, or a placeholder up to the
-next `}`. A valid stack's commands hold nothing else (`UNDECLARED_TEMPLATE_REF`)."""
+"""What a command holds, read from the left: `{{`, `}}`, or a placeholder up to the next `}`.
+A valid stack's commands hold nothing else (`UNDECLARED_TEMPLATE_REF`)."""
 
 
 def render_command(
@@ -720,8 +716,8 @@ def render_command(
     absolute: bool = False,
     got: Mapping[str, str] | None = None,
 ) -> str:
-    """`result`'s command with each placeholder, and each `{{` and `}}`, replaced as §11's table
-    says, verbatim, with no shell quoting: `{inputs.<entry>}` by the path of what the entry
+    """`result`'s command with each `{{` and `}}` replaced by one brace, and each placeholder
+    replaced verbatim, with no shell quoting: `{inputs.<entry>}` by the path of what the entry
     reads, `{decisions.<entry>}` by the option selected, `{inputs}` by every entry's path in
     order, separated by spaces, and `{output}` by the default place of the result's bytes.
 
@@ -730,7 +726,7 @@ def render_command(
     where `absolute`.
 
     An entry that reads at a commit (`Read.commit`) names no file in the checkout: its path is
-    in the tree of that commit, and the runner gets the bytes (§17, §21). `got` gives, by entry,
+    in the tree of that commit, and the runner gets the bytes. `got` gives, by entry,
     where it put them: a path from the checkout's top, or an absolute one. An entry it doesn't
     give is written `<commit>:<path>`, git's name for the file at that commit, as `astra plan`
     shows it."""

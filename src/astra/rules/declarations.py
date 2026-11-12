@@ -1,12 +1,12 @@
-"""§15 Declared analyses: a declaration's `path` stays inside the repository
+"""Declared analyses: a declaration's `path` stays inside the repository
 (`DECLARATION_OUTSIDE_REPOSITORY`) and names a folder holding an `astra.yaml` file, reached
 through no symlink (`MISSING_DECLARED_ANALYSIS`); no output shares its id with a declaration of
 its analysis (`CLASHING_RESULT_NAME`).
 
-A declaration whose analysis can't be got isn't checked by `MISSING_DECLARED_ANALYSIS`
-(design §4.13 case 3): binding gives each declaration one outcome (`astra.stack.Outcome`). With a
-`commit`, the folder is read at that commit, and measured from the top of the repository that
-holds it; with a `url`, it is the top of that repository (§17).
+A declaration whose analysis can't be got isn't checked by `MISSING_DECLARED_ANALYSIS`:
+binding gives each declaration one outcome (`astra.stack.Outcome`). With a `commit`, the folder
+is read at that commit, and measured from the top of the repository that holds it; with a
+`url`, it is the top of that repository.
 """
 
 from __future__ import annotations

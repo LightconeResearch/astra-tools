@@ -1,4 +1,4 @@
-"""`astra schema show|export`: astra-spec's JSON Schemas, byte for byte (Annex D)."""
+"""`astra schema show|export`: astra-spec's JSON Schemas, byte for byte (Schema files)."""
 
 from __future__ import annotations
 

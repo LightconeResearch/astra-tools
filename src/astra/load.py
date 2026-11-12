@@ -1,7 +1,7 @@
-"""`astra.yaml` and records, as Annex A reads them (design §4.1).
+"""`astra.yaml` and records, read as YAML 1.2 and as JSON (`INVALID_SYNTAX`).
 
 An `astra.yaml` goes to ruamel.yaml's safe loader, pure Python, with a resolver holding YAML
-1.2.2's core schema table (§10.3.2), so that `2026-10-26` is a string, as Annex A reads it. Every
+1.2.2's core schema table (§10.3.2), so that `2026-10-26` is a string. Every
 error the loader raises is `INVALID_SYNTAX`, a repeated key included, and so is a file with no
 document or more than one, a top level that isn't a map, and anything in the loaded value that
 isn't JSON: a key that isn't a string, a number that isn't finite, or a value only another tag
@@ -61,7 +61,7 @@ class _CoreSchema(VersionedResolver):
 
 
 class ParseError(Exception):
-    """A file that breaks a parse rule (§5, Annex A)."""
+    """A file that breaks a parse rule."""
 
     def __init__(
         self, code: str, message: str, line: int | None = None, column: int | None = None
@@ -117,7 +117,7 @@ def load_yaml(data: bytes) -> Document:
         found = re.match(r'found duplicate key "(.*?)" with value', error.problem or "")
         key = f"the key `{found[1]}`" if found else "a key"
         _fail(f"{key} is twice in one map, and YAML 1.2 allows a key once", error, detail=False)
-    except Exception as error:  # every other error the loader raises (design §4.1)
+    except Exception as error:  # every other error the loader raises
         _fail("this isn't YAML 1.2", error)
     document = Document(value, tree)
     _check_json(document, value, [])
@@ -140,7 +140,7 @@ def _fail(summary: str, error: Exception, detail: bool = True) -> NoReturn:
 
 
 def _check_json(document: Document, value: Any, path: list[str | int]) -> None:
-    """Raise INVALID_SYNTAX for the first thing in `value` that isn't JSON (Annex A)."""
+    """Raise INVALID_SYNTAX for the first thing in `value` that isn't JSON."""
     problem = None
     if type(value) is dict:
         for key, item in value.items():

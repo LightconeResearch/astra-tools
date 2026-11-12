@@ -1,12 +1,12 @@
-"""view(): the stack as it is in one universe of the root, for UIs (§12, §16, §18; design §4.6).
+"""view(): the stack as it is in one universe of the root, for UIs.
 
 Each analysis of the stack, the root first, with its fields as its `astra.yaml` writes them and
-whether it is built in the universe (§16 *The universe being built*); each of its decisions, the
-option the universe selects for it (§12) and whether the universe uses it, with the root driving
-(Results *uses*); and each of its outputs, whether it is built there (Results *built*), the case
-it takes there for a switch (Elements *takes*), and its planned result there, with its places
-(§18): its result in the universe, or its one result where it is built once. Like the plan, the
-view is made only of a valid stack (`api.view`).
+whether it is built in the universe; each of its decisions, the option the universe selects for
+it and whether the universe uses it, with the root driving (Results *uses*); and each of its
+outputs, whether it is built there (Results *built*), the case it takes there for a switch
+(Elements *takes*), and its planned result there, with its places: its result in the universe,
+or its one result where it is built once. Like the plan, the view is made only of a valid stack
+(`api.view`).
 """
 
 from __future__ import annotations
@@ -28,14 +28,14 @@ SHAPE = "astra-universe-view/1"
 @dataclass(frozen=True)
 class DecisionView:
     used: bool | None  # whether the universe uses it, with the root driving (Results *uses*);
-    # None where that turns on a switch that is undetermined (design §4.13 case 6)
+    # None where that turns on a switch that is undetermined
     selected: str | None  # the option the universe selects; None where it selects none
 
 
 @dataclass(frozen=True)
 class OutputView:
     built: bool | None  # whether it is built in the universe (Results *built*), as an output built
-    # once always is; None where that is undetermined (design §4.13 case 6)
+    # once always is; None where that is undetermined
     takes: str | None  # for a switch, the case it takes there, as written; None where it takes
     # none, and for an output other than a switch (Elements *takes*)
     result: Planned | None  # its planned result in the universe, or once; None where none is, as
@@ -46,7 +46,7 @@ class OutputView:
 @dataclass(frozen=True)
 class AnalysisView:
     member: Member  # its identity, its file, and its fields, as `analysis` and `document`
-    built: bool  # whether it is built in the universe: the root, or driven there (§16)
+    built: bool  # whether it is built in the universe: the root, or driven there
     decisions: Mapping[str, DecisionView]
     outputs: Mapping[str, OutputView]
 
@@ -60,7 +60,7 @@ class UniverseView:
     analyses: tuple[AnalysisView, ...]
 
     def to_json(self) -> dict[str, Any]:
-        """The view as `astra-universe-view/1` (design §4.11)."""
+        """The view as `astra-universe-view/1`."""
         # The exact JSON form.
         return {
             "shape": SHAPE,
@@ -104,7 +104,7 @@ def view(stack: Stack, universe: str) -> UniverseView:
     context = Context(stack, Catalogue.load())
     element = root_universe(stack, universe)
     selection = context.selections[element]
-    assert selection is not None  # every universe of a valid stack has one (design §4.13 case 7)
+    assert selection is not None  # every universe of a valid stack has one
     built = context.building.universes[element]
     run = context.building.run  # the root's
     used = run.used.get(element, frozenset())

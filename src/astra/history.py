@@ -1,8 +1,8 @@
-"""History: what git holds of the records of the root's planned results, read on demand (design
-§6 *Phase 4*). A feature beyond the specification, built on its records (§19) and their places
-(§18): nothing is indexed, and nothing kept in the cache.
+"""History: what git holds of the records of the root's planned results, read on demand. A
+feature beyond the specification, built on its records and their places: nothing is indexed,
+and nothing kept in the cache.
 
-A result is named by its address (§18), the `address` of the record at its place. The record's
+A result is named by its address, the `address` of the record at its place. The record's
 versions are its file at each commit along HEAD's history that changed it (`Repository.log`),
 in the repository that holds the analysis the result belongs to, each read as a checker reads a
 record (`records.read_record`), so a version that breaks a parse or schema rule says so. Four
@@ -44,16 +44,16 @@ class NotInHistoryError(Exception):
 class Version:
     """A result's record at one commit."""
 
-    place: Place  # the result's place: its address and record's path (§18)
+    place: Place  # the result's place: its address and record's path
     commit: str  # the commit that changed the record's file there; for a result read through
-    # its record (§17), the commit its analysis is read at
+    # its record, the commit its analysis is read at
     record: Record | tuple[Diagnostic, ...] | None  # what the file holds there: a record, the
     # parse or schema rules it breaks, or None where that commit removed it
 
 
 @dataclass(frozen=True)
 class Link:
-    """An entry of a record's `inputs`, and what the recipe read through it (§19)."""
+    """An entry of a record's `inputs`, and what the recipe read through it."""
 
     entry: str  # as the record lists it
     digest: Digest  # the hash and size the record gives
@@ -187,7 +187,7 @@ class History:
         """Each version of the record at `place` of `result`, newest first: its file at each
         commit along HEAD's history that changed it, in the repository that holds the analysis
         it belongs to; for a result read through its record, the one at the commit its
-        analysis is read at (§17)."""
+        analysis is read at."""
         key = (result.owner, place.record)
         if key not in self._kept:
             if result.read_only:  # its one version, at the declared commit

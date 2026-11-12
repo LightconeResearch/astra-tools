@@ -1,8 +1,8 @@
-"""What every validator rule is a function of (design §4.4).
+"""What every validator rule is a function of.
 
 A `Context` holds the Stack and what `universes.py` derives from it, each computed once, as a
-`cached_property` of the Context, and the predicates of design §4.13 that the rules consult before
-reporting: a rule on an undetermined subject isn't reported anywhere.
+`cached_property` of the Context, and the predicates that the rules consult before reporting: a
+rule on an undetermined subject isn't reported anywhere.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ class Context:
     def diagnostic(
         self, code: str, message: str, location: Location, related: Iterable[Location] = ()
     ) -> Diagnostic:
-        """A diagnostic for `code`, at its rule's level (§4)."""
+        """A diagnostic for `code`, at its rule's level."""
         return self.catalogue.diagnostic(code, message, location, related)
 
     def named(self, universes: Iterable[Element], file: Identity) -> str:
@@ -49,33 +49,32 @@ class Context:
 
     @cached_property
     def selections(self) -> Mapping[Element, Selection | None]:
-        """Every universe's effective selection (§12), None where it has none (design §4.13
-        case 7)."""
+        """Every universe's effective selection, None where it has none."""
         return universes.selections(self.stack)
 
     @cached_property
     def imports(self) -> Mapping[tuple[Identity, str], Element | None]:
-        """The universe each import names, by its file's analysis and its id (§12)."""
+        """The universe each import names, by its file's analysis and its id."""
         return universes.imports(self.stack)
 
     @cached_property
     def pins(self) -> Mapping[Resolution, Element | None]:
-        """The universe each pin names (§16 *Pins and imported universes*)."""
+        """The universe each pin names."""
         return universes.pins(self.stack, self.imports)
 
     @cached_property
     def per_universe(self) -> frozenset[Element]:
-        """The outputs built per universe (§13)."""
+        """The outputs built per universe."""
         return universes.per_universe(self.stack)
 
     @cached_property
     def depends(self) -> universes.Depends:
-        """What each output and switch depends on directly (§10)."""
+        """What each output and switch depends on directly."""
         return universes.depends(self.stack)
 
     @cached_property
     def cycles(self) -> frozenset[Element]:
-        """The outputs and switches that depend on themselves (§10)."""
+        """The outputs and switches that depend on themselves (`OUTPUT_CYCLE`)."""
         return universes.cycles(self.depends)
 
     @cached_property
@@ -113,15 +112,14 @@ class Context:
 
     @cached_property
     def driven(self) -> Mapping[Identity, tuple[Chain, ...]]:
-        """The chains of declarations each analysis's universes drive (§16; Elements): through a
-        declaration with no key where none of its analysis's decisions is used, or may be, in
-        a universe of the analysis driving."""
+        """The chains of declarations each analysis's universes drive (Elements *chain*, *drives*):
+        through a declaration with no key where none of its analysis's decisions is used, or may be,
+        in a universe of the analysis driving."""
         return universes.driven(self.stack, self._used, self._maybe)
 
     @cached_property
     def unsettled(self) -> Mapping[Identity, frozenset[Chain]]:
-        """For each analysis driving, the chains whose driving is undetermined (design §4.13 case
-        6, *undetermined driving*)."""
+        """For each analysis driving, the chains whose driving is undetermined."""
         return universes.unsettled(self.stack, self._used, self._maybe)
 
     @cached_property
@@ -150,7 +148,7 @@ class Context:
     @cached_property
     def building(self) -> Building:
         """What the root reaches and plans, the universes built, and its planned results whose
-        analysis is built in their universe (§16, §18)."""
+        analysis is built in their universe."""
         return universes.building(self.stack, self.runs[self.stack.root], self.driven)
 
     def used(self, universe: Element) -> frozenset[Element]:
@@ -159,8 +157,7 @@ class Context:
         return frozenset() if run is None else run.used.get(universe, frozenset())
 
     def maybe(self, universe: Element) -> frozenset[Element]:
-        """The decisions whose use in `universe`, with its own analysis driving, is undetermined
-        (design §4.13 case 6)."""
+        """The decisions whose use in `universe`, with its own analysis driving, is undetermined."""
         run = self.runs.get(universe.analysis)
         return frozenset() if run is None else run.maybe.get(universe, frozenset())
 
@@ -170,8 +167,8 @@ class Context:
 
     def unsettled_in(self, universe: Element) -> frozenset[Identity]:
         """The analyses that a universe's analysis's universes reach only through a chain whose
-        driving is undetermined, and the analyses those declare, directly or not (design §4.13
-        case 6): whether they are built in `universe` is undetermined."""
+        driving is undetermined, and the analyses those declare, directly or not: whether they
+        are built in `universe` is undetermined."""
         return self._unsettled_in.get(universe.analysis, frozenset())
 
     @cached_property
@@ -191,21 +188,20 @@ class Context:
 
     def unsettled_through(self, entry: Resolution) -> bool:
         """Whether `entry`'s chain of declarations goes through one whose driving, from its own
-        file, is undetermined (design §4.13 case 6)."""
+        file, is undetermined."""
         chains = self.unsettled.get(entry.file, frozenset())
         return any(entry.chain[:end] in chains for end in range(1, len(entry.chain) + 1))
 
-    # --- design §4.13 ---
+    # --- when a rule isn't checked ---
 
     def names_nothing(self, resolution: Resolution) -> bool:
-        """design §4.13 cases 4 and 5: an address that doesn't resolve, or that goes through a
-        declaration whose analysis is undetermined, names nothing, and no rule is checked on
-        what it would name."""
+        """An address that doesn't resolve, or that goes through a declaration whose analysis is
+        undetermined, names nothing, and no rule is checked on what it would name."""
         return resolution.element is None
 
     def on_cycle(self, element: Element | None) -> bool:
-        """design §4.13 case 13: whether `element` is an output or a switch on a cycle, on whose
-        results' places, and on what reads it, no rule but `OUTPUT_CYCLE` is checked."""
+        """Whether `element` is an output or a switch on a cycle, on whose results' places, and
+        on what reads it, no rule but `OUTPUT_CYCLE` is checked."""
         return element in self.cycles
 
 

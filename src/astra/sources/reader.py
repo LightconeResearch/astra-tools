@@ -1,14 +1,14 @@
-"""Readers: where an analysis's bytes come from (design §4.3).
+"""Readers: where an analysis's bytes come from.
 
 A path is tidied (`sources.paths`) and relative to the reader's top, with `/` between folders,
-and "" for the top. It names the entry at exactly that path (Annex B): each of its names is
+and "" for the top. It names the entry at exactly that path: each of its names is
 found in its folder's listing, so `data/A.csv` never names `data/a.csv`, even where the file
 system ignores case. A symlink is an entry, and is never followed: at a path it is neither a
 file nor a folder, and a path through a symlinked folder names nothing.
 
 In the working tree, a folder that holds a `.git` of its own, a checked-out submodule, is a
 gitlink, whose entries are read on disk. At a commit, a path that crosses a gitlink goes on
-into the submodule, at the commit the gitlink pins (Annex B *Submodules*).
+into the submodule, at the commit the gitlink pins.
 """
 
 from __future__ import annotations
@@ -54,14 +54,14 @@ class Reader(Protocol):
         ...
 
     def tracked(self, folder: str, paths: Collection[str]) -> frozenset[str]:
-        """Those of `paths` that are tracked (Annex B *Tracked*) in the repository that holds
-        the analysis in `folder`: read in the working tree, in its index; read at a commit, in
-        that commit's tree; either way reached through no gitlink."""
+        """Those of `paths` that are tracked in the repository that holds the analysis in
+        `folder`: read in the working tree, in its index; read at a commit, in that commit's
+        tree; either way reached through no gitlink."""
         ...
 
     def holding(self, folder: str) -> tuple[Repository, str]:
-        """The repository that holds the analysis in `folder`, the innermost (Annex B *The
-        repository that holds a file*), and the folder as a path from its top."""
+        """The repository that holds the analysis in `folder`, the innermost, and the folder as
+        a path from its top."""
         ...
 
 
@@ -111,8 +111,8 @@ class WorktreeReader:
         return Repository(self.top / top), folder[len(top) + 1 :]
 
     def _holding(self, folder: str) -> str:
-        """The top of the repository that holds the analysis in `folder`, the innermost
-        (Annex B): the deepest checked-out submodule on the way to it, or "" for the root's."""
+        """The top of the repository that holds the analysis in `folder`, the innermost: the
+        deepest checked-out submodule on the way to it, or "" for the root's."""
         segments = folder.split("/") if folder else []
         for count in range(len(segments), 0, -1):
             prefix = "/".join(segments[:count])
@@ -149,7 +149,7 @@ _KINDS: Mapping[str, Kind] = MappingProxyType(
 
 
 class UnreachableError(Exception):
-    """A commit that can't be got from its remote (§17 *Reading one*)."""
+    """A commit that can't be got from its remote."""
 
     def __init__(self, url: str | None, commit: str) -> None:
         super().__init__(f"{commit} can't be got from {url or 'a submodule with no URL'}")
@@ -169,15 +169,14 @@ class _Found:
 
 class CommitReader:
     """A commit, read through one long-lived `git cat-file --batch`, and never checked out:
-    analyses from a commit, local or from a remote (§17). Each file is the blob git stores
-    (Annex B *Bytes*).
+    analyses from a commit, local or from a remote. Each file is the blob git stores.
 
     A path that crosses a gitlink goes on into the submodule, at the commit the gitlink pins:
     read in the submodule's own repository where it is checked out in this repository's working
-    tree and holds that commit (§17), and otherwise got from the URL that this
+    tree and holds that commit, and otherwise got from the URL that this
     commit's `.gitmodules` gives it, a relative one resolved against the remote this commit was
     got from or, for a local one, its repository's default remote, or else its folder, as git
-    resolves it (Annex B *A gitlink's commit*)."""
+    resolves it."""
 
     def __init__(self, repo: Repository, commit: str, url: str | None, remotes: Remotes) -> None:
         self.repo = repo  # the local repository, or the store of `url`

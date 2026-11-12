@@ -1,11 +1,11 @@
-"""§16 Driving and consuming, the rules on selections: which declarations are driven, and
-`DUPLICATE_ELEMENT`, `LOOPING_KEY`, `MISSING_DECISION` and `UNKNOWN_PIN_UNIVERSE`, with design §4.13
-cases 4, 5 and 10; and the universe each pin and import names.
+"""Driving and consuming, the rules on selections: which declarations are driven, and
+`DUPLICATE_ELEMENT`, `LOOPING_KEY`, `MISSING_DECISION` and `UNKNOWN_PIN_UNIVERSE`, with what
+isn't checked through an undetermined analysis, a name that names nothing or a key that loops;
+and the universe each pin and import names.
 
-The first stacks are §16's `stage`, which declares `inner`, `again: {path: .}` and
-`parent: {path: ..}`, with the root declaring `inner` a second time: a keeping one, whose keys
-spell `stage.inner.d` and `inner.d`, and a breaking one. The last is §16's `output5`, with §12's
-import `subanalysis_v1`.
+The first stacks hold `stage`, which declares `inner`, `again: {path: .}` and `parent: {path: ..}`,
+with the root declaring `inner` a second time: a keeping one, whose keys spell `stage.inner.d` and
+`inner.d`, and a breaking one. The last has `output5`, with the import `subanalysis_v1`.
 """
 
 from __future__ import annotations
@@ -64,8 +64,8 @@ universes:
     decisions: {d: a, inner.d: a, parent.decision1: a}
 """
 )
-"""§16's `stage`: its universes drive `inner` and, through `..`, the root; `stage_result` lists
-the decisions they set, so each universe uses each key (Results *uses*)."""
+"""`stage`: its universes drive `inner` and, through `..`, the root; `stage_result` lists the
+decisions they set, so each universe uses each key (Results *uses*)."""
 
 LIB = (
     """spec_version: "0.1.0"
@@ -146,7 +146,7 @@ BROKEN_FILES = {
 }
 
 CHECKED = rules.universes.CODES | rules.driving.CODES
-"""The codes of §12's and §16's rules on selections."""
+"""The codes of the rules on selections."""
 
 ROOT_ID = Identity("")
 
@@ -166,7 +166,7 @@ def bound(top: Path, folder: str = "") -> Stack:
 
 
 def driven(stack: Stack) -> dict[Identity, tuple[Chain, ...]]:
-    """The chains each analysis's universes drive (§16), given what they use (Results *uses*)."""
+    """The chains each analysis's universes drive, given what they use (Results *uses*)."""
     return dict(Context(stack, Catalogue.load()).driven)
 
 
@@ -189,11 +189,11 @@ def broken_report(broken: Path) -> api.ValidationReport:
     return api.validate(broken)
 
 
-# --- §16 *Which declarations are driven* ---
+# --- Which declarations are driven ---
 
 
 def test_each_chain_a_key_goes_through_is_driven_on_its_own(kept: Path) -> None:
-    """§16: `stage.inner.d` drives `stage` and, through it, `stage`'s `inner`, and `inner.d`
+    """`stage.inner.d` drives `stage` and, through it, `stage`'s `inner`, and `inner.d`
     the root's own `inner`; `lib`, with no decisions, is driven whenever the driver's file
     declares it, and so is its `deep`, but not its `..`, which leads back; nor `self`, `stage2`
     or `stage`'s `again`, which no key goes through."""
@@ -207,8 +207,8 @@ def test_each_chain_a_key_goes_through_is_driven_on_its_own(kept: Path) -> None:
 
 
 def test_a_driven_analysis_drives_through_its_own_parent(kept: Path) -> None:
-    """§16 *The universe being built*: in `stage`'s universes, `parent: {path: ..}` leads back
-    to no analysis already on the chain, so the key `parent.decision1` drives the root."""
+    """In `stage`'s universes, `parent: {path: ..}` leads back to no analysis already on the chain,
+    so the key `parent.decision1` drives the root."""
     stack = bound(kept)
     stage = Identity("stage")
     assert {("inner",), ("parent",)} <= chains(stack, stage)
@@ -216,7 +216,7 @@ def test_a_driven_analysis_drives_through_its_own_parent(kept: Path) -> None:
 
 
 def test_the_analyses_built_in_a_universe_are_known_by_identity(kept: Path) -> None:
-    """§16: the driver itself, and each analysis a driven declaration reaches, once however
+    """The driver itself, and each analysis a driven declaration reaches, once however
     many chains reach it (`stage.inner` and `inner`)."""
     stack = bound(kept)
     assert list(built(driven(stack)[ROOT_ID], ROOT_ID)) == [
@@ -229,14 +229,14 @@ def test_the_analyses_built_in_a_universe_are_known_by_identity(kept: Path) -> N
 
 
 def test_a_key_that_loops_drives_nothing(broken: Path) -> None:
-    """design §4.13 case 10: `stage2.again.d` loops, so it drives neither `stage2` nor `again`."""
+    """`stage2.again.d` loops, so it drives neither `stage2` nor `again`."""
     found = chains(bound(broken))
     assert ("stage2",) not in found
     assert ("stage2", "again") not in found
 
 
 def test_a_stack_driven_as_written_breaks_no_rule_on_selections(kept: Path) -> None:
-    """§16: `stage.inner.d` and `inner.d` spell one decision, set under either in different
+    """`stage.inner.d` and `inner.d` spell one decision, set under either in different
     universes; u3 changes it under the key it inherits; `stage`'s `parent.decision1` doesn't
     loop."""
     assert found(api.validate(kept)) == []
@@ -245,8 +245,8 @@ def test_a_stack_driven_as_written_breaks_no_rule_on_selections(kept: Path) -> N
 # --- the rules ---
 
 
-def test_each_rule_is_broken_where_sixteens_text_says(broken_report: api.ValidationReport) -> None:
-    """§16: two own keys spelling one decision, even selecting one option, and a key spelling
+def test_each_rule_on_driving_is_broken(broken_report: api.ValidationReport) -> None:
+    """Two own keys spelling one decision, even selecting one option, and a key spelling
     an inherited decision under another key (DUPLICATE_ELEMENT); `stage.again.d` written through
     `again: {path: .}`, `stage.parent.decision1` back to the root, and `self.decision1`
     (LOOPING_KEY); a universe that leaves unset decisions driven by another universe's keys,
@@ -268,8 +268,8 @@ def test_each_rule_is_broken_where_sixteens_text_says(broken_report: api.Validat
 
 
 def test_duplicate_element_names_the_other_key(broken_report: api.ValidationReport) -> None:
-    """§16 *What a universe sets*: each decision has one key, so the message says which to
-    remove, and the other key is a related place."""
+    """Each decision has one key, so the message says which to remove, and the other key is a
+    related place."""
     two, inherited = [d for d in broken_report.diagnostics if d.code == "DUPLICATE_ELEMENT"]
     assert "`inner.d` and `stage.inner.d` spell one decision" in two.message
     assert [(r.pointer, r.key) for r in two.related] == [
@@ -282,8 +282,8 @@ def test_duplicate_element_names_the_other_key(broken_report: api.ValidationRepo
 
 
 def test_looping_key_says_how_to_key_the_decision(broken_report: api.ValidationReport) -> None:
-    """§16 *Driving*: `stage.d` is never written `stage.again.d`, and the root's own decisions
-    are keyed by their ids alone."""
+    """`stage.d` is never written `stage.again.d`, and the root's own decisions are keyed by their
+    ids alone."""
     messages = [d.message for d in broken_report.diagnostics if d.code == "LOOPING_KEY"]
     assert "leads back to `stage2`, already on its chain" in messages[0]
     assert "key the decision as `stage2.d`" in messages[0]
@@ -293,7 +293,7 @@ def test_looping_key_says_how_to_key_the_decision(broken_report: api.ValidationR
 
 
 def test_missing_decision_names_each_decision_unset(broken_report: api.ValidationReport) -> None:
-    """§16: whichever universe has the key that drives `stage` and `inner`, `unset` sets their
+    """Whichever universe has the key that drives `stage` and `inner`, `unset` sets their
     decisions."""
     messages = [
         d.message
@@ -309,9 +309,9 @@ def test_missing_decision_names_each_decision_unset(broken_report: api.Validatio
 def test_nothing_through_an_undetermined_analysis_or_a_name_that_names_nothing(
     broken_report: api.ValidationReport,
 ) -> None:
-    """design §4.13 cases 4, 5 and 10: `bad.parent.decision1` is judged up to `bad`, whose file is
-    invalid, and `stage.nothere.parent.decision1` up to `nothere`, which `stage` doesn't
-    declare: neither loops; no decision of `bad` is missing; the second names nothing."""
+    """`bad.parent.decision1` is judged up to `bad`, whose file is invalid, and
+    `stage.nothere.parent.decision1` up to `nothere`, which `stage` doesn't declare: neither loops;
+    no decision of `bad` is missing; the second names nothing."""
     reported = {
         (d.code, d.location.key)
         for d in broken_report.diagnostics
@@ -324,7 +324,7 @@ def test_nothing_through_an_undetermined_analysis_or_a_name_that_names_nothing(
     }
 
 
-# --- §16 *Pins and imported universes* ---
+# --- Pins and imported universes ---
 
 SUBANALYSIS = """\
 spec_version: "0.1.0"
@@ -350,7 +350,7 @@ universes:
     decisions: {decision1: b}
   parent_u1: {analysis: parent, universe: u1}
 """
-"""§15's `subanalysis`, with universes `u1` and `v1` of its own and an import of its parent's."""
+"""`subanalysis`, with universes `u1` and `v1` of its own and an import of its parent's."""
 
 PINNING = """\
 spec_version: "0.1.0"
@@ -377,7 +377,7 @@ outputs:
       - subanalysis.output1#u1               # the root's u1
       - subanalysis.output1#subanalysis_u1   # subanalysis's own u1, imported
       - subanalysis.output1#v1               # subanalysis's own v1
-      - subanalysis.output1#subanalysis_v1   # §12's import of subanalysis's v1
+      - subanalysis.output1#subanalysis_v1   # the import of subanalysis's v1
       - output1#u2
       - input1#u1
     recipe:
@@ -412,7 +412,7 @@ findings:
     claim: The two universes differ.
     evidence: [{artifact: "output1#u9"}, {artifact: "subanalysis.output1#v1"}]
 """
-"""§16's `output5`, and in `output6` a pin for each way to name no universe."""
+"""`output5`, and in `output6` a pin for each way to name no universe."""
 
 
 @pytest.fixture(scope="module")
@@ -427,9 +427,9 @@ def pinning(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_a_pin_names_the_files_entry_or_the_elements_analysiss_universe(pinning: Path) -> None:
-    """§16 *Pins and imported universes*: `#u1` names the root's own `u1`, `#subanalysis_u1`
-    the universe the import names, and `#v1`, since the root has no `v1`, `subanalysis`'s, as
-    §12's import `subanalysis_v1` does; a pin on an input names a universe too."""
+    """`#u1` names the root's own `u1`, `#subanalysis_u1` the universe the import names, and
+    `#v1`, since the root has no `v1`, `subanalysis`'s, as the import `subanalysis_v1` does; a
+    pin on an input names a universe too."""
     stack = bound(pinning)
     named = {
         r.pointer: pinned
@@ -448,7 +448,7 @@ def test_a_pin_names_the_files_entry_or_the_elements_analysiss_universe(pinning:
 
 
 def test_imports_of_one_universe_name_that_one_universe(pinning: Path) -> None:
-    """§16: an import resolves in its file by identity, under any id and through any
+    """An import resolves in its file by identity, under any id and through any
     declaration; one in a driven analysis's file can name its parent's universe."""
     found = imports(bound(pinning))
     subanalysis_u1 = Element(Identity("subanalysis"), "universe", "u1")
@@ -459,11 +459,10 @@ def test_imports_of_one_universe_name_that_one_universe(pinning: Path) -> None:
 
 
 def test_a_pin_that_names_no_universe_breaks_unknown_pin_universe(pinning: Path) -> None:
-    """§16: neither the file nor the element's analysis has the universe, as for an element of
+    """Neither the file nor the element's analysis has the universe, as for an element of
     the file's own analysis; an import in the other analysis's file isn't one of its universes;
-    and evidence pins as `Output.inputs` does (§14). A reference that names nothing isn't
-    checked (design §4.13 case 5), nor a pin naming the file's entry, an import that names
-    nothing."""
+    and evidence pins as `Output.inputs` does. A reference that names nothing isn't checked,
+    nor a pin naming the file's entry, an import that names nothing."""
     report = api.validate(pinning)
     pinned = [
         (d.location.pointer, d.level)

@@ -1,14 +1,14 @@
-"""§10 Outputs: an input and an output never share an id (`AMBIGUOUS_ID`), and no output, a
+"""Outputs: an input and an output never share an id (`AMBIGUOUS_ID`), and no output, a
 switch included, reads itself through `inputs` and `cases`, directly or not, pinned or not
 (`OUTPUT_CYCLE`).
 
 An output depends on each output or switch an entry of its `inputs` resolves to, and a switch on
 each that one of its cases resolves to, taken or not, pinned or not, through any declaration
-(Elements *switch*). Outputs are known by their analysis's identity (§17), so two spellings of one
-output, and a declaration back through `..`, reach one output (§15). An address that names
-nothing, or goes through an undetermined analysis, depends on nothing (design §4.13 cases 4, 5).
-For an output or a switch on a cycle, no other rule on its results' places, or on what reads it,
-is checked (case 13, `Context.on_cycle`): the breach is reported as `OUTPUT_CYCLE` alone.
+(Elements *switch*). Outputs are known by their analysis's identity, so two spellings of one
+output, and a declaration back through `..`, reach one output. An address that names nothing,
+or goes through an undetermined analysis, depends on nothing. For an output or a switch on a
+cycle, no other rule on its results' places, or on what reads it, is checked
+(`Context.on_cycle`): the breach is reported as `OUTPUT_CYCLE` alone.
 """
 
 from __future__ import annotations

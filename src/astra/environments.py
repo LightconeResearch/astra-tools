@@ -1,11 +1,11 @@
 """Environments: the extension point through which a runner's package says what an environment
-it records holds, and whether it can be recreated (§19, §21, design §4.10).
+it records holds, and whether it can be recreated.
 
 A record names the environment its recipe ran in by an IRI, enough for its runner to recreate it
-(§19), and a runner should let someone see what it holds (§21). astra-tools knows no scheme of
-IRIs itself: another package registers an object that has `Scheme`'s members in the entry-point
-group `astra.environments`, and the check report shows what each registered scheme answered for
-each record's environment.
+(`UNRECREATABLE_ENVIRONMENT`), and a runner should let someone see what it holds. astra-tools knows
+no scheme of IRIs itself: another package registers an object that has `Scheme`'s members in the
+entry-point group `astra.environments`, and the check report shows what each registered scheme
+answered for each record's environment.
 """
 
 from __future__ import annotations
@@ -15,11 +15,11 @@ from dataclasses import dataclass
 from typing import Protocol
 
 GROUP = "astra.environments"
-"""The entry-point group other packages register their schemes in (design §4.10)."""
+"""The entry-point group other packages register their schemes in."""
 
 
 class Scheme(Protocol):
-    """A kind of environment IRI a runner records (§19)."""
+    """A kind of environment IRI a runner records."""
 
     @property
     def name(self) -> str:

@@ -1,7 +1,7 @@
 """astra-spec's conformance documents (`conformance/documents/`): each invalid one gives exactly
 the code and pointer its header names, and the `# also:` one where it has one; each valid one
-gives nothing (§5, Annex A, Annex D). An `astra.yaml` is validated in a git repository, and a
-record checked by the contract.
+gives nothing. An `astra.yaml` is validated in a git repository, and a record checked by the
+contract.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def contract() -> Contract:
 
 def found(path: Path, repository: Path, contract: Contract) -> set[tuple[str, str]]:
     """The parse and schema diagnostics, and UNSUPPORTED_SPEC_VERSION, that the fixture gives:
-    those that decide whether a document is valid (§4). A fixture is one document, and the
+    those that decide whether a document is valid. A fixture is one document, and the
     validator rules it breaks, such as a declaration of a folder that isn't there, are no part
     of its point."""
     if path.suffix == ".yaml":

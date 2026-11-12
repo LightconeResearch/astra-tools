@@ -1,15 +1,14 @@
-"""§6 Names: every address resolves, through the declarations, to an element of the kind its
+"""Names: every address resolves, through the declarations, to an element of the kind its
 field takes (`UNRESOLVED_ADDRESS`); and an `artifact` that names a switch names one each of whose
 cases names an output other than a switch, or a switch like it (Rules `UNRESOLVED_ADDRESS`).
 
 Binding has resolved every address of every valid file (`astra.stack`); an address through a
-declaration whose analysis is undetermined isn't checked (design §4.13 case 4), and one that names
-nothing names nothing for every other rule (design §4.13 case 5). An entry of `inputs`, or a
-switch's case, whose id is both an input and an output names nothing too (case 5), but breaks
-`AMBIGUOUS_ID`, not this rule. A switch is an output (Elements *switch*), so a message names the
-kinds a field takes without it. An `artifact` naming a switch with a case, through nested
-switches, that names nothing, or a switch on a cycle, isn't judged: that case's own cause is
-reported (design §4.13 cases 5 and 13).
+declaration whose analysis is undetermined isn't checked, and one that names nothing names nothing
+for every other rule. An entry of `inputs`, or a switch's case, whose id is both an input and an
+output names nothing too, but breaks `AMBIGUOUS_ID`, not this rule. A switch is an output (Elements
+*switch*), so a message names the kinds a field takes without it. An `artifact` naming a switch with
+a case, through nested switches, that names nothing, or a switch on a cycle, isn't judged: that
+case's own cause is reported.
 """
 
 from __future__ import annotations
@@ -78,7 +77,7 @@ def _unresolved(context: Context, resolution: Resolution) -> Diagnostic:
 def _case_on_an_input(context: Context, switch: Element) -> Resolution | None:
     """The first case, of `switch` or of a switch one of its cases names, directly or not, that
     names an input; None where none does, and where one names nothing or a switch on the way is
-    on a cycle, as then the switch isn't judged as an `artifact` (design §4.13 cases 5 and 13)."""
+    on a cycle, as then the switch isn't judged as an `artifact`."""
     found: list[Resolution] = []
     path: list[Element] = []
     seen: set[Element] = set()

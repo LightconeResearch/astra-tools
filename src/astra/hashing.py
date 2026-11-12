@@ -1,4 +1,4 @@
-"""A file's SHA-256 and size, as a record gives them (§19), through the cache (design §4.7).
+"""A file's SHA-256 and size, as a record gives them, through the cache.
 
 A file on disk is hashed once: its entry in the cache's `hashes`, keyed by its device and inode,
 holds its size and modification time, and a hit needs both unchanged, so an unchanged file costs
@@ -28,7 +28,7 @@ _CHUNK = 1 << 20
 
 @dataclass(frozen=True)
 class Digest:
-    """What a record gives of some bytes (§19): their hash, `sha256:` then the SHA-256 digest
+    """What a record gives of some bytes: their hash, `sha256:` then the SHA-256 digest
     in lowercase hexadecimal, and their size in bytes."""
 
     content_hash: str
@@ -65,7 +65,7 @@ def digest_file(path: Path) -> Digest:
 
 def digest(reader: Reader, path: str) -> Digest | None:
     """The digest of the file at `path` in `reader`; None where no file is there, a symlink
-    being none (Annex B). Raises OSError where it can't be read."""
+    being none. Raises OSError where it can't be read."""
     entry = reader.stat(path)
     if entry is None or entry.kind != "file":
         return None

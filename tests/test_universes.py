@@ -1,10 +1,10 @@
-"""§12 Universes: effective selections, and `UNKNOWN_DERIVED_FROM`, `DERIVED_FROM_CYCLE`,
-`MISSING_REQUIRED_OPTION`, `INCOMPATIBLE_OPTIONS` and `EXCLUDED_OPTION_SELECTED`, with design
-§4.13 case 7.
+"""Universes: effective selections, and `UNKNOWN_DERIVED_FROM`, `DERIVED_FROM_CYCLE`,
+`MISSING_REQUIRED_OPTION`, `INCOMPATIBLE_OPTIONS` and `EXCLUDED_OPTION_SELECTED`, and what is
+still checked for a universe with no effective selection.
 
-The stacks are §12's: §8's decisions and §15's `subanalysis`, which the root's universes drive.
-The keeping one has §12's `u1`, `u2` and `u3`; the breaking one, a universe for each way to break
-a rule. astra-spec's `examples/iris` gives `incompatible_with`.
+The stacks share the root's two decisions and `subanalysis`, which the root's universes drive.
+The keeping one has `u1`, `u2` and `u3`; the breaking one, a universe for each way to break a
+rule. astra-spec's `examples/iris` gives `incompatible_with`.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ universes:
   v1:
     decisions: {decision1: a}
 """
-"""§15's `subanalysis`, with a universe `v1` of its own."""
+"""The declared analysis `subanalysis`, with a universe `v1` of its own."""
 
 ROOT = """\
 spec_version: "0.1.0"
@@ -81,7 +81,7 @@ universes:
     derived_from: u1
     decisions: {decision1: b, decision2: b}
 """
-"""§8's decisions and §12's `u1` and `u2`."""
+"""Two decisions, with a `requires` and an excluded option; `u1`, and `u2` derived from it."""
 
 KEPT = (
     ROOT
@@ -125,7 +125,7 @@ FILES = {
 }
 
 CHECKED = rules.universes.CODES | rules.driving.CODES
-"""The codes of §12's and §16's rules on selections."""
+"""The codes of the rules on universes and on driving."""
 
 ROOT_ID = Identity("")
 
@@ -169,11 +169,11 @@ def broken_report(broken: Path) -> api.ValidationReport:
     return api.validate(broken)
 
 
-# --- §12 The effective selection ---
+# --- The effective selection ---
 
 
-def test_the_effective_selections_are_twelves_table(kept: Path) -> None:
-    """§12: once `derived_from` is resolved, u2 inherits `subanalysis.decision1`, and u3
+def test_the_effective_selections_resolve_derived_from(kept: Path) -> None:
+    """Once `derived_from` is resolved, u2 inherits `subanalysis.decision1`, and u3
     replaces `decision1` and inherits the rest."""
     found = effective(kept)
     assert selected(found[universe("u1")]) == {
@@ -194,22 +194,22 @@ def test_the_effective_selections_are_twelves_table(kept: Path) -> None:
 
 
 def test_a_driven_analysiss_own_universes_have_effective_selections(kept: Path) -> None:
-    """§16 *What a validator checks*: every universe of every analysis of the stack."""
+    """A validator checks every universe of every analysis of the stack."""
     found = effective(kept)
     assert selected(found[Element(Identity("subanalysis"), "universe", "v1")]) == {"decision1": "a"}
 
 
-def test_twelves_universes_break_no_rule_on_selections(kept: Path) -> None:
-    """§12: u2 selects `decision2: b`, which `decision1.b` requires."""
+def test_the_kept_universes_break_no_rule_on_selections(kept: Path) -> None:
+    """u2 selects `decision2: b`, which `decision1.b` requires."""
     assert found(api.validate(kept)) == []
 
 
-# --- §12's rules ---
+# --- The rules on universes ---
 
 
-def test_each_rule_is_broken_where_twelves_text_says(broken_report: api.ValidationReport) -> None:
-    """§12: a selection whose `requires` isn't selected, set or inherited; an excluded option
-    (§8); a `derived_from` naming no universe or an import; and each universe on a loop."""
+def test_each_rule_on_selections_is_broken(broken_report: api.ValidationReport) -> None:
+    """A selection whose `requires` isn't selected, set or inherited; an excluded option; a
+    `derived_from` naming no universe or an import; and each universe on a loop."""
     assert [f for f in found(broken_report) if f[0] != "MISSING_DECISION"] == [
         ("MISSING_REQUIRED_OPTION", "/universes/requires/decisions", "decision1"),
         ("MISSING_REQUIRED_OPTION", "/universes/inherits/derived_from", None),
@@ -226,7 +226,7 @@ def test_each_rule_is_broken_where_twelves_text_says(broken_report: api.Validati
 def test_an_inherited_selection_is_reported_at_derived_from(
     broken_report: api.ValidationReport,
 ) -> None:
-    """Design §3: `inherits` inherits `decision1: b` from `requires`; the places where that key
+    """`inherits` inherits `decision1: b` from `requires`; the places where that key
     and its `requires` are written are related."""
     (diagnostic,) = [
         d for d in broken_report.diagnostics if d.location.pointer.startswith("/universes/inherits")
@@ -242,7 +242,7 @@ def test_an_inherited_selection_is_reported_at_derived_from(
 def test_a_universe_with_no_effective_selection_has_its_own_decisions_checked(
     broken: Path, broken_report: api.ValidationReport
 ) -> None:
-    """design §4.13 case 7: `unknown`, `from_import`, the loop and `reaches`, which only reaches it,
+    """`unknown`, `from_import`, the loop and `reaches`, which only reaches it,
     have none, so `unknown`'s `decision2` isn't MISSING_DECISION; UNRESOLVED_ADDRESS is still
     checked on its own `decisions`."""
     found = effective(broken)
@@ -291,7 +291,7 @@ and are the only ones through `subanalysis` and `again`, two declarations of one
 def test_a_universe_with_no_effective_selection_checks_and_drives_by_its_own_keys(
     tmp_path: Path,
 ) -> None:
-    """design §4.13 case 7: `unknown` has no effective selection, but UNKNOWN_OPTION
+    """`unknown` has no effective selection, but UNKNOWN_OPTION
     (`decision2: z`), DUPLICATE_ELEMENT (`again.decision1` spells `subanalysis.decision1`) and
     LOOPING_KEY (`self.decision1`) are still checked on its own `decisions`; and driving counts
     them, so the root's universes drive `subanalysis` and `again`, and `u1`, which leaves
@@ -317,7 +317,7 @@ def test_a_universe_with_no_effective_selection_checks_and_drives_by_its_own_key
     }
 
 
-# --- §8's constraints, in astra-spec's examples/iris ---
+# --- Constraints, in astra-spec's examples/iris ---
 
 IRIS_UNIVERSES = """\
   mixed:
@@ -334,7 +334,7 @@ IRIS_UNIVERSES = """\
 
 
 def test_the_iris_examples_constraints(tmp_path: Path) -> None:
-    """§8: `minmax` is incompatible with `model.svm`, and `svm` requires `scaling.standard`,
+    """`minmax` is incompatible with `model.svm`, and `svm` requires `scaling.standard`,
     which `svm_focused` inherits from `baseline` and keeps; `svm_minmax` sets `minmax` itself
     and inherits `svm`."""
     text = (SPEC / "examples" / "iris" / "astra.yaml").read_text(encoding="utf-8")

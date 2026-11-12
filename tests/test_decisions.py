@@ -1,5 +1,6 @@
-"""§8 Decisions and options: `UNKNOWN_OPTION`, in option references, universes' own selections
-and the keys of a switch's `cases`, with design §4.13 cases 4, 5 and 10."""
+"""Decisions and options: `UNKNOWN_OPTION`, in option references, universes' own selections
+and the keys of a switch's `cases`; on a key that loops too, but not under a name that names
+nothing or through an undetermined analysis."""
 
 from __future__ import annotations
 
@@ -76,9 +77,9 @@ def unknown(report: api.ValidationReport) -> list[str]:
 
 
 def test_an_option_its_decision_lacks_breaks_unknown_option(broken: api.ValidationReport) -> None:
-    """§8: in a constraint, through a declaration too; and in a universe's own selection, derived
-    or not, reported at the option selected. design §4.13 case 10: the key `self.decision1` loops,
-    and still names its decision."""
+    """In a constraint, through a declaration too; and in a universe's own selection, derived
+    or not, reported at the option selected. The key `self.decision1` loops, and still names its
+    decision."""
     assert unknown(broken) == [
         "/decisions/decision1/options/a/requires/0",
         "/decisions/decision1/options/a/incompatible_with/0",
@@ -114,9 +115,9 @@ def test_a_key_of_cases_its_switchs_decision_lacks_breaks_it(broken: api.Validat
 def test_nothing_under_an_address_that_names_nothing_is_checked(
     broken: api.ValidationReport,
 ) -> None:
-    """design §4.13 case 5: `decision9` names nothing, so `decision9: c` isn't checked for its
-    option, nor is a key of the cases of a switch on it; case 4: nor is `bad.decision1.z`, through
-    an undetermined analysis, nor a key under `switch: bad.decision1`."""
+    """`decision9` names nothing, so `decision9: c` isn't checked for its option, nor is a key of
+    the cases of a switch on it; nor is `bad.decision1.z`, through an undetermined analysis, nor
+    a key under `switch: bad.decision1`."""
     assert not any("decision9" in pointer or "bad" in pointer for pointer in unknown(broken))
     assert "/decisions/decision1/options/a/incompatible_with/1" not in unknown(broken)
     assert "/outputs/switch9/cases" not in unknown(broken)
@@ -159,11 +160,11 @@ universes:
     derived_from: u1
     decisions: {decision1: b, decision2: b}
 """
-"""§8's fragment and §12's universes, with `subanalysis` as `sub`."""
+"""Decisions with constraints and an excluded option, and universes, one derived from another."""
 
 
 def test_options_of_their_decisions_keep_it(tmp_path: Path) -> None:
-    """§8, §12: an excluded option is still one of its decision's options, and may key a case
+    """An excluded option is still one of its decision's options, and may key a case
     (Elements *switch*); a switch's decision may be another analysis's."""
     files = {"astra.yaml": KEPT, "sub/astra.yaml": SUB}
     assert unknown(api.validate(repository(tmp_path, files))) == []

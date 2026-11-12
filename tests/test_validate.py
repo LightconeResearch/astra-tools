@@ -1,6 +1,6 @@
 """`validate`: the root `astra.yaml` by the parse and schema rules, UNSUPPORTED_SPEC_VERSION and
-NOT_IN_REPOSITORY (§5, Annex A, design §4.13 cases 1, 2 and 11, Annex D), and the report it gives.
-The validator rules of the stack have modules of their own (`test_names.py`, ...)."""
+NOT_IN_REPOSITORY, and the report it gives. The validator rules of the stack have modules of
+their own (`test_names.py`, ...)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def checked_in_repository(tmp_path: Path, text: str) -> api.ValidationReport:
     return api.validate(analysis(git_init(tmp_path / "repo"), text))
 
 
-# --- §5: NOT_IN_REPOSITORY, and design §4.13 cases 2 and 11 ---
+# --- NOT_IN_REPOSITORY, and what is checked outside a repository ---
 
 
 def test_an_analysis_outside_a_repository_breaks_not_in_repository(outside: Path) -> None:
@@ -35,7 +35,7 @@ def test_an_analysis_outside_a_repository_breaks_not_in_repository(outside: Path
 
 
 def test_an_analysis_in_a_working_tree_keeps_it(tmp_path: Path) -> None:
-    """In the working tree, tracked or not: nothing needs committing (§5)."""
+    """In the working tree, tracked or not: nothing needs committing."""
     report = api.validate(analysis(git_init(tmp_path)))
     assert (report.diagnostics, report.valid) == ((), True)
 
@@ -56,28 +56,28 @@ def test_an_analysis_in_a_subfolder_is_named_from_the_repository_top(tmp_path: P
 def test_outside_a_repository_the_parse_and_schema_rules_are_checked(
     outside: Path, text: str, code: str, pointer: str
 ) -> None:
-    """Design §4.13 case 11: only the root's own file is checked, by the parse and schema rules.
-    Case 2: NOT_IN_REPOSITORY is about the folder, not the file, so it is reported beside a
+    """Only the root's own file is checked, by the parse and schema rules.
+    NOT_IN_REPOSITORY is about the folder, not the file, so it is reported beside a
     parse or schema rule, or UNSUPPORTED_SPEC_VERSION, that the file breaks."""
     report = api.validate(analysis(outside, text))
     assert pairs(report) == [("NOT_IN_REPOSITORY", ""), (code, pointer)]
 
 
 def test_outside_a_repository_no_declaration_is_followed(outside: Path) -> None:
-    """design §4.13 case 11: no other validator rule is checked, and the declarations aren't
-    followed, so a folder that isn't there isn't MISSING_DECLARED_ANALYSIS."""
+    """No other validator rule is checked, and the declarations aren't followed, so a folder that
+    isn't there isn't MISSING_DECLARED_ANALYSIS."""
     report = api.validate(analysis(outside, MINIMAL + "analyses: {sub: {path: nothere}}\n"))
     assert pairs(report) == [("NOT_IN_REPOSITORY", "")]
 
 
-# --- §5 Versions: UNSUPPORTED_SPEC_VERSION, and design §4.13 case 1 ---
+# --- Versions: UNSUPPORTED_SPEC_VERSION ---
 
 
 @pytest.mark.parametrize("version", ["0.2.0", "1.0.0", "0.0.1", "0.10.0"])
 def test_a_version_of_another_minor_breaks_unsupported_spec_version(
     tmp_path: Path, version: str
 ) -> None:
-    """Its schema isn't run, so the unknown field isn't reported (design §4.13 case 1)."""
+    """Its schema isn't run, so the unknown field isn't reported."""
     text = MINIMAL.replace("0.1.0", version) + "name: x\n"
     report = checked_in_repository(tmp_path, text)
     assert pairs(report) == [("UNSUPPORTED_SPEC_VERSION", "/spec_version")]
@@ -92,7 +92,7 @@ def test_every_patch_of_0_1_keeps_it(tmp_path: Path, version: str) -> None:
 
 @pytest.mark.parametrize("version", ['"0.1"', '"0.2.0rc1"', '"00.1.0"', '"v0.1.0"'])
 def test_a_malformed_version_is_read_by_the_0_1_schema(tmp_path: Path, version: str) -> None:
-    """design §4.13 case 1: not UNSUPPORTED_SPEC_VERSION, but the schema's INVALID_VALUE."""
+    """Not UNSUPPORTED_SPEC_VERSION, but the schema's INVALID_VALUE."""
     report = checked_in_repository(tmp_path, MINIMAL.replace('"0.1.0"', version))
     assert pairs(report) == [("INVALID_VALUE", "/spec_version")]
 
@@ -108,7 +108,7 @@ def test_a_missing_version_is_read_by_the_0_1_schema(tmp_path: Path) -> None:
     ]
 
 
-# --- Annex A: reading an astra.yaml ---
+# --- Reading an astra.yaml ---
 
 
 def test_a_version_written_as_a_number_is_a_number(tmp_path: Path) -> None:
@@ -123,14 +123,14 @@ def test_a_version_written_as_a_number_is_a_number(tmp_path: Path) -> None:
 def test_a_file_that_isnt_one_document_holding_a_map_breaks_invalid_syntax(
     tmp_path: Path, text: str
 ) -> None:
-    """§5: an `astra.yaml` is a YAML 1.2 document whose content is a map: a file with no
-    document, more than one, or a top level that isn't a map is INVALID_SYNTAX (design §4.1)."""
+    """An `astra.yaml` is a YAML 1.2 document whose content is a map: a file with no document, more
+    than one, or a top level that isn't a map is INVALID_SYNTAX."""
     assert pairs(checked_in_repository(tmp_path, text)) == [("INVALID_SYNTAX", "")]
 
 
 def test_a_quoted_key_is_the_same_key(tmp_path: Path) -> None:
     """`a`, `'a'` and `"a"` are one key, which YAML 1.2 allows once in a map: INVALID_SYNTAX,
-    at the second, naming it (design §4.1)."""
+    at the second, naming it."""
     text = MINIMAL + "'outputs': {}\n"
     report = checked_in_repository(tmp_path, text)
     assert pairs(report) == [("INVALID_SYNTAX", "")]
@@ -157,15 +157,14 @@ def test_a_key_that_isnt_a_string_breaks_invalid_syntax(tmp_path: Path, key: str
     "tag", ["!!timestamp 2026-10-26", "!!binary aGk=", "!local x", "!!int 1.5"]
 )
 def test_a_tag_outside_the_core_schema_breaks_invalid_syntax(tmp_path: Path, tag: str) -> None:
-    """Annex A: read under the core schema, with no tag but its own; and `!!int` doesn't read
-    `1.5`."""
+    """Read under the core schema, with no tag but its own; and `!!int` doesn't read `1.5`."""
     report = checked_in_repository(tmp_path, MINIMAL + f"label: {tag}\n")
     assert pairs(report) == [("INVALID_SYNTAX", "")]
 
 
 def test_plain_scalars_are_typed_by_the_core_schema(tmp_path: Path) -> None:
     """A date, `yes`, `1_000` and `0b1` are strings, `0o17` a number, and `2.0` an integer
-    (Annex A, YAML 1.2.2 §10.3.2)."""
+    (YAML 1.2.2 §10.3.2)."""
     text = MINIMAL.replace(
         "      command", "      resources: {gpus: 2.0, cpus: 0o17}\n      command"
     )
@@ -174,8 +173,8 @@ def test_plain_scalars_are_typed_by_the_core_schema(tmp_path: Path) -> None:
 
 
 def test_a_pin_needs_no_quotes_and_a_url_needs_none_in_a_flow_map(tmp_path: Path) -> None:
-    """`#` inside a token is literal (Annex A), and `{url: https://…}` is read whole
-    (design §4.1, `pure=True`): offline, all it breaks is that its commit is not got (§17)."""
+    """`#` inside a token is literal, and `{url: https://…}` is read whole (`pure=True`):
+    offline, all it breaks is that its commit is not got."""
     text = f"""\
 spec_version: "0.1.0"
 analyses: {{up: {{url: https://example.org/up.git, commit: "{"0" * 40}"}}}}
@@ -193,13 +192,13 @@ outputs:
 
 def test_a_pattern_ends_where_the_value_ends(tmp_path: Path) -> None:
     """A block scalar ends in a line break, which a pattern's `$` doesn't match before
-    (ECMA-262, design §4.1): `format: |` gives "json\\n", which breaks INVALID_VALUE."""
+    (ECMA-262): `format: |` gives "json\\n", which breaks INVALID_VALUE."""
     text = MINIMAL.replace("format: json", "format: |\n      json")
     report = checked_in_repository(tmp_path, text)
     assert pairs(report) == [("INVALID_VALUE", "/outputs/result/format")]
 
 
-# --- Annex D: where a schema error is reported ---
+# --- Where a schema error is reported ---
 
 
 def test_an_error_on_a_key_is_at_its_map_naming_the_key(tmp_path: Path) -> None:
@@ -240,12 +239,11 @@ def test_a_value_is_placed_at_its_line_and_column(tmp_path: Path) -> None:
     assert (diagnostic.location.line, diagnostic.location.column) == (4, 11)
 
 
-# --- The report (design §4.11) ---
+# --- The report ---
 
 
 def test_unchecked_lists_the_validator_codes_this_build_doesnt_check(tmp_path: Path) -> None:
-    """Every validator code of rules.json, in its order, but those the build's checks declare
-    (design §3)."""
+    """Every validator code of rules.json, in its order, but those the build's checks declare."""
     catalogue = Catalogue.load()
     checked = validate.CODES | contract.CODES | rules.CODES
     expected = [code for code in catalogue.codes("validator") if code not in checked]
@@ -293,14 +291,14 @@ def test_a_folder_without_an_astra_yaml_is_no_analysis(tmp_path: Path) -> None:
 
 
 def test_a_symlinked_astra_yaml_is_no_analysis(tmp_path: Path) -> None:
-    """A symlink is never followed (Annex B)."""
+    """A symlink is never followed."""
     (git_init(tmp_path) / "elsewhere.yaml").write_text(MINIMAL)
     (tmp_path / "astra.yaml").symlink_to("elsewhere.yaml")
     with pytest.raises(api.NoAnalysisError, match="no astra.yaml"):
         api.validate(tmp_path)
 
 
-# --- astra-spec's examples, and §2's worked example ---
+# --- astra-spec's examples, and a worked example ---
 
 
 EXAMPLES = sorted(path.parent for path in (SPEC / "examples").glob("**/astra.yaml"))
@@ -321,7 +319,7 @@ def examples(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.mark.parametrize("folder", EXAMPLES, ids=lambda path: path.relative_to(SPEC).as_posix())
 def test_an_example_reports_no_problems(examples: Path, folder: Path) -> None:
-    """Phase 1's *Done when* (design §6): no problems, and no rule left unchecked."""
+    """No problems, and no rule left unchecked."""
     report = api.validate(examples / folder.relative_to(SPEC))
     assert (report.diagnostics, report.unchecked) == ((), ())
 
@@ -375,6 +373,7 @@ findings:
 
 
 def test_the_worked_example_reports_no_problems(tmp_path: Path) -> None:
-    """§2, whose pins `output1#u1` need no quotes, with its input file committed (§7)."""
+    """The worked example, whose pins `output1#u1` need no quotes, with its input file
+    committed."""
     files = {"astra.yaml": WORKED_EXAMPLE, "data/input1.csv": "1,2\n"}
     assert api.validate(repository(tmp_path, files)).diagnostics == ()

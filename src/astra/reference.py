@@ -1,6 +1,6 @@
 """The field reference behind `astra spec`: the classes, enums and types of ASTRA's files, read
-from astra-spec's LinkML sources through linkml-runtime, the extra `[reference]` (§3 *Fields*,
-Annex D). Their descriptions are the normative definitions of the fields.
+from astra-spec's LinkML sources through linkml-runtime, the extra `[reference]` (Schema
+files). Their descriptions are the normative definitions of the fields.
 """
 
 from __future__ import annotations

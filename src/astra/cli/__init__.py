@@ -1,11 +1,11 @@
-"""The `astra` command line (design §4.12). Each command is a module of its own, imported when
+"""The `astra` command line. Each command is a module of its own, imported when
 it is run, which imports only click until then: `astra --help` and completion load no library.
 
 Exit codes: 0; 1 when `validate` finds an error, `check` a planned result that isn't
 `unchanged`, `plan`, `view`, `check`, `history` and `paper` an analysis that breaks a `MUST`,
 `history` nothing in git of what it is asked for, or `info` and `universe` no stack to show; 2
 for a usage error, a broken environment or an internal error. `paper`'s warnings never change an
-exit code (design §3).
+exit code.
 """
 
 from __future__ import annotations

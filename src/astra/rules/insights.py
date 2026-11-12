@@ -1,4 +1,4 @@
-"""§14 Insights and evidence: every entry of `Option.insights` names a prior insight of the
+"""Insights and evidence: every entry of `Option.insights` names a prior insight of the
 analysis (`INVALID_INSIGHT_REF`)."""
 
 from __future__ import annotations

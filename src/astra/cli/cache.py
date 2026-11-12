@@ -1,4 +1,4 @@
-"""`astra cache path|clear`: where the cache is, and clearing it (design §4.9)."""
+"""`astra cache path|clear`: where the cache is, and clearing it."""
 
 from __future__ import annotations
 

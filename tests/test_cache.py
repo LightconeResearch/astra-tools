@@ -1,5 +1,5 @@
-"""The cache (design §4.9): one folder of plain files, `$ASTRA_CACHE_DIR` or the platform's user
-cache folder, a relative `ASTRA_CACHE_DIR` refused, and entries put atomically."""
+"""The cache: one folder of plain files, `$ASTRA_CACHE_DIR` or the platform's user cache folder, a
+relative `ASTRA_CACHE_DIR` refused, and entries put atomically."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """`astra paper add DOI [--version N] [--file PDF] [--email ADDRESS] | list [PATH] | verify
 [PATH]`: the papers that the root's evidence cites by DOI, kept in the cache, and the quotes it
-takes from them (design §6 *Phase 5*), with the extra `[evidence]`. Text alone, as `info` is.
+takes from them, with the extra `[evidence]`. Text alone, as `info` is.
 """
 
 from __future__ import annotations

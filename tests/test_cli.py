@@ -1,5 +1,5 @@
-"""The six commands of phase 0, on what they promise: output, `--json` shape and exit codes
-(design §4.12). Phase 1's are in `test_commands.py`."""
+"""The commands `validate`, `schema`, `rules`, `guide`, `spec` and `completion`, on what they
+promise: output, `--json` shape and exit codes. The others are in `test_commands.py`."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def test_validate_exits_0_for_a_valid_analysis(tmp_path: Path) -> None:
     result = astra("validate", str(analysis(git_init(tmp_path))))
     assert result.exit_code == 0
     assert "astra.yaml: valid, 0 error(s), 0 warning(s)" in result.stdout
-    assert validate.unchecked(Catalogue.load()) == ()  # phase 1 checks every validator rule
+    assert validate.unchecked(Catalogue.load()) == ()  # every validator rule is checked
     assert "aren't checked" not in result.stdout
 
 
@@ -136,7 +136,7 @@ def test_rules_lists_every_rule_by_layer() -> None:
 
 
 def test_rules_lists_astra_tools_own_codes_as_its_own() -> None:
-    """Design §3: after rules.json's, astra-tools' own three, under a heading of their own."""
+    """After rules.json's, astra-tools' own three, under a heading of their own."""
     last = json.loads((SCHEMAS / "rules.json").read_text("utf-8"))["rules"][-1]["code"]
     stdout = astra("rules").stdout
     own = stdout.index("validator, astra-tools' own")

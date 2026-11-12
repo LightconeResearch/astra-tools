@@ -1,6 +1,6 @@
-"""Git, through its own commands (design §4.3): which repository holds a folder, what its
-index tracks (§7), its commits and their objects (§17), the remote stores' fetches, and, for a
-runner, what a checkout has changed and checkouts of its own (§21, design §4.8)."""
+"""Git, through its own commands: which repository holds a folder, what its index tracks, its
+commits and their objects, the remote stores' fetches, and, for a runner, what a checkout has
+changed and checkouts of its own."""
 
 from __future__ import annotations
 
@@ -73,17 +73,17 @@ class Repository:
 
     @classmethod
     def discover(cls, folder: Path) -> Repository | None:
-        """The repository whose working tree holds `folder`: the innermost, so a submodule's own
-        (Annex B). None if there is none."""
+        """The repository whose working tree holds `folder`: the innermost, so a submodule's own.
+        None if there is none."""
         result = _git("-C", str(folder), "rev-parse", "--show-toplevel")
         if result.returncode != 0:
             return None
         return cls(Path(os.fsdecode(result.stdout.rstrip(b"\n"))))
 
     def tracked(self, paths: Collection[str]) -> frozenset[str]:
-        """Those of `paths`, each from the top of the working tree, that name a file or a
-        symlink in the index (Annex B *Tracked*). A path inside a submodule names none, since
-        the index holds the submodule as one gitlink, and a gitlink is no file."""
+        """Those of `paths`, each from the top of the working tree, that name a file or a symlink in
+        the index. A path inside a submodule names none, since the index holds the submodule as one
+        gitlink, and a gitlink is no file."""
         wanted = sorted(set(paths))
         found: set[str] = set()
         for start in range(0, len(wanted), _PATHSPECS):
@@ -163,7 +163,7 @@ class Repository:
         untracked, renames as two paths; and, in each checked-out submodule that has changes of
         its own, each of those, after the submodule's path. A submodule is a change itself only
         where git reports more than its content changed: its commit, say."""
-        # What git reports as a change, in the checkout and its submodules (§21).
+        # What git reports as a change, in the checkout and its submodules.
         result = _git(
             "-C", str(self.top), "status", "--porcelain=v2", "--untracked-files=all",
             "--no-renames", "--ignore-submodules=none", "-z",
@@ -190,10 +190,10 @@ class Repository:
         return tuple(sorted(found))
 
     def worktree(self, commit: str) -> Repository:
-        """A checkout of `commit` of its own, for a run (§21, design §4.8): a detached `git
-        worktree add` in a new folder of the cache's `worktrees`, its submodules updated (`git
-        submodule update --init --recursive`). Raises GitError where git can't make it, and
-        CacheError where the cache can't be used."""
+        """A checkout of `commit` of its own, for a run: a detached `git worktree add` in a new
+        folder of the cache's `worktrees`, its submodules updated (`git submodule update --init
+        --recursive`). Raises GitError where git can't make it, and CacheError where the cache can't
+        be used."""
         folder = cache.root() / "worktrees"
         try:
             folder.mkdir(parents=True, exist_ok=True)
@@ -216,9 +216,9 @@ class Repository:
 
 
 class Objects:
-    """A repository's objects, as git stores them, through one long-lived `git cat-file
-    --batch` (design §4.3). With `lazy`, an object a partial clone lacks is fetched from its
-    remote when it is asked for; without, it reads as missing."""
+    """A repository's objects, as git stores them, through one long-lived `git cat-file --batch`.
+    With `lazy`, an object a partial clone lacks is fetched from its remote when it is asked for;
+    without, it reads as missing."""
 
     def __init__(self, repo: Repository, *, lazy: bool) -> None:
         try:

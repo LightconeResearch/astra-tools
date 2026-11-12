@@ -1,11 +1,10 @@
-"""validate(): the validator's report on an analysis (§4, design §4.11).
+"""validate(): the validator's report on an analysis.
 
 It binds the stack (`astra.stack`): every `astra.yaml` of it, by the parse and schema rules and
-astra-tools' `UNSUPPORTED_SPEC_VERSION` (§5, Annex A, Annex D, design §3). Then it runs the
-validator rules (`astra.rules`) on the stack, or reports `NOT_IN_REPOSITORY` for a root in no
-repository, whose declarations aren't followed (design §4.13 case 11), whether or not its file
-is a valid document (case 2). The validator codes no check of this build reports are listed in
-the report as `unchecked`.
+astra-tools' `UNSUPPORTED_SPEC_VERSION`. Then it runs the validator rules (`astra.rules`) on the
+stack, or reports `NOT_IN_REPOSITORY` for a root in no repository, whose declarations aren't
+followed, whether or not its file is a valid document. The validator codes no check of this
+build reports are listed in the report as `unchecked`.
 """
 
 from __future__ import annotations
@@ -37,11 +36,11 @@ class ValidationReport:
 
     @property
     def valid(self) -> bool:
-        """True when no `MUST` is broken: warnings and `unchecked` notwithstanding (§4)."""
+        """True when no `MUST` is broken: warnings and `unchecked` notwithstanding."""
         return all(diagnostic.level != "error" for diagnostic in self.diagnostics)
 
     def to_json(self) -> dict[str, Any]:
-        """The report as `astra-validation-report/1` (design §4.11)."""
+        """The report as `astra-validation-report/1`."""
         # The exact JSON form.
         return {
             "shape": SHAPE,
@@ -67,8 +66,8 @@ def unchecked(catalogue: Catalogue) -> tuple[str, ...]:
 
 def validate(reader: Reader, root: str, remotes: Remotes | None = None) -> ValidationReport:
     """The report on the analysis whose folder is `root` in `reader` ("" for its top), which
-    holds its `astra.yaml`; commits are got from remotes through `remotes` (§17). Raises
-    OSError if a file of the stack can't be read."""
+    holds its `astra.yaml`; commits are got from remotes through `remotes`. Raises OSError if a
+    file of the stack can't be read."""
     return validated(reader, root, remotes)[0]
 
 
@@ -83,7 +82,7 @@ def validated(
     found = list(bound.diagnostics)
     if reader.repo is None:
         # NOT_IN_REPOSITORY is about the folder, not the file, so it is reported beside the
-        # parse and schema rules and UNSUPPORTED_SPEC_VERSION (design §4.13 case 2).
+        # parse and schema rules and UNSUPPORTED_SPEC_VERSION.
         message = (
             "the analysis's folder isn't in the working tree of a git repository: "
             "make one with `git init`, or move the analysis into one"

@@ -1,7 +1,7 @@
 """The universe view as text: each analysis of the stack, whether it is built in the universe,
 each decision's selected option, or that the universe doesn't use it, each switch's case taken
 there, and each output's places there, with the commit they are read at for an analysis from a
-commit (§17), or why it has none."""
+commit, or why it has none."""
 
 from __future__ import annotations
 
@@ -40,8 +40,7 @@ def _decision(decision: DecisionView) -> str:
 
 
 def _switch(output: OutputView) -> str:
-    """The case a switch takes, or that it takes nothing, or that what it takes is undetermined
-    (design §4.13 case 6)."""
+    """The case a switch takes, or that it takes nothing, or that what it takes is undetermined."""
     if output.takes is not None:
         return f"takes {output.takes}"
     return "takes nothing" if output.built is False else "undetermined"

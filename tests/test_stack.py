@@ -1,6 +1,5 @@
-"""Binding (design §4.4): every analysis of the stack read once, by its identity (§17
-*Identity*); each declaration's outcome (§15, Annex B, design §4.13 cases 1–3); and each address
-resolved through its chain of declarations (§6 *Addresses*, §15)."""
+"""Binding: every analysis of the stack read once, by its identity; each declaration's outcome;
+and each address resolved through its chain of declarations."""
 
 from __future__ import annotations
 
@@ -31,7 +30,7 @@ outputs:
     recipe:
       command: python make.py '{output}'
 """
-"""§15's `subanalysis`, which declares its parent with `..`."""
+"""The declared analysis `sub`, which declares its parent with `..`."""
 
 
 def root(analyses: str, inputs: str | None = None) -> str:
@@ -68,11 +67,11 @@ def resolution(stack: Stack, written: str) -> Resolution:
     return found
 
 
-# --- §17 Identity: one analysis, however it is declared ---
+# --- Identity: one analysis, however it is declared ---
 
 
 def test_each_analysis_is_read_once_by_its_identity(tmp_path: Path) -> None:
-    """§15 *One analysis, however it is declared*: `sub`, `./sub/` and `x/../sub` reach one
+    """`sub`, `./sub/` and `x/../sub` reach one
     folder of the working tree, and `sub`'s `..` leads back to the root."""
     analyses = "{sub: {path: sub}, again: {path: ./sub/}, round: {path: x/../sub}}"
     top = repository(tmp_path, {"astra.yaml": root(analyses), "sub/astra.yaml": SUB})
@@ -84,8 +83,8 @@ def test_each_analysis_is_read_once_by_its_identity(tmp_path: Path) -> None:
 
 
 def test_an_identity_is_a_folder_from_the_top_of_the_working_tree(tmp_path: Path) -> None:
-    """§17 *Identity*: read in the working tree, from the top of the root's working tree, and
-    each file named from there (design §3)."""
+    """Elements *identity*: read in the working tree, from the top of the root's working tree,
+    and each file named from there."""
     top = repository(
         tmp_path, {"stage/astra.yaml": root("{sub: {path: ../sub}}"), "sub/astra.yaml": SUB}
     )
@@ -99,7 +98,7 @@ def test_an_identity_is_a_folder_from_the_top_of_the_working_tree(tmp_path: Path
 
 
 def test_self_names_the_analysis_itself(tmp_path: Path) -> None:
-    """§15: `self: {path: .}` leads back to the declaring analysis's own folder."""
+    """`self: {path: .}` leads back to the declaring analysis's own folder."""
     top = repository(tmp_path, {"astra.yaml": root("{self: {path: .}}")})
     found = stack(top)
     assert list(found.analyses) == [Identity("")]
@@ -124,8 +123,8 @@ def test_self_names_the_analysis_itself(tmp_path: Path) -> None:
 def test_a_declaration_by_path_reaches_an_analysis_or_says_why_not(
     tmp_path: Path, path: str, outcome: str
 ) -> None:
-    """§15 *The rules*, Annex B: above the top, nothing; a folder with no
-    astra.yaml file, or one reached through a symlink, nothing."""
+    """Above the top, nothing; a folder with no astra.yaml file, or one reached through a
+    symlink, nothing."""
     top = repository(
         tmp_path,
         {"astra.yaml": root(f"{{it: {{path: '{path}'}}}}"), "sub/astra.yaml": SUB, "empty/x": ""},
@@ -137,7 +136,7 @@ def test_a_declaration_by_path_reaches_an_analysis_or_says_why_not(
 
 
 def test_a_commit_that_cant_be_got_leaves_its_analysis_undetermined(tmp_path: Path) -> None:
-    """§17, design §4.13 case 3: a commit the repository hasn't, and one no remote gives; nothing
+    """A commit the repository hasn't, and one no remote gives; nothing
     through them is resolved."""
     commit = "0" * 40
     previous = f"{{path: ., commit: '{commit}'}}"
@@ -161,7 +160,7 @@ def test_a_commit_that_cant_be_got_leaves_its_analysis_undetermined(tmp_path: Pa
 def test_an_invalid_file_is_reported_and_its_analysis_is_undetermined(
     tmp_path: Path, text: str, code: str
 ) -> None:
-    """design §4.13 cases 1 and 2: a declared file that breaks a parse or schema rule, or
+    """A declared file that breaks a parse or schema rule, or
     UNSUPPORTED_SPEC_VERSION, is reported in its own file, and its declarations aren't
     followed: `sub`'s `..` isn't read."""
     top = repository(
@@ -183,11 +182,11 @@ def test_an_invalid_root_gives_no_stack(tmp_path: Path) -> None:
     assert (result.stack, [d.code for d in result.diagnostics]) == (None, ["UNKNOWN_FIELD"])
 
 
-# --- §6 Addresses: each resolved through its chain of declarations ---
+# --- Addresses: each resolved through its chain of declarations ---
 
 
 def test_an_address_resolves_through_its_chain_to_an_element(tmp_path: Path) -> None:
-    """§15: in the root's file, `sub.output1` is the output `output1` of the analysis in the
+    """In the root's file, `sub.output1` is the output `output1` of the analysis in the
     folder `sub`, through the chain `sub`."""
     top = repository(
         tmp_path, {"astra.yaml": root("{sub: {path: sub}}", "[sub.output1]"), "sub/astra.yaml": SUB}
@@ -203,7 +202,7 @@ def test_an_address_resolves_through_its_chain_to_an_element(tmp_path: Path) -> 
 
 
 def test_two_spellings_resolve_to_one_element(tmp_path: Path) -> None:
-    """§15 *One analysis, however it is declared*: `again.output1` and `sub.output1` are one
+    """`again.output1` and `sub.output1` are one
     output; and `sub.parent.decision1`, through `..`, is the root's own `decision1`."""
     text = root("{sub: {path: sub}, again: {path: sub}}", "[sub.output1, again.output1]").replace(
         "    inputs:", "    decisions: [decision1, sub.parent.decision1]\n    inputs:"
@@ -236,11 +235,11 @@ def test_an_address_that_names_nothing_resolves_to_nothing(tmp_path: Path) -> No
         assert not resolution(found, written).undetermined
 
 
-def test_every_field_of_sixs_table_is_resolved(tmp_path: Path) -> None:
-    """§6 *Addresses*: Output.inputs, Output.decisions, a switch's `switch` and its cases, each
-    keyed by an option and maybe pinned (Elements *switch*), Option.requires and
-    Option.incompatible_with, the keys of Universe.decisions, Evidence.artifact, and an import's
-    analysis and universe."""
+def test_every_address_field_is_resolved(tmp_path: Path) -> None:
+    """Each field `UNRESOLVED_ADDRESS` judges: Output.inputs, Output.decisions, a switch's
+    `switch` and its cases, each keyed by an option and maybe pinned (Elements *switch*),
+    Option.requires and Option.incompatible_with, the keys of Universe.decisions,
+    Evidence.artifact, and an import's analysis and universe."""
     text = """\
 spec_version: "0.1.0"
 analyses:
@@ -332,8 +331,8 @@ too."""
 def test_a_switch_is_bound_as_a_switch(tmp_path: Path) -> None:
     """Elements *switch*: a switch is an entry of `outputs` but an element of its own kind, which
     `inputs`, a case and `artifact` take as they take an output, and never of kind `output`.
-    `Stack.switches` holds its `switch` and its cases by option, as resolved. design §4.13 case
-    5: an id that is an input and a switch names nothing, as one an input and an output share."""
+    `Stack.switches` holds its `switch` and its cases by option, as resolved. An id that is an
+    input and a switch names nothing, as one an input and an output share."""
     sub = SUB + "universes:\n  v1:\n    decisions: {decision1: a}\n"
     found = stack(repository(tmp_path, {"astra.yaml": SWITCHES, "sub/astra.yaml": sub}))
     root = Identity("")

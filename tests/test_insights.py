@@ -1,4 +1,4 @@
-"""§14 Insights and evidence: `INVALID_INSIGHT_REF`."""
+"""Insights and evidence: `INVALID_INSIGHT_REF`."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ findings:
     evidence:
       - artifact: result
 """
-"""§14's fragment, citing the analysis's own output."""
+"""Insights after the specification's example, the finding citing the analysis's own output."""
 
 
 def cited(insights: str) -> str:
@@ -42,8 +42,8 @@ def invalid(report: api.ValidationReport) -> list[tuple[str, str]]:
 
 
 def test_an_option_citing_no_prior_insight_breaks_invalid_insight_ref(tmp_path: Path) -> None:
-    """§14: an id that is no insight's, and a finding's, which isn't a prior insight; in a
-    declared analysis's file too."""
+    """An id that is no insight's, and a finding's, which isn't a prior insight; in a declared
+    analysis's file too."""
     files = {
         "astra.yaml": cited("[insight2, insight9, insight1]") + "analyses: {sub: {path: sub}}\n",
         "sub/astra.yaml": cited("[insight3]"),
@@ -61,6 +61,6 @@ def test_an_option_citing_no_prior_insight_breaks_invalid_insight_ref(tmp_path: 
 
 
 def test_an_option_citing_a_prior_insight_keeps_it(tmp_path: Path) -> None:
-    """§14: `insights: [insight2]`."""
+    """`insights: [insight2]`."""
     files = {"astra.yaml": cited("[insight2]")}
     assert invalid(api.validate(repository(tmp_path, files))) == []

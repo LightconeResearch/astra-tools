@@ -1,16 +1,15 @@
-"""§13 Pins (Rules `PIN_NOT_BUILT`): every pinned output, or switch, is built in the universe it is
+"""Pins (Rules `PIN_NOT_BUILT`): every pinned output, or switch, is built in the universe it is
 pinned to, in `inputs`, in `cases` and in `artifact`; and a universe of an analysis other than the
 driving analysis, named by a pin the root reaches, sets every decision, of its analysis and of
 those its universes drive, that something reached through that pin uses there and the universe
 doesn't use itself.
 
 The first is judged on every pin written, whether anything reaches it or not; not where the pin
-names no universe (design §4.13 case 5) or one with no effective selection (case 7), nor where
-the target is on a cycle (case 13) or undetermined in that universe (case 6): there the cause is
-reported. The second is judged on the pins the root's run follows (`Run.pins`), with the
-universe's own use from its own analysis's run, so that a decision it uses itself is left to
-`MISSING_DECISION`, reported in its own file; not for a decision whose use there is
-undetermined (case 6), nor for one of an analysis not built there, which
+names no universe or one with no effective selection, nor where the target is on a cycle or
+undetermined in that universe: there the cause is reported. The second is judged on the pins the
+root's run follows (`Run.pins`), with the universe's own use from its own analysis's run, so
+that a decision it uses itself is left to `MISSING_DECISION`, reported in its own file; not for
+a decision whose use there is undetermined, nor for one of an analysis not built there, which
 `NOT_BUILT_IN_UNIVERSE` judges.
 """
 

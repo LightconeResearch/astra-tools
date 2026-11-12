@@ -1,5 +1,5 @@
 """`astra plan [PATH] [--json] [--notes]`: the planned results, their places and commands, and
-the plan's notes (§18, design §4.6, §4.12)."""
+the plan's notes."""
 
 from __future__ import annotations
 
@@ -17,21 +17,20 @@ from astra.cli import FAILED, environment, write_json, write_report
 def command(path: Path | None, as_json: bool, listed: bool) -> None:
     """Show the planned results of the analysis in PATH, each after what it reads.
 
-    PATH is the analysis's folder, the current one by default. Each result is shown with its
-    places, its record's and its bytes' (§18), the resources its recipe asks for,
-    and its command, run in its analysis's folder, with its placeholders filled in (§11), or the
-    commit whose record it is read through (§17). Then come the notes, none of them a breach,
-    counted by kind, and listed with --notes (the JSON lists every one): pins that name another
-    analysis's universe only because their file has no universe of that id (§16), results with
-    two names (§18), outputs with no planned result (§18), outputs that aren't built in some
-    universe because a switch they read has no case there for the option selected (Elements),
-    results that are one computation in several universes, and commands that name a path outside
-    their analysis's folder, or in a folder below it that holds an analysis of its own
-    (CODE_OUTSIDE_ANALYSIS, §21). Pins, outputs and commands are counted and listed where they
-    concern what the analysis in PATH builds: a pin a planned result reads through, an output or
-    a command of the analysis or of one its universes drive; a line gives the whole stack's count
-    where it is more. Exits 1 where the analysis breaks a MUST, which is shown as `astra
-    validate` shows it, and 2 where it can't be read.
+    PATH is the analysis's folder, the current one by default. Each result is shown with its places,
+    its record's and its bytes', the resources its recipe asks for, and its command, run in its
+    analysis's folder, with its placeholders filled in, or the commit whose record it is read
+    through. Then come the notes, none of them a breach, counted by kind, and listed with --notes
+    (the JSON lists every one): pins that name another analysis's universe only because their file
+    has no universe of that id, results with two names, outputs with no planned result, outputs that
+    aren't built in some universe because a switch they read has no case there for the option
+    selected (Elements), results that are one computation in several universes, and commands that
+    name a path outside their analysis's folder, or in a folder below it that holds an analysis of
+    its own (CODE_OUTSIDE_ANALYSIS). Pins, outputs and commands are counted and listed where they
+    concern what the analysis in PATH builds: a pin a planned result reads through, an output or a
+    command of the analysis or of one its universes drive; a line gives the whole stack's count
+    where it is more. Exits 1 where the analysis breaks a MUST, which is shown as `astra validate`
+    shows it, and 2 where it can't be read.
     """
     from astra import api
 
