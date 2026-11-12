@@ -797,6 +797,89 @@ def test_results_on_a_cycle_get_no_statuses(tmp_path: Path) -> None:
     assert statuses(report) == {"result": ("missing", "absent")}
 
 
+def _made(id_: str, field: str = "", reads: str = "") -> str:
+    """An output of `astra.yaml`, with `field` listing `reads` where given."""
+    listed = f"    {field}: [{reads}]\n" if field else ""
+    return (
+        f"  {id_}:\n    type: metric\n    format: json\n{listed}"
+        "    recipe:\n      command: python make.py '{output}'\n"
+    )
+
+
+DECIDING = """\
+decisions:
+  decision1:
+    options:
+      a: {}
+      b: {}
+universes:
+  u1: {decisions: {decision1: a}}
+  u2: {decisions: {decision1: b}}
+"""
+"""Two universes, selecting `a` and `b` for `decision1`."""
+
+UNSET = DECIDING.replace(
+    "universes:", "  decision2:\n    options:\n      c: {}\n      d: {}\nuniverses:"
+).replace("{decision1: a}", "{decision1: a, decision2: c}")
+"""`DECIDING` with `decision2` too, which `u1` sets and `u2` doesn't."""
+
+
+@pytest.mark.parametrize(
+    ("text", "artifact", "errors"),
+    [
+        pytest.param(
+            _made("first", "inputs", "second") + _made("second", "inputs", "first"),
+            "first",
+            ["OUTPUT_CYCLE", "OUTPUT_CYCLE"],
+            id="an output on a cycle",
+        ),
+        pytest.param(
+            _made("first", "inputs", "sw")
+            + "  sw:\n    switch: decision1\n    cases: {a: first, b: first}\n"
+            + DECIDING,
+            "sw",
+            ["OUTPUT_CYCLE"] * 3,
+            id="a switch on a cycle",
+        ),
+        pytest.param(
+            _made("per", "decisions", "decision1")
+            + "  sw:\n    switch: decision2\n    cases: {c: per, d: per}\n"
+            + UNSET,
+            "sw",
+            ["MISSING_DECISION"],
+            id="a switch whose decision a universe doesn't set",
+        ),
+        pytest.param(
+            _made("per", "decisions", "decision1")
+            + "  sw:\n    switch: decision1\n    cases: {a: per, b: nothing}\n"
+            + DECIDING,
+            "sw",
+            ["UNRESOLVED_ADDRESS"],
+            id="a switch whose case names nothing",
+        ),
+        pytest.param(
+            _made("per", "decisions", "decision1") + DECIDING,
+            "per#u9",
+            ["UNKNOWN_PIN_UNIVERSE"],
+            id="a pin that names no universe",
+        ),
+    ],
+)
+def test_evidence_citing_what_is_undetermined_gets_no_status(
+    tmp_path: Path, text: str, artifact: str, errors: list[str]
+) -> None:
+    """Design §4.7 and §4.13 case 12: only evidence citing results whose planning is determined
+    gets a status. Evidence that cites, once or in one of the root's universes, an output on a
+    cycle (case 13), a switch undetermined there, as one on a cycle is (cases 6 and 13), or
+    whose case names nothing (case 5), or that has a pin that names no universe (case 5), gets
+    none, and so isn't `missing`: `STALE_EVIDENCE` isn't reported for it, but the cause is."""
+    citing = "findings:\n  insight1:\n    claim: It is cited.\n    evidence:\n"
+    text = MINIMAL + text + citing + f"      - artifact: {artifact}\n"
+    report = api.check(repository(tmp_path, {"astra.yaml": text}))
+    assert sorted(d.code for d in report.errors) == sorted(errors)
+    assert (report.evidence, report.ok) == ((), False)
+
+
 def test_an_analysis_with_no_stack_gets_no_statuses(tmp_path: Path) -> None:
     """Design §4.13 cases 2 and 12: a root whose file isn't a valid document is undetermined,
     so no result's planning is: the report holds only the errors."""

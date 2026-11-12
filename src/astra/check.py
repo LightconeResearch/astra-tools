@@ -53,7 +53,7 @@ from astra.sources.git import Repository
 from astra.sources.reader import CommitReader, in_repository
 from astra.sources.remote import Remotes
 from astra.stack import Element, Identity, Member, Resolution, Stack, bind
-from astra.universes import Place, Selection, Step, Through, along
+from astra.universes import Place, Selection, Step, Through, along, read_in
 
 SHAPE = "astra-check-report/1"
 
@@ -562,14 +562,14 @@ class _Checker:
         (`_cited`). Each gives the record at the place of its name along the artifact's
         declarations, then each case's, from the analysis it belongs to (`universes.along`), or,
         where they give none of its names, the worst of its records. None where its `artifact`
-        names nothing or it cites a result whose planning isn't determined, as only on a stack
-        that breaks a `MUST` (design §4.13 cases 4, 5 and 12); and for a declared analysis's
-        evidence that cites no planned result, which a check doesn't cover."""
+        names nothing, or what it cites is undetermined or a result whose planning isn't, as
+        only on a stack that breaks a `MUST` (design §4.13 cases 4 to 7, 12 and 13); and for a
+        declared analysis's evidence that cites no planned result, which a check doesn't cover."""
         element = entry.element
         if element is None:  # design §4.13 cases 4 and 5
             return None
         cited = self._cited(entry, element)
-        if entry.file != self.stack.root and not cited:
+        if cited is None or (entry.file != self.stack.root and not cited):
             return None
         read: list[Status] = []
         for through in cited:
@@ -599,21 +599,40 @@ class _Checker:
             reasons = (self.reason("STALE_EVIDENCE", f"`{entry.written}` {what}", location),)
         return EvidenceStatus(location, entry.written, addresses, status, reasons)
 
-    def _cited(self, entry: Resolution, element: Element) -> list[Through]:
+    def _cited(self, entry: Resolution, element: Element) -> list[Through] | None:
         """What the evidence `entry`, the root's or a declared analysis's, reads for each planned
         result it cites (§20 *Evidence*; Results *Evidence*), each once: one where its `artifact`
         is pinned or names an output built once; and otherwise, where it names an output built
         per universe or a switch, in each of the root's universes, its output's result there, or
-        the result of the case the switch takes there, where it is planned."""
+        the result of the case the switch takes there, where it is planned.
+
+        None where, once or in one of those universes, what it cites is undetermined: its pin
+        names no universe (design §4.13 case 5); a switch on the way is undetermined there
+        (case 6), as one on a cycle is (case 13), or takes a case that names nothing (case 5);
+        or what it reaches is planned by the root's run, but with its planning undetermined
+        (cases 7, 12 and 13) or in a universe that doesn't build its analysis (case 12). Where a
+        switch on the way takes no case, or what it reaches isn't built, it cites nothing
+        there."""
         context, building = self.context, self.context.building
+        if entry.pin is not None and context.pins[entry] is None:
+            return None  # design §4.13 case 5
         universes: list[Element | None] = [None]
         if entry.pin is None and (element.kind == "switch" or element in context.per_universe):
             universes = [u for u in building.universes if u.analysis == self.stack.root]
         found: dict[Key, Through] = {}
         for universe in universes:
             through = context.meaning.through(entry, universe)
-            if through is not None and (through.target, through.universe) in building.planned:
-                found.setdefault((through.target, through.universe), through)
+            if through is None:
+                # a switch on the way takes no case (False), or is undetermined (None)
+                at = read_in(entry, universe, context.pins, context.per_universe)
+                if context.meaning.built(element, at) is not False:
+                    return None
+                continue
+            key = (through.target, through.universe)
+            if key in building.planned:
+                found.setdefault(key, through)
+            elif key in building.run.planned:  # planned, but not determined (design §4.13 case 12)
+                return None
         return list(found.values())
 
 
