@@ -378,13 +378,14 @@ Prints astra-spec's guide for agents, `llms.txt`, as it is.
 astra paper add DOI [--version N] [--file PDF] [--email ADDRESS]
 astra paper list [PATH]
 astra paper verify [PATH]
+astra paper seek DOI QUOTE... [--version N] [--page N]
 ```
 
 Keeps the papers that an analysis's evidence cites by DOI in the cache, and seeks its quotes in
-them ([Elements](https://astra-spec.org/0.1/specification/#elements)). A quote is
-sought within the page its location gives (`page=6`), or in the whole text. A paper not in the
-cache (`EVIDENCE_PAPER_MISSING`), or a quote not found (`EVIDENCE_QUOTE_NOT_FOUND`), is a
-warning, never an error. Needs the `[evidence]` extra
+them ([Elements](https://astra-spec.org/0.1/specification/#elements)), or quotes you give. A
+quote is sought within the page its location gives (`page=6`), or in the whole text. For
+`verify`, a paper not in the cache (`EVIDENCE_PAPER_MISSING`), or a quote not found
+(`EVIDENCE_QUOTE_NOT_FOUND`), is a warning, never an error. Needs the `[evidence]` extra
 ([Installation](installation.md#extras)).
 
 | Command | What it does |
@@ -392,6 +393,7 @@ warning, never an error. Needs the `[evidence]` extra
 | `add DOI` | Keeps the paper of DOI. An arXiv DOI (`10.48550/arXiv.<id>`) is fetched from arXiv, at `--version` where given; any other from the open-access copy Unpaywall knows, which asks for `--email`. `--file` keeps a PDF you have instead. Exits 2 where the paper can't be got or isn't a PDF |
 | `list` | Lists each work the analysis's evidence cites by DOI, and whether its paper is in the cache |
 | `verify` | Seeks each quote the analysis's evidence takes from a work it cites by DOI. Exits 0 whatever it finds |
+| `seek DOI QUOTE...` | Seeks each QUOTE in the paper of DOI that `add` kept, as `verify` would, with no analysis: within `--page` where given, or in the whole text. Shows the pages each quote is found on, which a location such as `page=6` can give. Exits 1 when a quote isn't found, and 2 where the paper isn't in the cache or has no page `--page` |
 
 ## `astra cache`
 

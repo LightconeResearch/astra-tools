@@ -1,6 +1,7 @@
 """`astra paper add DOI [--version N] [--file PDF] [--email ADDRESS] | list [PATH] | verify
-[PATH]`: the papers that the root's evidence cites by DOI, kept in the cache, and the quotes it
-takes from them, with the extra `[evidence]`. Text alone, as `info` is.
+[PATH] | seek DOI QUOTE... [--version N] [--page N]`: the papers that the root's evidence cites
+by DOI, kept in the cache, and the quotes it takes from them, or quotes given, with the extra
+`[evidence]`. Text alone, as `info` is.
 """
 
 from __future__ import annotations
@@ -8,10 +9,14 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 
 from astra.cli import FAILED, environment, fail, write_report
+
+if TYPE_CHECKING:
+    from astra.evidence.quotes import Sought
 
 EXTRA = ("pypdf", "rapidfuzz")
 """The packages of the extra `[evidence]`."""
@@ -19,11 +24,12 @@ EXTRA = ("pypdf", "rapidfuzz")
 
 @click.group("paper")
 def command() -> None:
-    """Keep the papers an analysis cites by DOI, and seek its quotes in them.
+    """Keep the papers an analysis cites by DOI, and seek quotes in them.
 
     Papers are kept in the cache, by DOI and version. A quote is sought in its paper's text,
-    within the page its location gives (`page=6`), or in the whole text. A quote not found is a
-    warning, never an error. These commands need the extra [evidence]:
+    within the page its location gives (`page=6`), or in the whole text. `verify` seeks the
+    quotes an analysis's evidence takes, and one not found is a warning, never an error; `seek`
+    seeks the quotes you give it, with no analysis. These commands need the extra [evidence]:
     pip install 'astra-tools[evidence]'.
     """
     # Text alone, with no --json.
@@ -132,3 +138,56 @@ def verify(path: Path | None) -> None:
     from astra.cli.text.paper import show
 
     show(warnings)
+
+
+@command.command("seek")
+@click.argument("doi")
+@click.argument("quote", nargs=-1, required=True)
+@click.option(
+    "--version",
+    type=click.IntRange(min=1),
+    metavar="N",
+    help="The work's version, counted from 1, as the evidence gives it.",
+)
+@click.option(
+    "--page",
+    type=click.IntRange(min=1),
+    metavar="N",
+    help="Seek each quote within this page, counted from 1, not in the whole text.",
+)
+def seek(doi: str, quote: tuple[str, ...], version: int | None, page: int | None) -> None:
+    """Seek each QUOTE in the paper of DOI in the cache, as `astra paper verify` seeks a quote
+    that evidence takes from it, with no analysis.
+
+    Each quote is sought within --page where given, or in the whole text, and shown with the
+    pages it is found on: the page that a location such as `page=6` gives. Exits 0 when each
+    quote is found; 1 when one isn't; and 2 where the paper isn't in the cache, can't be read,
+    or has no page --page.
+    """
+    from astra import api
+
+    if any(not text.split() for text in quote):
+        raise click.BadParameter("a quote can't be blank", param_hint="QUOTE")
+    with _evidence():
+        try:
+            found = api.seek(doi, *quote, version=version, page=page)
+        except api.RequestError as error:
+            raise click.BadParameter(str(error), param_hint="'--page'") from None
+    for sought in found:
+        click.echo(f"{_where(sought)}: {' '.join(sought.exact.split())}")
+    if not all(sought.found for sought in found):
+        raise click.exceptions.Exit(FAILED)
+
+
+def _where(sought: Sought) -> str:
+    """Where a quote is found, or where it was sought and not found."""
+    if not sought.found:
+        where = "in the whole text" if sought.page is None else f"on page {sought.page}"
+        return f"not found {where}"
+    if not sought.pages:
+        return "found in the whole text, across more than two pages"
+    named = [str(first) if first == last else f"{first}-{last}" for first, last in sought.pages]
+    listed = named[0] if len(named) == 1 else f"{', '.join(named[:-1])} and {named[-1]}"
+    if sought.pages[0][0] != sought.pages[0][1]:
+        return f"found across pages {listed}"
+    return f"found on page{'s' if len(named) > 1 else ''} {listed}"

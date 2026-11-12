@@ -5,12 +5,14 @@ For a `doi`, the cited resource is the work's full text, and with both a `quote`
 in the text of the work's PDF, kept in the cache by `astra paper add` (`papers`): within the
 page that a PDF fragment identifier's `page=` gives (RFC 8118), or
 in the whole text. Its warnings are codes of astra-tools' own, outside `rules.json`: always
-warnings, which never change a verdict, a status or an exit code.
+warnings, which never change a verdict, a status or an exit code. `seek` seeks a quote given,
+with no analysis, as `verify` seeks one, and says on which pages it is found (`Sought`).
 """
 
 from __future__ import annotations
 
 import unicodedata
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rapidfuzz import fuzz
@@ -36,6 +38,20 @@ PDF = (None, "http://tools.ietf.org/rfc/rfc3778")
 """The `conforms_to` of a PDF fragment identifier: none, or the IRI Web Annotation gives it."""
 
 
+@dataclass(frozen=True)
+class Sought:
+    """A quote, its `exact`, sought in a paper within `page`, counted from 1, or in its whole
+    text where `page` is None (`seek`): whether it is `found` there, and each run of `pages` it
+    is on, as its first and last. Those are `page` itself or, in the whole text, each page it is
+    on alone; on none alone, each two pages it runs across; and none where it isn't found, or
+    runs across more than two."""
+
+    exact: str
+    page: int | None
+    found: bool
+    pages: tuple[tuple[int, int], ...]
+
+
 def verify(stack: Stack) -> tuple[Diagnostic, ...]:
     """A warning for each item of the root's evidence citing a `doi` with a `quote` whose paper
     isn't in the cache (`EVIDENCE_PAPER_MISSING`, at its `doi`), or whose `exact` isn't found
@@ -58,7 +74,7 @@ def verify(stack: Stack) -> tuple[Diagnostic, ...]:
             found.append(_warning(PAPER_MISSING, message, stack, (*pointer, "doi")))
             continue
         page = _page(item.location)
-        sought = pages if page is None else pages[page - 1 : page]  # pages counted from 1
+        sought = _within(pages, page)
         if _found(item.quote.exact, " ".join(sought)):
             continue
         where = "in its whole text" if page is None else f"on page {page}, as its location says"
@@ -67,6 +83,26 @@ def verify(stack: Stack) -> tuple[Diagnostic, ...]:
         message = f"the quote isn't found in the paper of {named}, sought {where}"
         found.append(_warning(QUOTE_NOT_FOUND, message, stack, (*pointer, "quote")))
     return tuple(sorted(found, key=lambda d: (d.location.line or 0, d.location.column or 0)))
+
+
+def seek(exact: str, pages: tuple[str, ...], page: int | None = None) -> Sought:
+    """The quote `exact` sought in the paper whose pages' text is `pages`, as `verify` seeks a
+    quote: within `page`, counted from 1, or in the whole text where it is None."""
+    if not _found(exact, " ".join(_within(pages, page))):
+        return Sought(exact, page, False, ())
+    if page is not None:
+        return Sought(exact, page, True, ((page, page),))
+    found = tuple((n, n) for n, text in enumerate(pages, 1) if _found(exact, text))
+    if not found:  # on no page alone
+        pairs = range(1, len(pages))
+        found = tuple((n, n + 1) for n in pairs if _found(exact, " ".join(pages[n - 1 : n + 1])))
+    return Sought(exact, page, True, found)
+
+
+def _within(pages: tuple[str, ...], page: int | None) -> tuple[str, ...]:
+    """The pages a quote is sought within: `page`, counted from 1, or all of them where it is
+    None; none where the paper hasn't that page."""
+    return pages if page is None else pages[page - 1 : page]
 
 
 def _page(location: model.FragmentSelector | None) -> int | None:

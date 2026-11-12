@@ -1,5 +1,5 @@
 """The stable public functions of astra-tools: `validate`, `bind`, `init`, `plan`, `view`,
-`check` and `history`; and, with the extra `[evidence]`, `papers` and `quotes`."""
+`check` and `history`; and, with the extra `[evidence]`, `papers`, `quotes` and `seek`."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ from astra.view import view as view_stack
 if TYPE_CHECKING:
     from astra.diagnostics import Diagnostic
     from astra.evidence.papers import Cited
+    from astra.evidence.quotes import Sought
 
 __all__ = [
     "Bound",
@@ -48,6 +49,7 @@ __all__ = [
     "papers",
     "plan",
     "quotes",
+    "seek",
     "validate",
     "view",
 ]
@@ -164,6 +166,30 @@ def quotes(path: str | os.PathLike[str] | None = None) -> tuple[Diagnostic, ...]
     from astra.evidence.quotes import verify
 
     return verify(_valid(path))
+
+
+def seek(
+    doi: str, *quotes: str, version: int | None = None, page: int | None = None
+) -> tuple[Sought, ...]:
+    """Each of `quotes`, in order, sought in the paper of `doi` at `version` (None for no
+    version) that the cache holds, with no analysis, as a quote that evidence takes from it is
+    sought: within `page`, counted from 1, or in the whole text, with the pages it is found on
+    (`evidence.quotes.seek`). The paper's text is read once. Raises ImportError where the extra
+    `[evidence]` isn't installed, `evidence.papers.PaperError` where the cache doesn't hold the
+    paper or it can't be read, RequestError where the paper has no page `page`, and CacheError
+    where the cache can't be used."""
+    from astra.evidence import papers
+    from astra.evidence.quotes import seek as seek_quote
+
+    named = papers.named(doi, version)
+    data = papers.get(doi, version)
+    if data is None:
+        command = papers.command(doi, version)
+        raise papers.PaperError(f"the paper of {named} isn't in the cache: run `{command}`")
+    pages = papers.pages(data)
+    if page is not None and not 1 <= page <= len(pages):
+        raise RequestError(f"the paper of {named} has {len(pages)} page(s), and no page {page}")
+    return tuple(seek_quote(exact, pages, page) for exact in quotes)
 
 
 def _valid(

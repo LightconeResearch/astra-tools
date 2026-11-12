@@ -1,6 +1,7 @@
 """Quotes against papers, with the extra [evidence]: papers kept in the cache by DOI and
 version, and each quote sought in its paper's text, within the page a PDF fragment identifier
-gives, on what `astra.evidence`, `api.papers`, `api.quotes` and `astra paper` promise. No test
+gives, on what `astra.evidence`, `api.papers`, `api.quotes`, `api.seek` and `astra paper`
+promise. No test
 reaches the network: a paper is given as a file, or `urllib` is answered from the test's own
 bytes.
 """
@@ -302,6 +303,77 @@ def test_verify_exits_1_for_an_invalid_analysis(cited: Path) -> None:
     result = astra("paper", "verify", str(cited))
     assert result.exit_code == 1
     assert "error INVALID_VALUE" in result.stdout
+
+
+def test_seek_shows_the_pages_each_quote_given_is_on(cited: Path) -> None:
+    """With no analysis, each quote is sought as `verify` seeks it, in the whole text, and shown
+    with the pages it is on: alone, or across two."""
+    assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
+    result = astra("paper", "seek", DOI, ACROSS, "noise", "held-out data.\nIn every experiment")
+    assert (result.exit_code, result.stdout.splitlines()) == (
+        0,
+        [
+            f"found on page 2: {ACROSS}",
+            "found on pages 1 and 2: noise",
+            "found across pages 1-2: held-out data. In every experiment",
+        ],
+    )
+
+
+def test_seek_exits_1_when_a_quote_isnt_found(cited: Path) -> None:
+    """Within --page, a quote is sought on that page alone, as within a location's `page=`."""
+    assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
+    on_1 = astra("paper", "seek", DOI, ACROSS, "label noise", "--page", "1")
+    assert (on_1.exit_code, on_1.stdout.splitlines()) == (
+        1,
+        [f"not found on page 1: {ACROSS}", "found on page 1: label noise"],
+    )
+    gained = "the forest gained two points of accuracy"
+    whole = astra("paper", "seek", DOI, gained)
+    assert (whole.exit_code, whole.stdout) == (1, f"not found in the whole text: {gained}\n")
+
+
+def test_seek_needs_the_paper_in_the_cache_and_a_quote(cited: Path) -> None:
+    missing = astra("paper", "seek", DOI, ACROSS)
+    assert missing.exit_code == 2
+    assert f"isn't in the cache: run `astra paper add {DOI}`" in missing.stderr
+    assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
+    versioned = astra("paper", "seek", DOI, ACROSS, "--version", "2")
+    assert versioned.exit_code == 2
+    assert f"run `astra paper add {DOI} --version 2`" in versioned.stderr
+    on_3 = astra("paper", "seek", DOI, ACROSS, "--page", "3")
+    assert on_3.exit_code == 2 and "has 2 page(s), and no page 3" in on_3.stderr
+    blank = astra("paper", "seek", DOI, ACROSS, " ")
+    assert blank.exit_code == 2 and "a quote can't be blank" in blank.stderr
+    assert astra("paper", "seek", DOI).exit_code == 2
+
+
+def test_seek_names_two_pages_at_most() -> None:
+    """A quote on no page alone is on each two pages it runs across, and on none named where it
+    runs across more."""
+    pages = ("It begins here, and the quote", "runs on", "to its end on page three.")
+    assert quotes.seek("runs on", pages).pages == ((2, 2),)
+    assert quotes.seek("the quote runs on", pages).pages == ((1, 2),)
+    across = "the quote runs on to its end"
+    assert quotes.seek(across, pages) == quotes.Sought(across, None, True, ())
+    assert quotes.seek(across, pages, 2) == quotes.Sought(across, 2, False, ())
+
+
+def test_api_seek_reads_the_paper_once_for_each_quote_given() -> None:
+    """Each quote, in the order given, with no analysis: a quote is never read as its
+    letters."""
+    with pytest.raises(papers.PaperError, match=f"run `astra paper add {DOI}`"):
+        api.seek(DOI, ACROSS)
+    papers.add(DOI, None, data=PAPER)
+    assert api.seek(DOI, ACROSS, "noise", "the forest gained two points") == (
+        quotes.Sought(ACROSS, None, True, ((2, 2),)),
+        quotes.Sought("noise", None, True, ((1, 1), (2, 2))),
+        quotes.Sought("the forest gained two points", None, False, ()),
+    )
+    assert api.seek(DOI, ACROSS, page=1) == (quotes.Sought(ACROSS, 1, False, ()),)
+    assert api.seek(DOI) == ()
+    with pytest.raises(api.RequestError, match="has 2 page"):
+        api.seek(DOI, ACROSS, page=3)
 
 
 def test_add_refuses_what_isnt_a_pdf(cited: Path) -> None:
