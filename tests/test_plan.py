@@ -753,7 +753,10 @@ def test_the_plan_notes_a_pin_that_names_another_analysiss_universe_by_the_fallb
     }
     where = f"astra.yaml:{note.location.line}:{note.location.column}"
     assert f"note {where} {note.message}" in astra("plan", str(pinning), "--notes").stdout
-    assert "  1 pin(s) rely on the fallback (§16)" in astra("plan", str(pinning)).stdout
+    assert (
+        "  1 pin(s) name another analysis's universe only because their file has none of that id"
+        in astra("plan", str(pinning)).stdout
+    )
 
 
 def test_the_plan_notes_each_result_with_two_names(tmp_path: Path) -> None:
@@ -943,7 +946,7 @@ def test_the_plan_notes_each_command_that_names_a_path_outside_its_folder(tmp_pa
     rule = (
         "a recipe should run only code tracked in its analysis's folder, outside every folder "
         "below it that holds an analysis of its own, or that its output's inputs give it "
-        "(`CODE_OUTSIDE_ANALYSIS`, §21)"
+        "(`CODE_OUTSIDE_ANALYSIS`)"
     )
     assert [note.message for note in found] == [
         f"the command names `../lib`, outside its analysis's folder: {rule}",
@@ -1038,8 +1041,9 @@ def test_the_plan_notes_say_whether_they_concern_what_the_root_builds(tmp_path: 
     ]
     assert lines[-5:] == [
         f"{len(plan.results)} planned result(s), and notes, none of them a breach:",
-        "  1 pin(s) rely on the fallback (§16)",
-        "  2 pin(s) in the whole stack rely on the fallback (§16)",
+        "  1 pin(s) name another analysis's universe only because their file has none of that id",
+        "  2 pin(s) in the whole stack name another analysis's universe only because their file "
+        "has none of that id",
         "  2 output(s) have no planned result",
         "  2 command(s) name a path outside their analysis (CODE_OUTSIDE_ANALYSIS)",
     ]

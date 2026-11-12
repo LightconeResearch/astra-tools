@@ -48,7 +48,7 @@ def check(context: Context) -> Iterator[Diagnostic]:
             if id_ in analysis.analyses:
                 message = (
                     f"the output `{id_}` shares its id with a declaration, so their results' "
-                    "places could be the same (§18): rename one"
+                    "places could be the same: rename one"
                 )
                 output = context.at(member.identity, ("outputs",), id_)
                 declared = context.at(member.identity, ("analyses",), id_)

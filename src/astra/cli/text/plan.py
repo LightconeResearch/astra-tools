@@ -59,7 +59,12 @@ def show(plan: Plan, *, listed: bool = False) -> None:
             out.print(Text(f"  {_counted(kind, notes)}"))
         whole = sum(note.kind == kind for note in plan.notes)
         if whole > len(notes) and kind == "fallback_pin":
-            out.print(Text(f"  {whole} pin(s) in the whole stack rely on the fallback (§16)"))
+            out.print(
+                Text(
+                    f"  {whole} pin(s) in the whole stack name another analysis's universe only "
+                    "because their file has none of that id"
+                )
+            )
         if whole > len(notes) and kind == "unplanned":
             out.print(Text(f"  {whole} output(s) in the whole stack have no planned result"))
         if whole > len(notes) and kind == "outside_folder":
@@ -71,7 +76,10 @@ def show(plan: Plan, *, listed: bool = False) -> None:
 def _counted(kind: NoteKind, notes: list[Note]) -> str:
     """The notes of `kind`, counted."""
     if kind == "fallback_pin":
-        return f"{len(notes)} pin(s) rely on the fallback (§16)"
+        return (
+            f"{len(notes)} pin(s) name another analysis's universe only because their file has "
+            "none of that id"
+        )
     if kind == "two_names":
         return f"{len(notes)} result(s) have two names"
     if kind == "unplanned":

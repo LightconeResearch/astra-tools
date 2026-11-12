@@ -73,7 +73,7 @@ OWN: Mapping[str, Rule] = MappingProxyType(
                 "REMOTE_UNREACHABLE",
                 "validator",
                 "MUST",
-                "Every commit the stack gets from a remote (§17) can be got",
+                "Every commit the stack gets from a remote can be got",
                 "astra-tools",
             ),
             Rule(

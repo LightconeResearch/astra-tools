@@ -653,7 +653,7 @@ def _outside_folder(
             message = (
                 f"the command names {'; '.join(named)}: a recipe should run only code tracked in "
                 "its analysis's folder, outside every folder below it that holds an analysis of "
-                "its own, or that its output's inputs give it (`CODE_OUTSIDE_ANALYSIS`, §21)"
+                "its own, or that its output's inputs give it (`CODE_OUTSIDE_ANALYSIS`)"
             )
             pointer = ("outputs", id_, "recipe", "command")
             at = context.at(member.identity, pointer)

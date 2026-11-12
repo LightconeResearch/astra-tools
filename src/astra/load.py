@@ -118,7 +118,7 @@ def load_yaml(data: bytes) -> Document:
         key = f"the key `{found[1]}`" if found else "a key"
         _fail(f"{key} is twice in one map, and YAML 1.2 allows a key once", error, detail=False)
     except Exception as error:  # every other error the loader raises (design §4.1)
-        _fail("this isn't YAML 1.2 as Annex A reads it", error)
+        _fail("this isn't YAML 1.2", error)
     document = Document(value, tree)
     _check_json(document, value, [])
     return document

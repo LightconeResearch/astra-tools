@@ -68,7 +68,7 @@ def _inputs(
         ):
             message = (
                 f"`{written}` isn't tracked in the repository that holds this analysis: `git "
-                "add` it (a file kept in a submodule is never tracked here, §7)"
+                "add` it (a file kept in a submodule is never tracked here)"
             )
             yield context.diagnostic("INPUT_NOT_TRACKED", message, at)
         why = _elsewhere(reader, folder, path)
@@ -95,7 +95,7 @@ def _no_file(reader: Reader, path: str, standins: Sequence[StandIn]) -> str | No
         return None
     known = ", ".join(standin.name for standin in standins)
     if entry is not None:  # a symlink
-        return f"is a symlink, which is never followed (Annex B), and no stand-in of {known}"
+        return f"is a symlink, which is never followed, and no stand-in of {known}"
     return f"names no file, and no stand-in of {known}"
 
 
@@ -134,7 +134,7 @@ def _reserved(context: Context, member: Member, analysis: model.Analysis) -> Ite
             if tidied == folder or paths.lies_inside(tidied, folder):
                 where = "is" if tidied == folder else "lies inside"
                 message = (
-                    f"`{path}` {where} `{folder}`, which belongs to runners (§5): move it out "
+                    f"`{path}` {where} `{folder}`, which belongs to runners: move it out "
                     "of every analysis's `results/` and `.astra/`"
                 )
                 at = context.at(member.identity, pointer)
