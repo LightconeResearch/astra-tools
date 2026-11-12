@@ -32,7 +32,7 @@ outputs:
     recipe:
       command: python make.py '{output}'
 """
-"""The smallest valid `astra.yaml`: a `spec_version` and one output (§5)."""
+"""A minimal `astra.yaml` that makes something: a `spec_version` and one output (§5)."""
 
 
 def pytest_report_header(config: pytest.Config) -> str:

@@ -12,7 +12,7 @@ analyses. It reads only `0.1.x` files; older files need its 0.2 line (`astra-too
   `../astra-spec` pinned to one commit (see Development). At runtime astra-tools reads its
   data from the namespace package `astra.schema`: the JSON Schemas (`generated/*.schema.json`)
   and the rule catalogue (`generated/rules.json`: every code's layer, level and statement).
-  Nothing is copied. astra-spec ships no Python models.
+  Nothing is copied. astra-spec's Pydantic models, behind its `pydantic` extra, go unused.
 - **astra-tools** (this repo) owns the tooling. It doesn't depend on, or prescribe, any
   agentic layer or UI; lightcone-cli and others consume `astra.api` and the `--json` shapes.
 

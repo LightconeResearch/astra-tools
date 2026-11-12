@@ -211,7 +211,7 @@ outputs:
     recipe:
       command: python src/result.py '{output}'
 """
-"""What `init` writes: a `spec_version` and one output, all an analysis needs (§5)."""
+"""What `init` writes: a `spec_version` and one output, `result`, to start from (§5)."""
 
 
 def init(path: str | os.PathLike[str] | None = None) -> tuple[Path, bool]:

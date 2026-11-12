@@ -28,7 +28,7 @@ outputs:
     recipe:
       command: python make.py '{output}'
 """
-"""The one output an analysis needs (§5)."""
+"""One output, `result` (§5)."""
 
 READING = OUTPUT.replace("    recipe:", "    inputs: [input1]\n    recipe:")
 """`result`, reading `input1`."""

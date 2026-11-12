@@ -231,11 +231,11 @@ class Analysis:
     """The content of an `astra.yaml` (§5)."""
 
     spec_version: str
-    outputs: Mapping[str, Output]
     label: str | None = None
     description: str | None = None
     tags: tuple[str, ...] = ()
     inputs: Mapping[str, Input] = field(default_factory=_empty)
+    outputs: Mapping[str, Output] = field(default_factory=_empty)
     decisions: Mapping[str, Decision] = field(default_factory=_empty)
     universes: Mapping[str, Universe] = field(default_factory=_empty)
     analyses: Mapping[str, AnalysisDeclaration] = field(default_factory=_empty)
