@@ -40,8 +40,7 @@ jobs:
           path: dist/
 
   # Tests the built wheel as users install it: pip takes astra-spec from PyPI, the newest release
-  # the wheel's requirement accepts. The tests read that release's conformance suite, examples and
-  # test documents from astra-spec's source tree, checked out at the release's tag.
+  # the wheel's requirement accepts.
   test:
     name: Test built package
     needs: build
@@ -80,24 +79,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install "${wheels[0]}[reference,evidence]" "pytest >= 8.3"
 
-      - name: Read the version of astra-spec installed
-        id: spec
-        run: |
-          version="$(python -c 'import importlib.metadata as m; print(m.version("astra-spec"))')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Check out astra-spec at that release's tag
-        uses: actions/checkout@v4
-        with:
-          repository: astra-project/astra-spec
-          ref: v${{ steps.spec.outputs.version }}
-          path: astra-spec
-          persist-credentials: false
-
       - name: Run tests
         working-directory: astra-tools
-        env:
-          ASTRA_SPEC_SOURCE: ${{ github.workspace }}/astra-spec
         run: pytest -q -p no:cacheprovider
 
   pypi-publish:

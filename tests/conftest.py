@@ -4,7 +4,6 @@ astra-spec's conformance suite and examples are in `tests/spec.py`."""
 from __future__ import annotations
 
 import importlib.metadata
-import os
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator, Mapping
@@ -29,8 +28,7 @@ outputs:
 
 
 def pytest_report_header(config: pytest.Config) -> str:
-    source = os.environ.get("ASTRA_SPEC_SOURCE", "unset")
-    return f"astra-spec {importlib.metadata.version('astra-spec')}, ASTRA_SPEC_SOURCE {source}"
+    return f"astra-spec {importlib.metadata.version('astra-spec')}"
 
 
 @pytest.fixture(autouse=True, scope="session")

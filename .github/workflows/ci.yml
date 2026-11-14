@@ -1,9 +1,5 @@
 name: CI
 
-# astra-spec is the release uv.lock installs from PyPI. The tests read that release's conformance
-# suite, examples and test documents from astra-spec's source tree, so astra-spec is checked out at
-# the release's tag, which ASTRA_SPEC_SOURCE names.
-
 on:
   push:
     branches: [main]
@@ -45,23 +41,7 @@ jobs:
       - name: Install astra-tools with the dev group, which brings both extras
         run: uv sync --frozen
 
-      - name: Read the version of astra-spec installed
-        id: spec
-        run: |
-          version="$(uv run --frozen python -c 'import importlib.metadata as m; print(m.version("astra-spec"))')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Check out astra-spec at that release's tag
-        uses: actions/checkout@v4
-        with:
-          repository: astra-project/astra-spec
-          ref: v${{ steps.spec.outputs.version }}
-          path: astra-spec
-          persist-credentials: false
-
       - name: Run tests
-        env:
-          ASTRA_SPEC_SOURCE: ${{ github.workspace }}/astra-spec
         run: uv run --frozen pytest -q -p no:cacheprovider
 
       - name: Run mypy

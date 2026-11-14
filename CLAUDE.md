@@ -36,12 +36,9 @@ docs/               # cli.md and installation.md, shown on astra-spec.org
 ## Development Commands
 
 ### Setup
-astra-spec is the release `uv.lock` installs from PyPI. The tests read its conformance suite, examples and test documents from `ASTRA_SPEC_SOURCE`, a checkout of astra-spec at that release's tag (`tests/spec.py` checks the tag):
+astra-spec is the release `uv.lock` installs from PyPI. `tests/spec.py` downloads that release's conformance suite, examples and test documents from its tag on GitHub, once, into `~/.cache/astra-tools-tests/`:
 ```bash
 uv sync --frozen
-version="$(uv run --frozen python -c 'import importlib.metadata as m; print(m.version("astra-spec"))')"
-git clone --depth 1 --branch "v$version" https://github.com/astra-project/astra-spec ../astra-spec-release
-export ASTRA_SPEC_SOURCE="$PWD/../astra-spec-release"
 ```
 
 ### Testing and linting
@@ -60,7 +57,6 @@ astra-tools only ever uses an astra-spec published on PyPI. Once it is, widen th
 uv lock --upgrade-package astra-spec
 uv sync --frozen
 ```
-Then check `ASTRA_SPEC_SOURCE` out at the new release's tag. CI does the same, from the version `uv.lock` installs.
 
 ### Changing a command
 Change `docs/cli.md` (and `docs/installation.md` for an extra) in the same commit; `tests/test_cli_docs.py` checks it. astra-spec.org shows both pages, so their links into the specification are full URLs.

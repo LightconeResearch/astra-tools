@@ -82,15 +82,12 @@ each command's options, exit codes and examples. The
 
 ## Development
 
-astra-tools is tested against the astra-spec release `uv.lock` installs from PyPI. The tests read
-that release's conformance suite, examples and test documents from astra-spec's source tree, at the
-release's tag: `ASTRA_SPEC_SOURCE` names a checkout of it.
+astra-tools is tested against the astra-spec release `uv.lock` installs from PyPI. The tests'
+first run downloads that release's conformance suite, examples and test documents from its tag on
+GitHub, and keeps them in `~/.cache/astra-tools-tests/`.
 
 ```bash
 uv sync --frozen
-version="$(uv run --frozen python -c 'import importlib.metadata as m; print(m.version("astra-spec"))')"
-git clone --depth 1 --branch "v$version" https://github.com/astra-project/astra-spec ../astra-spec-release
-export ASTRA_SPEC_SOURCE="$PWD/../astra-spec-release"
 ```
 
 The checks:
