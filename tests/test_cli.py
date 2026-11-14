@@ -28,14 +28,15 @@ def test_help_names_every_command() -> None:
     assert set(COMMANDS) == {
         "check",
         "guide",
+        "history",
         "info",
         "init",
         "paper",
         "plan",
         "schema",
         "spec",
-        "universe",
         "validate",
+        "view",
     }
 
 

@@ -1,4 +1,4 @@
-"""The commands `info`, `universe` and `init`, and the `astra.api` functions
+"""The commands `info` and `init`, and the `astra.api` functions
 they call, on what they promise: output, exit codes and what they leave on disk."""
 
 from __future__ import annotations
@@ -158,112 +158,6 @@ def test_info_json_is_every_analysis_of_the_stack(tmp_path: Path) -> None:
     assert list(root["decisions"]["decision1"]["options"]) == ["a", "b"]
     assert root["universes"]["u2"]["derived_from"] == "u1"
     assert sub["file"] == "subanalysis/astra.yaml"
-
-
-# --- universe ---
-
-
-UNIVERSES = """\
-spec_version: "0.1.0"
-analyses:
-  subanalysis: {path: subanalysis}
-decisions:
-  decision1:
-    options: {a: {}, b: {}}
-  decision2:
-    options: {a: {}, b: {}}
-outputs:
-  output1:
-    type: metric
-    format: json
-    decisions: [decision1, decision2]
-    recipe:
-      command: python make.py '{decisions.decision1}' '{decisions.decision2}' '{output}'
-universes:
-  u1:
-    decisions: {decision1: a, decision2: a, subanalysis.decision1: a}
-  u2:
-    derived_from: u1
-    decisions: {decision1: b, decision2: b}
-  u3:
-    derived_from: u2
-    decisions: {decision1: a}   # replaces the decision1 it inherits
-  u4:
-    label: Derived from nothing
-    derived_from: u9
-  subanalysis_v1:
-    analysis: subanalysis
-    universe: v1
-"""
-"""Three universes and an import, and one with no effective selection."""
-
-
-@pytest.fixture(scope="module")
-def universes(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    sub = SUBANALYSIS + "universes:\n  v1:\n    decisions: {decision1: b}\n"
-    files = {"astra.yaml": UNIVERSES, "subanalysis/astra.yaml": sub}
-    return repository(tmp_path_factory.mktemp("universes"), files)
-
-
-def test_universe_list_shows_the_universes_and_imports(universes: Path) -> None:
-    result = astra("universe", "list", str(universes))
-    assert result.exit_code == 0
-    assert result.stdout.splitlines() == [
-        "u1",
-        "u2  derived from u1",
-        "u3  derived from u2",
-        "u4  derived from u9  Derived from nothing",
-        "subanalysis_v1  imports subanalysis.v1",
-    ]
-
-
-@pytest.mark.parametrize(
-    "universe, selects",
-    [
-        ("u1", ["decision1: a", "decision2: a", "subanalysis.decision1: a"]),
-        (
-            "u2",
-            [
-                "subanalysis.decision1: a  (from u1)",
-                "decision1: b",
-                "decision2: b",
-            ],
-        ),
-        (
-            "u3",
-            ["subanalysis.decision1: a  (from u1)", "decision2: b  (from u2)", "decision1: a"],
-        ),
-    ],
-)
-def test_universe_show_gives_the_effective_selection(
-    universes: Path, universe: str, selects: list[str]
-) -> None:
-    """What each universe selects once `derived_from` is resolved, each inherited
-    selection with the universe it comes from; `u3` replaces the `decision1` it inherits from
-    `u2`."""
-    result = astra("universe", "show", universe, str(universes))
-    assert result.exit_code == 0
-    lines = result.stdout.splitlines()
-    assert lines[0].split("  ")[0] == universe
-    assert [line.strip() for line in lines[1:]] == selects
-
-
-def test_universe_show_of_a_universe_with_no_effective_selection_exits_1(universes: Path) -> None:
-    """`u4`'s `derived_from` names nothing, so it has no effective selection to show: the
-    command says so and exits 1."""
-    result = astra("universe", "show", "u4", str(universes))
-    assert result.exit_code == 1
-    assert "no effective selection" in result.stderr
-
-
-@pytest.mark.parametrize("universe", ["subanalysis_v1", "u9"])
-def test_universe_show_of_an_import_or_of_nothing_is_a_usage_error(
-    universes: Path, universe: str
-) -> None:
-    """An import selects nothing and isn't one of the analysis's universes."""
-    result = astra("universe", "show", universe, str(universes))
-    assert result.exit_code == 2
-    assert "u1, u2, u3, u4" in result.stderr
 
 
 # --- init ---
