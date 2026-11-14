@@ -284,8 +284,14 @@ def test_init_makes_an_analysis_in_a_new_repository_that_validates(tmp_path: Pat
     assert astra("validate", str(folder)).exit_code == 0
 
 
-def test_init_converges_and_never_overwrites(tmp_path: Path) -> None:
-    """Run again, it changes nothing; on a folder with an astra.yaml of its own, it keeps it."""
+def test_init_converges_and_never_overwrites(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run again, it changes nothing; on a folder with an astra.yaml of its own, it keeps it.
+    Where git knows who commits, the new repository gets a first commit."""
+    for who in ("AUTHOR", "COMMITTER"):
+        monkeypatch.setenv(f"GIT_{who}_NAME", "astra-tools tests")
+        monkeypatch.setenv(f"GIT_{who}_EMAIL", "tests@astra.invalid")
     folder = tmp_path / "analysis"
     assert astra("init", str(folder)).exit_code == 0
     assert git(folder, "log", "--format=%s").strip() == "Initial ASTRA analysis structure"
@@ -336,3 +342,25 @@ def test_init_inside_a_working_tree_makes_no_repository_through_the_cli(tmp_path
 def test_init_exits_2_for_a_file(tmp_path: Path) -> None:
     (tmp_path / "file").write_text("x")
     assert astra("init", str(tmp_path / "file")).exit_code == 2
+
+
+def test_init_makes_the_repository_where_git_knows_no_one_to_commit_as(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a user name and email, there is no first commit, and the repository is made
+    all the same."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "home" / ".config"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("EMAIL", "")
+    for who in ("AUTHOR", "COMMITTER"):
+        monkeypatch.delenv(f"GIT_{who}_NAME", raising=False)
+        monkeypatch.delenv(f"GIT_{who}_EMAIL", raising=False)
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "user.useConfigOnly")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    folder = tmp_path / "analysis"
+    result = astra("init", str(folder))
+    assert result.exit_code == 0 and "✓ created .git" in result.stdout
+    assert (folder / ".git").is_dir() and (folder / "astra.yaml").is_file()
+    assert astra("init", str(folder), "--check").exit_code == 0
