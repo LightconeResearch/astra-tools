@@ -8,6 +8,7 @@ bytes.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import urllib.request
@@ -232,11 +233,20 @@ def test_add_fetches_an_arxiv_doi_from_arxiv_at_its_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An arXiv DOI's paper is arXiv's, at the version the evidence gives, counted from 1."""
-    asked = answering(monkeypatch, {"https://arxiv.org/pdf/1706.03762v5": PAPER})
+    arxiv = "https://arxiv.org/pdf/1706.03762v5"
+    work = {"title": "Attention", "author": [{"given": "Ashish", "family": "Vaswani"}]}
+    doi_org = "https://doi.org/10.48550/arXiv.1706.03762"
+    asked = answering(monkeypatch, {arxiv: PAPER, doi_org: json.dumps(work).encode()})
     assert papers.add("10.48550/arXiv.1706.03762", 5) == 2
-    assert asked == ["https://arxiv.org/pdf/1706.03762v5"]
+    assert asked == [arxiv, doi_org]
     assert papers.get("10.48550/arXiv.1706.03762", 5) == PAPER
     assert papers.get("10.48550/arXiv.1706.03762", None) is None
+    kept = papers.record("10.48550/arXiv.1706.03762", 5)
+    assert kept is not None
+    assert (kept.title, kept.authors, kept.source_url) == ("Attention", ("Ashish Vaswani",), arxiv)
+    assert kept.sha256 == hashlib.sha256(PAPER).hexdigest()
+    path = papers.path("10.48550/arXiv.1706.03762", 5)
+    assert path is not None and path.suffix == ".pdf" and path.read_bytes() == PAPER
 
 
 def test_add_fetches_any_other_doi_through_unpaywall(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -245,10 +255,13 @@ def test_add_fetches_any_other_doi_through_unpaywall(monkeypatch: pytest.MonkeyP
     record = f"https://api.unpaywall.org/v2/{DOI}?email=me%40example.org"
     best = "https://example.org/forests.pdf"
     found = json.dumps({"best_oa_location": {"url_for_pdf": best}}).encode()
-    asked = answering(monkeypatch, {record: found, best: PAPER})
+    doi_org = f"https://doi.org/{DOI}"
+    asked = answering(monkeypatch, {record: found, best: PAPER, doi_org: b"not JSON"})
     assert papers.add(DOI, None, email="me@example.org") == 2
-    assert asked == [record, best]
+    assert asked == [record, best, doi_org]
     assert papers.get(DOI, None) == PAPER
+    kept = papers.record(DOI, None)
+    assert kept is not None and (kept.title, kept.authors) == (None, ())  # doi.org said nothing
 
 
 # --- astra paper ---
@@ -267,20 +280,68 @@ def cited(tmp_path: Path) -> Path:
     return top
 
 
-def test_add_file_keeps_a_paper_that_list_shows(cited: Path) -> None:
-    before = astra("paper", "list", str(cited))
-    assert before.exit_code == 0
-    assert before.stdout == f"{DOI}: not in the cache: `astra paper add {DOI}`\n"
-    added = astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf"))
+def test_add_pdf_keeps_a_paper_that_list_show_and_path_give(cited: Path) -> None:
+    before = astra("paper", "list")
+    assert (before.exit_code, before.stdout) == (0, "No papers cached\n")
+    added = astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.pdf"))
     assert added.exit_code == 0
-    assert "2 page(s)" in added.stdout
-    after = astra("paper", "list", str(cited))
-    assert (after.exit_code, after.stdout) == (0, f"{DOI}: in the cache\n")
+    path = papers.path(DOI, None)
+    assert path is not None
+    assert added.stdout.splitlines()[1:4] == [
+        "✓ Paper added to cache",
+        f"  DOI: {DOI}",
+        f"  Path: {path}",
+    ]
+    again = astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.pdf"))
+    assert again.stdout.splitlines() == [f"Paper already cached: {DOI}", f"  Path: {path}"]
+    listed = astra("paper", "list")
+    assert DOI in listed.stdout and listed.stdout.rstrip().endswith("1 paper(s) cached")
+    shown = astra("paper", "show", DOI)
+    assert shown.exit_code == 0
+    assert shown.stdout.splitlines()[0] == f"DOI: {DOI}"
+    assert f"SHA-256: {hashlib.sha256(PAPER).hexdigest()}" in shown.stdout
+    assert shown.stdout.splitlines()[-1] == f"Path: {path}"
+    printed = astra("paper", "path", DOI)
+    assert (printed.exit_code, printed.stdout) == (0, f"{path}\n")
+    assert path.suffix == ".pdf" and path.read_bytes() == PAPER
+
+
+def test_show_and_path_exit_1_for_a_paper_not_in_the_cache() -> None:
+    shown = astra("paper", "show", DOI, "-v", "2")
+    assert shown.exit_code == 1
+    assert shown.stdout.splitlines()[0] == f"Error: Paper not found in cache: {DOI} (version 2)"
+    assert astra("paper", "path", DOI).exit_code == 1
+
+
+def test_verify_quotes_reads_quotes_as_json_and_answers_json(cited: Path) -> None:
+    """Each quote sought in the whole text, its page first among those found; exit 1 for a quote
+    not found, 2 where the paper isn't in the cache or the input isn't JSON."""
+    runner = CliRunner()
+    asked = json.dumps({"quotes": [{"text": "noise", "page": 2}]})
+    missing = runner.invoke(main, ["paper", "verify-quotes", DOI], input=asked)
+    assert missing.exit_code == 2
+    assert json.loads(missing.stdout)["error"] == f"Paper not in cache: {DOI}"
+    assert astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.pdf")).exit_code == 0
+    quotes = [{"text": "label noise", "page": 1}, {"text": "gained two points"}]
+    result = runner.invoke(
+        main, ["paper", "verify-quotes", DOI], input=json.dumps({"quotes": quotes})
+    )
+    assert result.exit_code == 1
+    answer = json.loads(result.stdout)
+    assert [r["status"] for r in answer["results"]] == ["verified", "not_found"]
+    assert answer["results"][0]["found_pages"] == [1]
+    assert answer["summary"] == {"total": 2, "verified": 1, "not_found": 1, "errors": 0}
+    found = runner.invoke(
+        main, ["paper", "verify-quotes", DOI], input=json.dumps({"quotes": quotes[:1]})
+    )
+    assert found.exit_code == 0
+    bad = runner.invoke(main, ["paper", "verify-quotes", DOI], input="not JSON")
+    assert bad.exit_code == 2 and json.loads(bad.stdout)["error"].startswith("Invalid JSON input")
 
 
 def test_verify_exits_0_whether_or_not_a_quote_is_found(cited: Path) -> None:
     """The warnings never change an exit code."""
-    assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
+    assert astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.pdf")).exit_code == 0
     found = astra("paper", "verify", str(cited))
     assert (found.exit_code, found.stdout.splitlines()[-1]) == (
         0,
@@ -307,7 +368,7 @@ def test_verify_exits_1_for_an_invalid_analysis(cited: Path) -> None:
 def test_seek_shows_the_pages_each_quote_given_is_on(cited: Path) -> None:
     """With no analysis, each quote is sought as `verify` seeks it, in the whole text, and shown
     with the pages it is on: alone, or across two."""
-    assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
+    assert astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.pdf")).exit_code == 0
     result = astra("paper", "seek", DOI, ACROSS, "noise", "held-out data.\nIn every experiment")
     assert (result.exit_code, result.stdout.splitlines()) == (
         0,
@@ -321,7 +382,7 @@ def test_seek_shows_the_pages_each_quote_given_is_on(cited: Path) -> None:
 
 def test_seek_exits_1_when_a_quote_isnt_found(cited: Path) -> None:
     """Within --page, a quote is sought on that page alone, as within a location's `page=`."""
-    assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
+    assert astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.pdf")).exit_code == 0
     on_1 = astra("paper", "seek", DOI, ACROSS, "label noise", "--page", "1")
     assert (on_1.exit_code, on_1.stdout.splitlines()) == (
         1,
@@ -336,7 +397,7 @@ def test_seek_needs_the_paper_in_the_cache_and_a_quote(cited: Path) -> None:
     missing = astra("paper", "seek", DOI, ACROSS)
     assert missing.exit_code == 2
     assert f"isn't in the cache: run `astra paper add {DOI}`" in missing.stderr
-    assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
+    assert astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.pdf")).exit_code == 0
     versioned = astra("paper", "seek", DOI, ACROSS, "--version", "2")
     assert versioned.exit_code == 2
     assert f"run `astra paper add {DOI} --version 2`" in versioned.stderr
@@ -377,10 +438,10 @@ def test_api_seek_reads_the_paper_once_for_each_quote_given() -> None:
 
 def test_add_refuses_what_isnt_a_pdf(cited: Path) -> None:
     (cited.parent / "paper.txt").write_text("not a paper\n")
-    result = astra("paper", "add", DOI, "--file", str(cited.parent / "paper.txt"))
+    result = astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.txt"))
     assert result.exit_code == 2
     assert "isn't a PDF" in result.stderr
-    assert "not in the cache" in astra("paper", "list", str(cited)).stdout
+    assert astra("paper", "list").stdout == "No papers cached\n"
 
 
 def test_add_fetches_only_what_it_can_without_more(cited: Path) -> None:
@@ -390,3 +451,19 @@ def test_add_fetches_only_what_it_can_without_more(cited: Path) -> None:
     assert no_email.exit_code == 2 and "--email" in no_email.stderr
     versioned = astra("paper", "add", DOI, "--version", "2", "--email", "me@example.org")
     assert versioned.exit_code == 2 and "only arXiv's papers" in versioned.stderr
+
+
+def test_validate_suggests_verify_evidence_and_seeks_the_quotes_with_it(cited: Path) -> None:
+    """Without --verify-evidence, a note says how to seek the quotes; with it, they are sought as
+    `astra paper verify` seeks them; --skip-evidence says nothing of them."""
+    plain = astra("validate", str(cited))
+    assert plain.exit_code == 0
+    assert plain.stdout.splitlines()[-1] == (
+        "Note: the evidence takes 1 quote(s) from papers: run with --verify-evidence to seek them."
+    )
+    skipped = astra("validate", str(cited), "--skip-evidence")
+    assert "Note:" not in skipped.stdout and "EVIDENCE_" not in skipped.stdout
+    assert astra("paper", "add", DOI, "--pdf", str(cited.parent / "paper.pdf")).exit_code == 0
+    verified = astra("validate", str(cited), "-e")
+    assert verified.exit_code == 0
+    assert verified.stdout.splitlines()[-1] == astra("paper", "verify", str(cited)).stdout.rstrip()

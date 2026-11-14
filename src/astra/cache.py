@@ -3,9 +3,9 @@
 It is `$ASTRA_CACHE_DIR`, which must be absolute, or else the platform's user cache folder:
 `$XDG_CACHE_HOME/astra` or `~/.cache/astra`, `~/Library/Caches/astra` on macOS, and
 `%LOCALAPPDATA%\\astra\\cache` on Windows. An entry is one file, `<namespace>/<sha256 of its
-key>`, written atomically, so processes that share the cache see the old value or the new one,
-never a mix. Everything in it is safe to delete, and `clear` deletes what astra-tools keeps
-there (`NAMESPACES`).
+key>` with the suffix its kind of file takes, if any (`.pdf` for a paper), written atomically, so
+processes that share the cache see the old value or the new one, never a mix. Everything in it is
+safe to delete, and `clear` deletes what astra-tools keeps there (`NAMESPACES`).
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ import os
 import shutil
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 NAMESPACES = ("remotes", "validity", "hashes", "worktrees", "papers")
@@ -50,18 +51,36 @@ def root() -> Path:
     return (Path(xdg) if xdg and Path(xdg).is_absolute() else Path.home() / ".cache") / "astra"
 
 
-def get(namespace: str, key: str) -> bytes | None:
-    """The value last put under `key` in `namespace`, or None."""
+def get(namespace: str, key: str, suffix: str = "") -> bytes | None:
+    """The value last put under `key` in `namespace`, with `suffix`, or None."""
     try:
-        return _entry(namespace, key).read_bytes()
+        return _entry(namespace, key, suffix).read_bytes()
     except FileNotFoundError:
         return None
 
 
-def put(namespace: str, key: str, value: bytes) -> None:
-    """Keep `value` under `key` in `namespace`, in place of any value before it: written to a
-    temporary file in the same folder, then moved into place by `os.replace`."""
-    path = _entry(namespace, key)
+def path(namespace: str, key: str, suffix: str = "") -> Path | None:
+    """The file that holds the value under `key` in `namespace`, with `suffix`, or None where
+    there is none: for a tool that reads the file itself."""
+    entry = _entry(namespace, key, suffix)
+    return entry if entry.is_file() else None
+
+
+def values(namespace: str, suffix: str) -> Iterator[bytes]:
+    """Every value in `namespace` whose file has `suffix`, in no particular order."""
+    folder = root() / namespace
+    if not folder.is_dir():
+        return
+    for entry in folder.iterdir():
+        if entry.name.endswith(suffix) and not entry.name.startswith(".tmp-"):
+            with contextlib.suppress(FileNotFoundError):  # removed meanwhile
+                yield entry.read_bytes()
+
+
+def put(namespace: str, key: str, value: bytes, suffix: str = "") -> None:
+    """Keep `value` under `key` in `namespace`, with `suffix`, in place of any value before it:
+    written to a temporary file in the same folder, then moved into place by `os.replace`."""
+    path = _entry(namespace, key, suffix)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temporary = tempfile.mkstemp(prefix=".tmp-", dir=path.parent)
@@ -101,5 +120,5 @@ def clear() -> Path:
     return folder
 
 
-def _entry(namespace: str, key: str) -> Path:
-    return root() / namespace / hashlib.sha256(key.encode("utf-8")).hexdigest()
+def _entry(namespace: str, key: str, suffix: str = "") -> Path:
+    return root() / namespace / (hashlib.sha256(key.encode("utf-8")).hexdigest() + suffix)

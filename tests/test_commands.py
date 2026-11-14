@@ -3,6 +3,7 @@ they call, on what they promise: output, exit codes and what they leave on disk.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -92,7 +93,7 @@ def test_info_shows_each_analysis_of_the_stack_in_brief(tmp_path: Path) -> None:
     switch = "  switch1:\n    switch: decision1\n    cases: {a: output1, b: input1}\nuniverses:\n"
     text = ROOT.replace("inputs:\n", declared, 1).replace("universes:\n", switch, 1)
     repository(top, {"astra.yaml": text})
-    result = astra("info", str(top))
+    result = astra("info", "-f", str(top / "astra.yaml"))
     assert result.exit_code == 0
     lines = result.stdout.splitlines()
     assert lines[:11] == [
@@ -115,15 +116,46 @@ def test_info_shows_each_analysis_of_the_stack_in_brief(tmp_path: Path) -> None:
 def test_info_with_no_stack_to_show_exits_1(tmp_path: Path, outside: Path) -> None:
     """A root whose file isn't a valid document, or in no repository, has no stack."""
     for folder in (analysis(git_init(tmp_path / "repo"), MINIMAL + "name: x\n"), analysis(outside)):
-        result = astra("info", str(folder))
+        result = astra("info", "--file", str(folder / "astra.yaml"))
         assert result.exit_code == 1
         assert "astra validate" in result.stderr
 
 
-def test_info_exits_2_where_there_is_no_analysis(tmp_path: Path) -> None:
-    result = astra("info", str(git_init(tmp_path)))
-    assert result.exit_code == 2
-    assert "has no astra.yaml" in result.stderr
+def test_info_exits_1_where_there_is_no_analysis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(git_init(tmp_path))
+    result = astra("info")
+    assert (result.exit_code, result.stdout) == (1, "Error: No astra.yaml found.\n")
+
+
+def test_info_reads_the_astra_yaml_here_or_above(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    top = repository(tmp_path, {"astra.yaml": MINIMAL})
+    (top / "src").mkdir()
+    monkeypatch.chdir(top / "src")
+    result = astra("info")
+    assert result.stdout == "astra.yaml\n  outputs   result: metric, json\n"
+
+
+def test_info_shows_only_the_rows_asked_for(tmp_path: Path) -> None:
+    files = {"astra.yaml": MINIMAL, "subanalysis/astra.yaml": SUBANALYSIS, "data/input1.csv": "1\n"}
+    top = repository(tmp_path, files)
+    repository(top, {"astra.yaml": ROOT})
+    shown = astra("info", "-f", str(top / "astra.yaml"), "-d", "-i").stdout.splitlines()
+    assert [line.split()[0] for line in shown if line.startswith("  ") and line[2] != " "] == [
+        "inputs",
+        "decisions",
+        "decisions",
+    ]
+
+
+def test_info_json_is_the_text_as_one_json_string(tmp_path: Path) -> None:
+    top = repository(tmp_path, {"astra.yaml": MINIMAL})
+    result = astra("info", "-f", str(top / "astra.yaml"), "--json")
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == "astra.yaml\n  outputs   result: metric, json\n"
 
 
 # --- universe ---
@@ -239,10 +271,44 @@ def test_init_makes_an_analysis_in_a_new_repository_that_validates(tmp_path: Pat
     folder = tmp_path / "new" / "analysis"
     result = astra("init", str(folder))
     assert result.exit_code == 0
-    assert (folder / ".git").is_dir()
-    assert "in a new git repository" in result.stdout
+    assert result.stdout.splitlines() == [
+        "✓ created astra.yaml",
+        "✓ created .gitignore",
+        "✓ created .git",
+        f"✓ Converged ASTRA analysis scaffold: {folder}",
+    ]
+    assert (folder / ".git").is_dir() and (folder / ".gitignore").is_file()
     assert api.validate(folder).diagnostics == ()
     assert astra("validate", str(folder)).exit_code == 0
+
+
+def test_init_converges_and_never_overwrites(tmp_path: Path) -> None:
+    """Run again, it changes nothing; on a folder with an astra.yaml of its own, it keeps it."""
+    folder = tmp_path / "analysis"
+    assert astra("init", str(folder), "--no-git").exit_code == 0
+    assert not (folder / ".git").exists()
+    again = astra("init", str(folder), "--no-git")
+    assert (again.exit_code, again.stdout) == (0, f"✓ {folder} already converged\n")
+    (folder / "astra.yaml").write_text("mine\n")
+    assert astra("init", str(folder)).exit_code == 0
+    assert (folder / "astra.yaml").read_text() == "mine\n"
+
+
+def test_init_check_writes_nothing_and_json_reports(tmp_path: Path) -> None:
+    folder = tmp_path / "analysis"
+    result = astra("init", str(folder), "--check", "--json")
+    assert result.exit_code == 1
+    assert json.loads(result.stdout) == {
+        "converged": False,
+        "created": ["astra.yaml", ".gitignore", ".git"],
+        "repaired": [],
+        "unchanged": [],
+        "warnings": [],
+    }
+    assert not folder.exists()
+    assert astra("init", str(folder)).exit_code == 0
+    done = astra("init", str(folder), "--check")
+    assert (done.exit_code, done.stdout) == (0, f"✓ {folder} is converged — nothing to do\n")
 
 
 def test_init_inside_a_working_tree_makes_no_repository(tmp_path: Path) -> None:
@@ -253,12 +319,14 @@ def test_init_inside_a_working_tree_makes_no_repository(tmp_path: Path) -> None:
     assert api.validate(top / "stage").diagnostics == ()
 
 
-def test_init_exits_2_where_there_is_an_analysis_or_a_file(tmp_path: Path) -> None:
-    folder = analysis(tmp_path / "analysis")
-    result = astra("init", str(folder))
-    assert result.exit_code == 2
-    assert "has an astra.yaml already" in result.stderr
-    assert (folder / "astra.yaml").read_text() == MINIMAL
+def test_init_inside_a_working_tree_makes_no_repository_through_the_cli(tmp_path: Path) -> None:
+    top = git_init(tmp_path)
+    result = astra("init", str(top / "stage"))
+    assert result.exit_code == 0 and "✓ created .git" not in result.stdout.splitlines()
+    assert not (top / "stage" / ".git").exists()
+
+
+def test_init_exits_2_for_a_file(tmp_path: Path) -> None:
     (tmp_path / "file").write_text("x")
     assert astra("init", str(tmp_path / "file")).exit_code == 2
 

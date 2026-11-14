@@ -57,20 +57,65 @@ def test_validate_respects_no_color(tmp_path: Path) -> None:
     assert "31m" not in plain.stdout
 
 
-def test_validate_json_is_the_report(tmp_path: Path, outside: Path) -> None:
-    result = astra("validate", str(analysis(outside)), "--json")
+def test_validate_json_is_the_report_as_one_json_string(tmp_path: Path, outside: Path) -> None:
+    """The text report, as one JSON-encoded string with no ANSI escape, colour forced or not,
+    safe to embed in any JSON document; the exit code still carries pass or fail."""
+    result = astra("validate", str(analysis(outside)), "--json", env={"FORCE_COLOR": "1"})
     assert result.exit_code == 1
     report = json.loads(result.stdout)
-    assert list(report) == ["shape", "root", "valid", "diagnostics", "unchecked"]
-    assert report["shape"] == "astra-validation-report/1"
-    assert [d["code"] for d in report["diagnostics"]] == ["NOT_IN_REPOSITORY"]
+    assert isinstance(report, str) and "\x1b" not in report
+    assert "error NOT_IN_REPOSITORY" in report and "invalid, 1 error(s)" in report
     result = astra("validate", str(analysis(git_init(tmp_path / "repo"))), "--json")
-    assert (result.exit_code, json.loads(result.stdout)["valid"]) == (0, True)
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == "astra.yaml: valid, 0 error(s), 0 warning(s)\n"
+
+
+def test_validate_takes_an_astra_yaml_or_its_folder(tmp_path: Path) -> None:
+    folder = analysis(git_init(tmp_path))
+    assert astra("validate", str(folder / "astra.yaml")).exit_code == 0
+    (folder / "universe.yaml").write_text("decisions: {}\n")
+    result = astra("validate", str(folder / "universe.yaml"))
+    assert result.exit_code == 2 and "universes are in astra.yaml" in result.stderr
+
+
+def test_validate_with_no_file_validates_every_root_analysis_here(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each astra.yaml under the current folder that no other declares, hidden, vendored and
+    results folders skipped; one declared is validated with the analysis that declares it."""
+    top = git_init(tmp_path)
+    declaring = MINIMAL + "analyses:\n  part: {path: part}\n"
+    analysis(top / "one", declaring)
+    analysis(top / "one" / "part")
+    analysis(top / "two", MINIMAL + "name: x\n")
+    for skipped in (".hidden", "node_modules", "results"):
+        analysis(top / skipped, MINIMAL + "name: x\n")
+    monkeypatch.chdir(top)
+    result = astra("validate")
+    assert result.exit_code == 1
+    assert "one/astra.yaml: valid" in result.stdout
+    assert "two/astra.yaml: invalid" in result.stdout
+    assert "part/astra.yaml:" not in result.stdout
+    assert result.stdout.splitlines()[-1] == "1/2 analysis(es) failed validation: two/astra.yaml"
+    monkeypatch.chdir(top / "one")
+    result = astra("validate", "--json")
+    assert result.exit_code == 0
+    assert json.loads(result.stdout).endswith("All 1 analysis(es) passed validation.\n")
+
+
+def test_validate_with_no_file_and_no_analysis_here_exits_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(git_init(tmp_path))
+    result = astra("validate")
+    assert (result.exit_code, result.stdout) == (1, "Error: no astra.yaml found here.\n")
 
 
 def test_validate_reads_the_current_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(analysis(git_init(tmp_path)))
-    assert astra("validate").exit_code == 0
+    result = astra("validate")
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[-1] == "All 1 analysis(es) passed validation."
 
 
 def test_validate_exits_2_where_there_is_no_analysis(tmp_path: Path) -> None:
@@ -191,7 +236,19 @@ def test_spec_describes_a_term(term: str, line: str) -> None:
 
 
 def test_spec_refuses_an_unknown_term() -> None:
-    assert astra("spec", "nothing_named_so").exit_code == 2
+    result = astra("spec", "nothing_named_so")
+    assert result.exit_code == 1
+    assert result.stdout.splitlines()[0] == "Unknown term: nothing_named_so"
+    assert result.stdout.splitlines()[1].startswith("Valid terms: ")
+    assert "Insight" in result.stdout
+
+
+def test_spec_full_shows_every_term_in_full() -> None:
+    result = astra("spec", "--full")
+    assert result.exit_code == 0
+    assert "Insight (class)" in result.stdout and "Analysis (class)" in result.stdout
+    assert "  claim (" in result.stdout  # a field, as a term in full shows it
+    assert astra("spec", "Insight", "--full").exit_code == 2
 
 
 # --- completion ---

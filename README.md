@@ -38,8 +38,10 @@ gives the details.
 
 ```console
 $ astra init my-analysis
-Made my-analysis/astra.yaml, in a new git repository.
-Check it with: astra validate my-analysis
+✓ created astra.yaml
+✓ created .gitignore
+✓ created .git
+✓ Converged ASTRA analysis scaffold: my-analysis
 $ astra validate my-analysis
 astra.yaml: valid, 0 error(s), 0 warning(s)
 $ astra plan my-analysis
@@ -71,7 +73,7 @@ record and its bytes go, and the command that builds it.
 | [`astra spec`](https://astra-spec.org/0.1.0rc1/cli/#astra-spec) | Describe the fields of ASTRA files |
 | [`astra schema`](https://astra-spec.org/0.1.0rc1/cli/#astra-schema) | Show or export the JSON Schemas |
 | [`astra guide`](https://astra-spec.org/0.1.0rc1/cli/#astra-guide) | Print the guide for agents |
-| [`astra paper`](https://astra-spec.org/0.1.0rc1/cli/#astra-paper) | Keep cited papers, and seek quotes in them |
+| [`astra paper`](https://astra-spec.org/0.1.0rc1/cli/#astra-paper) | Keep papers by DOI, and verify quotes in them |
 | [`astra cache`](https://astra-spec.org/0.1.0rc1/cli/#astra-cache) | Show or clear the cache |
 | [`astra completion`](https://astra-spec.org/0.1.0rc1/cli/#astra-completion) | Print a shell completion script |
 

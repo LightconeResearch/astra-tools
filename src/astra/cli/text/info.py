@@ -1,5 +1,6 @@
 """The stack in brief, as text: each analysis, the root first, with its file, its label, and
-its declarations, inputs, outputs and switches, decisions and universes."""
+its declarations, inputs, outputs and switches, decisions and universes, or only those rows
+asked for."""
 
 from __future__ import annotations
 
@@ -10,7 +11,8 @@ from astra.cli.text import console, file_named
 from astra.stack import Declaration, Stack
 
 
-def show(stack: Stack) -> None:
+def show(stack: Stack, only: set[str] | None = None) -> None:
+    """Each analysis of `stack`, with every row, or only the rows `only` names."""
     out = console()
     for member in stack.analyses.values():
         heading = Text(file_named(stack.location(member.identity, ())), style="bold")
@@ -35,6 +37,8 @@ def show(stack: Stack) -> None:
             "universes": [_universe(id_, u) for id_, u in analysis.universes.items()],
         }
         for name, items in rows.items():
+            if only is not None and name not in only:
+                continue
             for index, item in enumerate(items):
                 out.print(Text.assemble("  ", (f"{name if index == 0 else '':<10}", "bold"), item))
 

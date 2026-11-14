@@ -145,9 +145,10 @@ def test_completion_imports_no_heavy_package() -> None:
     assert imported(run(), {**env, "COMP_CWORD": "1"}) & HEAVY == set()
 
 
-def test_validate_json_imports_no_heavy_package(tmp_path: Path) -> None:
+def test_validate_json_imports_only_rich_of_the_heavy_packages(tmp_path: Path) -> None:
+    """Its JSON string is the text report, which rich writes."""
     folder = analysis(git_init(tmp_path))
-    assert imported(run("validate", str(folder), "--json")) & HEAVY == set()
+    assert imported(run("validate", str(folder), "--json")) & HEAVY == {"rich"}
 
 
 def importing(packages: set[str]) -> list[str]:

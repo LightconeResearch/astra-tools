@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import io
 import json
 import os
+import re
+import sys
 import traceback
 from collections.abc import Iterator
 from pathlib import Path
@@ -95,6 +98,44 @@ def environment() -> Iterator[None]:
         fail(str(error))
     except OSError as error:
         fail(f"can't read {error.filename}: {error.strerror}")
+
+
+_ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+"""Any ANSI escape sequence (CSI): `json_string`'s text is plain even where colour is forced."""
+
+
+@contextlib.contextmanager
+def json_string(enabled: bool) -> Iterator[None]:
+    """Where `enabled`, print what the body prints on stdout as one JSON-encoded string, with no
+    ANSI escapes, safe to embed in any JSON document, and keep its exit code (`--json` of
+    `validate` and `info`)."""
+    if not enabled:
+        yield
+        return
+    captured = io.StringIO()
+    stdout = sys.stdout
+    exit_: click.exceptions.Exit | None = None
+    try:
+        with contextlib.redirect_stdout(captured):
+            try:
+                yield
+            except click.exceptions.Exit as stopped:
+                exit_ = stopped
+    finally:
+        stdout.write(json.dumps(_ANSI.sub("", captured.getvalue())) + "\n")
+        stdout.flush()
+    if exit_ is not None and exit_.exit_code:
+        raise exit_
+
+
+def find_analysis(start: Path | None = None) -> Path | None:
+    """The `astra.yaml` in `start`, the current folder by default, or the nearest folder above
+    it that has one; None where none has."""
+    folder = (Path.cwd() if start is None else start).resolve()
+    for candidate in (folder, *folder.parents):
+        if (candidate / "astra.yaml").is_file():
+            return candidate / "astra.yaml"
+    return None
 
 
 def read_stack(path: Path | None) -> Stack:
