@@ -39,6 +39,8 @@ jobs:
           name: distribution-files
           path: dist/
 
+  # Tests the built wheel as users install it: pip takes astra-spec from PyPI, the newest release
+  # the wheel's requirement accepts.
   test:
     name: Test built package
     needs: build
@@ -46,12 +48,15 @@ jobs:
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out astra-tools
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          path: astra-tools
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -64,13 +69,19 @@ jobs:
           name: distribution-files
           path: dist/
 
-      - name: Install from wheel
+      - name: Install the wheel, and pytest
         run: |
-          pip install dist/*.whl
-          pip install pytest
+          wheels=(dist/*.whl)
+          if [[ ${#wheels[@]} -ne 1 ]]; then
+            echo "::error::dist/ holds ${#wheels[@]} wheels, not one"
+            exit 1
+          fi
+          python -m pip install --upgrade pip
+          python -m pip install "${wheels[0]}" "pytest >= 8.3"
 
       - name: Run tests
-        run: pytest tests/ -v
+        working-directory: astra-tools
+        run: pytest -q -p no:cacheprovider
 
   pypi-publish:
     name: Publish to PyPI

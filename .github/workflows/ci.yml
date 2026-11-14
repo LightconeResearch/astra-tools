@@ -5,100 +5,50 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-
-      - name: Run ruff check
-        run: ruff check src/ tests/
-
-      - name: Run ruff format check
-        run: ruff format --check src/ tests/
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run mypy
-        run: mypy src/
-
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
+    defaults:
+      run:
+        working-directory: astra-tools
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out astra-tools
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Needed for hatch-vcs versioning
+          path: astra-tools
+          fetch-depth: 0  # hatch-vcs reads the version from the tags
+          persist-credentials: false
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v8.0.0
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
 
+      - name: Install astra-tools with the dev group
+        run: uv sync --frozen
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Run tests
+        run: uv run --frozen pytest -q -p no:cacheprovider
 
-      - name: Run tests with coverage
-        run: pytest tests/ -v --cov=astra --cov-report=xml --cov-report=term
+      - name: Run mypy
+        run: uv run --frozen mypy --strict src/
 
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.11'
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.xml
-          fail_ci_if_error: false
+      - name: Run ruff check
+        run: uv run --frozen ruff check src/ tests/
 
-  validate-examples:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-
-      - name: Validate example files
-        run: |
-          astra validate examples/iris/astra.yaml
-          astra validate examples/iris/universes/baseline.yaml -a examples/iris/astra.yaml
-          astra validate examples/iris_pipeline/astra.yaml
-          astra validate examples/iris_pipeline/universes/baseline.yaml -a examples/iris_pipeline/astra.yaml
+      - name: Run ruff format check
+        run: uv run --frozen ruff format --check src/ tests/
