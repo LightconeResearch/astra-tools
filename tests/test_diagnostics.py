@@ -49,7 +49,7 @@ def test_astra_tools_own_codes_are_none_of_rules_json() -> None:
         "EVIDENCE_PAPER_MISSING",
     }
     assert not set(OWN) & set(catalogue.rules)
-    assert [catalogue.level(code) for code in OWN] == ["error", "error", "warning", "warning"]
+    assert [catalogue.level(code) for code in OWN] == ["error", "error", "warning", "error"]
 
 
 def test_every_code_astra_tools_has_of_its_own_is_checked() -> None:

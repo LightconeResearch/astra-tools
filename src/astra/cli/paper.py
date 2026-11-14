@@ -114,9 +114,10 @@ def verify(path: Path | None) -> None:
     DOI, in its paper in the cache.
 
     PATH is the analysis's folder, the current one by default. A quote not found in its paper
-    is an error (QUOTE_NOT_FOUND), and a paper not in the cache a warning, shown as `astra
-    validate` shows them. Exits 0 when no quote is not found; 1 when one isn't, or the analysis
-    breaks a MUST, which is shown as `astra validate` shows it; and 2 where it can't be read.
+    (QUOTE_NOT_FOUND), and one whose paper isn't in the cache (EVIDENCE_PAPER_MISSING: add it
+    with `astra paper add`), are errors, shown as `astra validate` shows them. Exits 0 when
+    every quote is found; 1 when one isn't or can't be sought, or the analysis breaks a MUST,
+    which is shown as `astra validate` shows it; and 2 where it can't be read.
     """
     from astra import api
 

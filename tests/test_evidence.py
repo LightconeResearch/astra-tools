@@ -158,11 +158,11 @@ def test_a_page_the_paper_hasnt_holds_no_quote(verified: Mapping[str, Diagnostic
     assert "sought on page 3" in found.message and "has 2 page(s)" in found.message
 
 
-def test_a_paper_not_in_the_cache_is_a_warning(verified: Mapping[str, Diagnostic]) -> None:
-    """At the evidence's `doi`, saying how to add the paper at the version cited; evidence
-    without a quote seeks nothing."""
+def test_a_paper_not_in_the_cache_is_an_error(verified: Mapping[str, Diagnostic]) -> None:
+    """At the evidence's `doi`: a quote that can't be sought isn't verified. Its message says how
+    to add the paper at the version cited; evidence without a quote seeks nothing."""
     missing = verified[at("uncached", 0, "doi")]
-    assert (missing.code, missing.level) == ("EVIDENCE_PAPER_MISSING", "warning")
+    assert (missing.code, missing.level) == ("EVIDENCE_PAPER_MISSING", "error")
     assert "`astra paper add 10.5555/87654321`" in missing.message
     version = verified[at("uncached", 1, "doi")]  # kept without a version, not as version 2
     assert "`astra paper add 10.5555/12345678 --version 2`" in version.message
@@ -192,7 +192,7 @@ def test_the_codes_and_their_levels(verified: Mapping[str, Diagnostic]) -> None:
     assert (spec.layer, spec.level, spec.source) == ("evidence", "MUST", None)
     assert quotes.PAPER_MISSING not in catalogue.rules
     own = catalogue.rule(quotes.PAPER_MISSING)
-    assert (own.layer, own.level, own.source) == ("evidence", "SHOULD", "astra-tools")
+    assert (own.layer, own.level, own.source) == ("evidence", "MUST", "astra-tools")
 
 
 def test_astra_specs_insights_fixture(tmp_path: Path) -> None:
@@ -285,13 +285,15 @@ def test_add_file_keeps_a_paper_that_list_shows(cited: Path) -> None:
     assert (after.exit_code, after.stdout) == (0, f"{DOI}: in the cache\n")
 
 
-def test_verify_exits_1_for_a_quote_not_found_and_0_for_a_paper_missing(cited: Path) -> None:
-    """A paper not in the cache is a warning, which changes no exit code; a quote not found in
-    its paper is an error."""
+def test_verify_exits_1_unless_every_quote_is_found_in_its_paper(cited: Path) -> None:
+    """A quote whose paper isn't in the cache can't be sought, and one not found in its paper
+    isn't there: both are errors, and only every quote found exits 0."""
     unsought = astra("paper", "verify", str(cited))
-    assert (unsought.exit_code, unsought.stdout.splitlines()[-1]) == (
-        0,
-        "Each quote sought is in its paper; 1 not sought, their paper not in the cache.",
+    assert unsought.exit_code == 1
+    assert "error EVIDENCE_PAPER_MISSING" in unsought.stdout
+    assert unsought.stdout.splitlines()[-1] == (
+        "0 quote(s) not found in their paper; 1 not sought, their paper not in the cache: "
+        "`astra paper add` it."
     )
     assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
     found = astra("paper", "verify", str(cited))
@@ -308,7 +310,8 @@ def test_verify_exits_1_for_a_quote_not_found_and_0_for_a_paper_missing(cited: P
     assert lines[0] == "astra.yaml"
     assert lines[1].startswith("  12:42 error QUOTE_NOT_FOUND the quote isn't found")
     assert lines[-1] == (
-        "1 quote(s) not found in their paper; 0 not sought, their paper not in the cache."
+        "1 quote(s) not found in their paper; 0 not sought, their paper not in the cache: "
+        "`astra paper add` it."
     )
 
 

@@ -160,9 +160,9 @@ def papers(path: str | os.PathLike[str] | None = None) -> tuple[Cited, ...]:
 
 def quotes(path: str | os.PathLike[str] | None = None) -> tuple[Diagnostic, ...]:
     """The diagnostics on the quotes that the evidence of the analysis whose folder is `path`
-    takes from works it cites by DOI, read as `validate` reads it (`evidence.quotes`): a
-    warning for a paper not in the cache (`EVIDENCE_PAPER_MISSING`), and an error for a quote
-    not found in it (`QUOTE_NOT_FOUND`). Raises `evidence.papers.PaperError`
+    takes from works it cites by DOI, read as `validate` reads it (`evidence.quotes`): an
+    error for a paper not in the cache (`EVIDENCE_PAPER_MISSING`), and one for a quote not
+    found in it (`QUOTE_NOT_FOUND`). Raises `evidence.papers.PaperError`
     where a paper the cache holds can't be read, and otherwise as `papers` does."""
     from astra.evidence.quotes import verify
 

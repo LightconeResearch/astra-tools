@@ -88,7 +88,7 @@ OWN: Mapping[str, Rule] = MappingProxyType(
             Rule(
                 "EVIDENCE_PAPER_MISSING",
                 "evidence",
-                "SHOULD",
+                "MUST",
                 "The cache holds the paper of every work that evidence cites by `doi` with a "
                 "`quote`, so that the quote can be sought (`QUOTE_NOT_FOUND`)",
                 "astra-tools",
@@ -97,8 +97,8 @@ OWN: Mapping[str, Rule] = MappingProxyType(
     }
 )
 """astra-tools' own codes, which the specification left to tools, with their layer, level and
-statement: the first two are errors, since without them the stack can't be read. A paper not
-in the cache is a fact about one machine, not about the analysis: a warning."""
+statement. The first two, and `EVIDENCE_PAPER_MISSING`, are errors: without them the stack
+can't be read, or a quote can't be sought, and what can't be checked isn't verified."""
 
 
 @dataclass(frozen=True)

@@ -5,9 +5,10 @@ For a `doi`, the cited resource is the work's full text, and with both a `quote`
 in the text of the work's PDF, kept in the cache by `astra paper add` (`papers`): within the
 page that a PDF fragment identifier's `page=` gives (RFC 8118), or
 in the whole text. A quote not found breaks the specification's `QUOTE_NOT_FOUND`, a `MUST`
-of its evidence layer: an error. A paper not in the cache is astra-tools' own
-`EVIDENCE_PAPER_MISSING`, a warning: the quote can't be sought. `seek` seeks a quote given, with
-no analysis, as `verify` seeks one, and says on which pages it is found (`Sought`).
+of its evidence layer: an error. A paper not in the cache breaks astra-tools' own
+`EVIDENCE_PAPER_MISSING`, also an error: the quote can't be sought, so it isn't verified.
+`seek` seeks a quote given, with no analysis, as `verify` seeks one, and says on which pages it
+is found (`Sought`).
 """
 
 from __future__ import annotations
@@ -57,9 +58,9 @@ class Sought:
 
 
 def verify(stack: Stack) -> tuple[Diagnostic, ...]:
-    """For each item of the root's evidence citing a `doi` with a `quote`: a warning where its
-    paper isn't in the cache (`EVIDENCE_PAPER_MISSING`, at its `doi`), an error where its
-    `exact` isn't found where it is sought (`QUOTE_NOT_FOUND`, at its `quote`); nothing for one
+    """For each item of the root's evidence citing a `doi` with a `quote`, an error where its
+    paper isn't in the cache (`EVIDENCE_PAPER_MISSING`, at its `doi`), or where its `exact`
+    isn't found where it is sought (`QUOTE_NOT_FOUND`, at its `quote`); nothing for one
     found.
     Reads only the cache: `papers.add` keeps a paper."""
     # Only the cache is read.
