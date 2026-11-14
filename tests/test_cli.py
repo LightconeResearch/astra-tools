@@ -4,7 +4,6 @@ promise: output, `--json` shape and exit codes. The others are in `test_commands
 from __future__ import annotations
 
 import json
-import sys
 from importlib.resources import files
 from pathlib import Path
 
@@ -193,15 +192,6 @@ def test_spec_describes_a_term(term: str, line: str) -> None:
 
 def test_spec_refuses_an_unknown_term() -> None:
     assert astra("spec", "nothing_named_so").exit_code == 2
-
-
-def test_spec_without_the_reference_extra_exits_2(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(sys.modules, "linkml_runtime", None)
-    monkeypatch.setitem(sys.modules, "linkml_runtime.utils.schemaview", None)
-    monkeypatch.setitem(sys.modules, "linkml_runtime.linkml_model.meta", None)
-    result = astra("spec")
-    assert result.exit_code == 2
-    assert "[reference]" in result.stderr
 
 
 # --- completion ---

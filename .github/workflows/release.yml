@@ -69,7 +69,7 @@ jobs:
           name: distribution-files
           path: dist/
 
-      - name: Install the wheel with its extras, and pytest
+      - name: Install the wheel, and pytest
         run: |
           wheels=(dist/*.whl)
           if [[ ${#wheels[@]} -ne 1 ]]; then
@@ -77,7 +77,7 @@ jobs:
             exit 1
           fi
           python -m pip install --upgrade pip
-          python -m pip install "${wheels[0]}[reference]" "pytest >= 8.3"
+          python -m pip install "${wheels[0]}" "pytest >= 8.3"
 
       - name: Run tests
         working-directory: astra-tools

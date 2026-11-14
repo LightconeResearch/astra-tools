@@ -43,14 +43,12 @@ dependencies = [
     "astra-spec >= 0.1.0rc1, < 0.2",
     "click >= 8.2.1",
     "jsonschema >= 4.23",
+    "linkml-runtime >= 1.12",
     "pypdf >= 5",
     "rapidfuzz >= 3",
     "rich >= 13.8",
     "ruamel.yaml >= 0.19.1",
 ]
-
-[project.optional-dependencies]
-reference = ["linkml-runtime >= 1.12"]
 
 [project.scripts]
 astra = "astra.cli:main"
@@ -71,7 +69,6 @@ dev = [
     "ruff >= 0.9",
     "mypy >= 1.15",
     "types-jsonschema >= 4.23",
-    "astra-tools[reference]",  # the import-cost tests' checks need linkml-runtime there
 ]
 
 [build-system]

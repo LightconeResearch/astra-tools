@@ -38,7 +38,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
-      - name: Install astra-tools with the dev group, which brings the [reference] extra
+      - name: Install astra-tools with the dev group
         run: uv sync --frozen
 
       - name: Run tests

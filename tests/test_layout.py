@@ -14,17 +14,15 @@ def test_the_namespace_has_no_init_and_no_schema() -> None:
     assert not (SRC / "schema").exists()
 
 
-def test_the_core_dependencies() -> None:
+def test_the_dependencies_and_no_extras() -> None:
     requires = importlib.metadata.requires("astra-tools") or []
-    core = {
-        re.sub(r"[-_.]+", "-", re.match(r"[A-Za-z0-9._-]+", r)[0]).lower()
-        for r in requires
-        if "extra ==" not in r
-    }
-    assert core == {
+    assert not [r for r in requires if "extra ==" in r]
+    names = {re.sub(r"[-_.]+", "-", re.match(r"[A-Za-z0-9._-]+", r)[0]).lower() for r in requires}
+    assert names == {
         "astra-spec",
         "click",
         "jsonschema",
+        "linkml-runtime",
         "pypdf",
         "rapidfuzz",
         "rich",

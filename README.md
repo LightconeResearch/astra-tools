@@ -31,7 +31,6 @@ For ASTRA 0.0.x files, install the 0.2 line:
 uv tool install 'astra-tools<0.3'
 ```
 
-`astra spec` needs the `[reference]` extra.
 [Installation](https://astra-spec.org/0.1.0rc1/installation/)
 gives the details.
 
