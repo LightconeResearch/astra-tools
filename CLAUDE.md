@@ -65,7 +65,7 @@ The CLI reference and installation page live in astra-spec (`docs/cli.md`, `docs
 - Python >=3.11 (on 3.11, `Traversable.joinpath` takes one argument)
 - Ruff (line-length 100), mypy strict
 - Versioning: hatch-vcs (from git tags)
-- Core dependencies: astra-spec, click, jsonschema, rich, ruamel.yaml; extras `[reference]`, `[evidence]`
+- Core dependencies: astra-spec, click, jsonschema, pypdf, rapidfuzz, rich, ruamel.yaml; extra `[reference]`
 
 ## Key Conventions
 

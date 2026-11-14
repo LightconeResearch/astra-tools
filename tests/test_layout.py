@@ -21,4 +21,12 @@ def test_the_core_dependencies() -> None:
         for r in requires
         if "extra ==" not in r
     }
-    assert core == {"astra-spec", "click", "jsonschema", "rich", "ruamel-yaml"}
+    assert core == {
+        "astra-spec",
+        "click",
+        "jsonschema",
+        "pypdf",
+        "rapidfuzz",
+        "rich",
+        "ruamel-yaml",
+    }

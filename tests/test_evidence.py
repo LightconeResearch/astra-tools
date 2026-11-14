@@ -1,4 +1,4 @@
-"""Quotes against papers, with the extra [evidence]: papers kept in the cache by DOI and
+"""Quotes against papers: papers kept in the cache by DOI and
 version, and each quote sought in its paper's text, within the page a PDF fragment identifier
 gives, on what `astra.evidence`, `api.papers`, `api.quotes`, `api.seek` and `astra paper`
 promise. No test
@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import io
 import json
-import subprocess
-import sys
 import urllib.request
 from collections.abc import Mapping
 from pathlib import Path
@@ -392,13 +390,3 @@ def test_add_fetches_only_what_it_can_without_more(cited: Path) -> None:
     assert no_email.exit_code == 2 and "--email" in no_email.stderr
     versioned = astra("paper", "add", DOI, "--version", "2", "--email", "me@example.org")
     assert versioned.exit_code == 2 and "only arXiv's papers" in versioned.stderr
-
-
-def test_paper_needs_the_extra(cited: Path) -> None:
-    code = (
-        "import sys\nsys.modules['pypdf'] = None\nfrom astra.cli import main\n"
-        f"main(['paper', 'list', {str(cited)!r}], prog_name='astra')\n"
-    )
-    process = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert process.returncode == 2
-    assert "pip install 'astra-tools[evidence]'" in process.stderr

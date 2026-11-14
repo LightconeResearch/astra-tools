@@ -1,6 +1,6 @@
 """What importing each module, and running the light commands, may pull in.
 
-`astra --help`, completion and `validate --json` import neither rich nor the extras' packages,
+`astra --help`, completion and `validate --json` import neither rich nor the heavy packages,
 and rich is imported only under `astra/cli/text/`. Each run is a fresh interpreter, since this
 one has imported everything already.
 """
@@ -21,7 +21,8 @@ from tests.conftest import analysis, git_init
 WATCHED = ("rich", "linkml_runtime", "pypdf", "rapidfuzz", "jsonschema", "ruamel.yaml")
 """The dependencies whose import costs enough to watch."""
 
-EXTRAS_AND_RICH = {"rich", "linkml_runtime", "pypdf", "rapidfuzz"}
+HEAVY = {"rich", "linkml_runtime", "pypdf", "rapidfuzz"}
+"""Imported only by the commands that need them."""
 
 ALLOWED = {
     "astra.api": ("ruamel.yaml",),
@@ -134,19 +135,19 @@ def run(*args: str) -> str:
     )
 
 
-def test_help_imports_neither_rich_nor_an_extra() -> None:
-    assert imported(run("--help")) & EXTRAS_AND_RICH == set()
+def test_help_imports_no_heavy_package() -> None:
+    assert imported(run("--help")) & HEAVY == set()
 
 
-def test_completion_imports_neither_rich_nor_an_extra() -> None:
-    assert imported(run("completion", "bash")) & EXTRAS_AND_RICH == set()
+def test_completion_imports_no_heavy_package() -> None:
+    assert imported(run("completion", "bash")) & HEAVY == set()
     env = {**os.environ, "_ASTRA_COMPLETE": "bash_complete", "COMP_WORDS": "astra va"}
-    assert imported(run(), {**env, "COMP_CWORD": "1"}) & EXTRAS_AND_RICH == set()
+    assert imported(run(), {**env, "COMP_CWORD": "1"}) & HEAVY == set()
 
 
-def test_validate_json_imports_neither_rich_nor_an_extra(tmp_path: Path) -> None:
+def test_validate_json_imports_no_heavy_package(tmp_path: Path) -> None:
     folder = analysis(git_init(tmp_path))
-    assert imported(run("validate", str(folder), "--json")) & EXTRAS_AND_RICH == set()
+    assert imported(run("validate", str(folder), "--json")) & HEAVY == set()
 
 
 def importing(packages: set[str]) -> list[str]:
@@ -171,6 +172,6 @@ def test_rich_is_imported_only_under_cli_text() -> None:
     assert found and all(path.startswith("cli/text/") for path in found)
 
 
-def test_the_evidence_extra_is_imported_only_under_evidence() -> None:
+def test_pypdf_and_rapidfuzz_are_imported_only_under_evidence() -> None:
     found = importing({"pypdf", "rapidfuzz"})
     assert found and all(path.startswith("evidence/") for path in found)

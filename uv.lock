@@ -99,22 +99,20 @@ dependencies = [
     { name = "astra-spec" },
     { name = "click" },
     { name = "jsonschema" },
+    { name = "pypdf" },
+    { name = "rapidfuzz" },
     { name = "rich" },
     { name = "ruamel-yaml" },
 ]
 
 [package.optional-dependencies]
-evidence = [
-    { name = "pypdf" },
-    { name = "rapidfuzz" },
-]
 reference = [
     { name = "linkml-runtime" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "astra-tools", extra = ["evidence", "reference"] },
+    { name = "astra-tools", extra = ["reference"] },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -128,16 +126,16 @@ requires-dist = [
     { name = "click", specifier = ">=8.2.1" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "linkml-runtime", marker = "extra == 'reference'", specifier = ">=1.12" },
-    { name = "pypdf", marker = "extra == 'evidence'", specifier = ">=5" },
-    { name = "rapidfuzz", marker = "extra == 'evidence'", specifier = ">=3" },
+    { name = "pypdf", specifier = ">=5" },
+    { name = "rapidfuzz", specifier = ">=3" },
     { name = "rich", specifier = ">=13.8" },
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
 ]
-provides-extras = ["evidence", "reference"]
+provides-extras = ["reference"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "astra-tools", extras = ["reference", "evidence"] },
+    { name = "astra-tools", extras = ["reference"] },
     { name = "mypy", specifier = ">=1.15" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-cov", specifier = ">=6" },
