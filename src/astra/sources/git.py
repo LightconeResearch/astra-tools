@@ -1,6 +1,5 @@
 """Git, through its own commands: which repository holds a folder, what its index tracks, its
-commits and their objects, the remote stores' fetches, and, for a runner, what a checkout has
-changed and checkouts of its own."""
+commits and their objects, and the remote stores' fetches."""
 
 from __future__ import annotations
 
@@ -153,38 +152,6 @@ class Repository:
             "--filter=blob:none", "origin", f"{commit}:refs/astra/{commit}",
         )  # fmt: skip
         return self.has_commit(commit)  # also where another process kept it first
-
-    def changes(self) -> tuple[str, ...]:
-        """Each path, from the top of the working tree, that `git status --porcelain=v2
-        --untracked-files=all` reports: changed in the index or the working tree since HEAD, or
-        untracked, renames as two paths; and, in each checked-out submodule that has changes of
-        its own, each of those, after the submodule's path. A submodule is a change itself only
-        where git reports more than its content changed: its commit, say."""
-        # What git reports as a change, in the checkout and its submodules.
-        result = _git(
-            "-C", str(self.top), "status", "--porcelain=v2", "--untracked-files=all",
-            "--no-renames", "--ignore-submodules=none", "-z",
-        )  # fmt: skip
-        if result.returncode != 0:
-            error = os.fsdecode(result.stderr).strip()
-            raise GitError(f"git can't read the status of {self.top}: {error}")
-        found: list[str] = []
-        for record in result.stdout.split(b"\0"):
-            if record.startswith(b"? "):  # "? <path>"
-                found.append(os.fsdecode(record[2:]))
-            elif record.startswith((b"1 ", b"u ")):  # "1 <XY> <sub> <6 fields> <path>", "u ..."
-                fields = record.split(b" ", 8 if record.startswith(b"1") else 10)
-                xy, sub, path = fields[1], fields[2], os.fsdecode(fields[-1])
-                if not sub.startswith(b"S"):  # "N...", not a submodule
-                    found.append(path)
-                    continue
-                if sub[2:4] != b"..":  # "S<C><M><U>": tracked or untracked changes inside
-                    found.extend(
-                        f"{path}/{inner}" for inner in Repository(self.top / path).changes()
-                    )
-                if sub[1:2] == b"C" or xy != b".M":
-                    found.append(path)
-        return tuple(sorted(found))
 
 
 class Objects:
