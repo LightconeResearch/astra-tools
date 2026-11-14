@@ -12,7 +12,7 @@ astra-tools is the **Python CLI and library** for ASTRA 0.1 analyses: validator,
 
 astra-tools is intentionally agnostic to any agentic layer or UI. It answers to the specification: argue from it, its conformance suite and its examples, never from one analysis that uses ASTRA.
 
-Both `astra-spec` and this package share the `astra` Python namespace via implicit namespace packages (PEP 420). There is **no** `src/astra/__init__.py`, and never create `src/astra/schema/`.
+Both `astra-spec` and this package share the `astra` Python namespace via implicit namespace packages (PEP 420). There is **no** `src/astra/__init__.py`, and never create anything astra-spec ships there (`schema/`, `datamodel/`, `docs/`, `_version.py`): `astra.datamodel` must work the same with or without astra-tools. `tests/test_layout.py` checks it.
 
 ## Repository Structure
 
