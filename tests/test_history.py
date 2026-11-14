@@ -299,3 +299,106 @@ def test_a_result_of_an_analysis_from_a_commit_has_its_one_version(tmp_path: Pat
 
 
 # --- astra history ---
+
+
+def test_astra_history_timeline(recorded: Recorded) -> None:
+    result = astra("history", "timeline", "output1#u2", str(recorded.top))
+    assert result.exit_code == 0, result.output
+    lines = result.stdout.splitlines()
+    assert lines[0] == "output1#u2  .astra/records/u2/output1.json"
+    commits = [line.strip() for line in lines if line.startswith("  ") and line[2] != " "]
+    assert commits == [recorded.third, recorded.second, recorded.first]
+    third = digest_bytes(b"output1#u2 3\n").content_hash
+    assert f"    bytes        {third}, 13 byte(s)" in lines
+    assert f"    made at      {recorded.second}" in lines
+    assert f"    environment  {OTHER}" in lines
+    assert lines[-1] == "3 version(s)"
+
+
+def test_astra_history_timeline_exits_1_with_no_version_and_2_for_no_result(
+    tmp_path: Path, recorded: Recorded
+) -> None:
+    top = repository(tmp_path, {"astra.yaml": WORKED_EXAMPLE, "data/input1.csv": "1\n"})
+    result = astra("history", "timeline", "output2", str(top))
+    assert result.exit_code == 1
+    assert "no record of `output2` is in HEAD's history" in result.stderr
+    result = astra("history", "timeline", "output1", str(recorded.top))
+    assert result.exit_code == 2
+    assert "ADDR" in result.stderr
+
+
+def test_astra_history_lineage(recorded: Recorded) -> None:
+    result = astra("history", "lineage", "output2", str(recorded.top))
+    assert result.exit_code == 0, result.output
+    lines = result.stdout.splitlines()
+    assert lines[:2] == ["output2  .astra/records/output2.json", f"  {recorded.second}"]
+    at = lines.index("made from")
+    u1, input1 = (digest_bytes(data).content_hash for data in (b"output1#u1 2\n", b"2\n"))
+    assert lines[at + 1 : at + 5] == [
+        f"  output1#u1: {u1}, 13 byte(s)",
+        f"    output1#u1's record of {recorded.second}, made at {recorded.first}",
+        f"    input1: {input1}, 2 byte(s)",
+        "      the file data/input1.csv",
+    ]
+
+
+def test_astra_history_lineage_used_by(recorded: Recorded) -> None:
+    result = astra("history", "lineage", "output1#u2", str(recorded.top), "--used-by")
+    assert result.exit_code == 0, result.output
+    lines = result.stdout.splitlines()
+    at = lines.index("used by")
+    assert lines[at + 1].startswith(
+        f"  output2, its record of {recorded.second}, through `output1#u2`: "
+    )
+    read = f"    output1#u2's record of {recorded.second}, made at {recorded.first}"
+    assert lines[at + 2] == read
+
+
+def test_astra_history_lineage_of_a_record_that_isnt_valid_exits_1(copied: Path) -> None:
+    (copied / ".astra" / "records" / "output2.json").write_text("{")
+    commit(copied)
+    result = astra("history", "lineage", "output2", str(copied))
+    assert result.exit_code == 1
+    assert "error INVALID_SYNTAX" in result.stdout
+
+
+def test_astra_history_find(recorded: Recorded) -> None:
+    old = digest_bytes(b"output1#u1\n").content_hash
+    result = astra("history", "find", str(recorded.top), "--hash", old)
+    assert result.exit_code == 0, result.output
+    lines = result.stdout.splitlines()
+    assert lines[:2] == ["output1#u1  .astra/records/u1/output1.json", f"  {recorded.first}"]
+    assert lines[-1] == "1 version(s)"
+    result = astra("history", "find", str(recorded.top), "--environment", ENVIRONMENT)
+    assert (result.exit_code, result.stdout.splitlines()[-1]) == (0, "6 version(s)")
+    result = astra("history", "find", str(recorded.top), "--environment", "urn:example:none")
+    assert result.exit_code == 1
+    assert "no version of a planned result's record has urn:example:none" in result.stderr
+    assert astra("history", "find", str(recorded.top)).exit_code == 2
+    both = ("--hash", old, "--environment", ENVIRONMENT)
+    assert astra("history", "find", str(recorded.top), *both).exit_code == 2
+
+
+def test_astra_history_get(recorded: Recorded) -> None:
+    result = astra("history", "get", f"output1#u1@{recorded.first}", str(recorded.top))
+    assert result.exit_code == 0, result.stderr
+    assert result.stdout_bytes == b"output1#u1\n"
+    result = astra("history", "get", f"output1#u1@{recorded.built_from}", str(recorded.top))
+    assert (result.exit_code, result.stdout_bytes) == (1, b"")
+    assert f"astra: {recorded.built_from} holds no record at" in result.stderr
+    for asked in ("output1#u1@nowhere", "output1#u1", "nothing@HEAD", "@HEAD"):
+        result = astra("history", "get", asked, str(recorded.top))
+        assert result.exit_code == 2, asked
+        assert "ADDR@REV" in result.stderr
+
+
+def test_astra_history_of_an_invalid_analysis_shows_why_and_exits_1(tmp_path: Path) -> None:
+    top = repository(tmp_path, {"astra.yaml": MINIMAL.replace("type: metric", "type: plot")})
+    result = astra("history", "timeline", "result", str(top))
+    assert result.exit_code == 1
+    assert "astra.yaml: invalid, 1 error(s), 0 warning(s)" in result.stdout
+
+
+def test_astra_history_exits_2_where_there_is_no_analysis(tmp_path: Path) -> None:
+    result = astra("history", "timeline", "output2", str(tmp_path / "nothere"))
+    assert result.exit_code == 2

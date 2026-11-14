@@ -10,6 +10,7 @@ read pinned to its own `v1`.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,8 @@ from astra import api
 from astra.cli import main
 from astra.stack import Identity
 from astra.view import UniverseView
-from tests.conftest import repository
+from tests.conftest import MINIMAL, git, git_init, repository
+from tests.test_plan import FROM_COMMIT, LIB
 
 ROOT = """\
 spec_version: "0.1.0"
@@ -209,3 +211,71 @@ def test_the_view_as_astra_universe_view_1(top: Path) -> None:
         },
     }
     assert (other["built"], other["decisions"]["e"]) == (True, {"used": False, "selected": None})
+
+
+def test_astra_view_shows_the_stack_in_one_universe(top: Path) -> None:
+    result = astra("view", "u1", str(top))
+    assert result.exit_code == 0
+    assert result.stdout.splitlines() == [
+        "universe u1",
+        "astra.yaml  built",
+        "  decision1    a",
+        "  output1      output1#u1  results/u1/output1.json",
+        "  output2      output2  results/output2.csv",
+        "subanalysis/astra.yaml  built",
+        "  decision1    a",
+        "  output1      subanalysis.output1#u1  results/u1/subanalysis.output1.json",
+        "  unread       no planned result",
+        "other/astra.yaml  built",
+        "  d            unused",
+        "  e            unused",
+        "  out          no planned result",
+        "  out2         no planned result",
+    ]
+    shape = json.loads(astra("view", "u1", str(top), "--json").stdout)
+    assert shape == api.view("u1", top).to_json()
+
+
+def test_astra_view_names_the_commit_of_an_analysis_from_a_commit(tmp_path: Path) -> None:
+    """The root's universes drive `lib`, read at a commit, so it is built in `u1`, where its
+    `out` is the root's; its `once`, built once, is `lib`'s, at that commit."""
+    top = repository(tmp_path, {"astra.yaml": MINIMAL, "lib/astra.yaml": LIB})
+    commit = git(top, "rev-parse", "HEAD").strip()
+    repository(top, {"astra.yaml": FROM_COMMIT % commit})
+    result = astra("view", "u1", str(top))
+    assert result.exit_code == 0
+    assert result.stdout.splitlines() == [
+        "universe u1",
+        "astra.yaml  built",
+        "  result       result#u1  results/u1/result.csv",
+        f"lib/astra.yaml at {commit}  built",
+        "  d            a",
+        "  out          lib.out#u1  results/u1/lib.out.json",
+        f"  once         once  lib/results/once.json at {commit}",
+    ]
+
+
+@pytest.mark.parametrize("universe", ["u9", "v1"])
+def test_astra_view_of_a_universe_the_root_hasnt_is_a_usage_error(top: Path, universe: str) -> None:
+    """`v1` is `other`'s universe, not the root's."""
+    result = astra("view", universe, str(top))
+    assert result.exit_code == 2
+    assert f"no universe `{universe}`: its universes are u1, u2" in result.stderr
+
+
+def test_an_invalid_analysis_has_no_view(tmp_path: Path) -> None:
+    """`astra view` prints the validation report, as `astra validate` does, and exits 1."""
+    files = {"astra.yaml": ROOT.replace("decision1: b, ", ""), "data/input1.csv": "1\n"}
+    files |= {"subanalysis/astra.yaml": SUBANALYSIS, "other/astra.yaml": OTHER}
+    folder = repository(tmp_path, files)
+    with pytest.raises(api.InvalidAnalysisError):
+        api.view("u1", folder)
+    result = astra("view", "u1", str(folder))
+    assert result.exit_code == 1
+    assert "MISSING_DECISION" in result.stdout
+    result = astra("view", "u1", str(folder), "--json")
+    assert (result.exit_code, json.loads(result.stdout)["valid"]) == (1, False)
+
+
+def test_astra_view_exits_2_where_there_is_no_analysis(tmp_path: Path) -> None:
+    assert astra("view", "u1", str(git_init(tmp_path))).exit_code == 2

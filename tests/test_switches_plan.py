@@ -418,6 +418,18 @@ def test_the_view_as_astra_universe_view_1_says_what_is_used_built_and_taken(
     assert one["outputs"]["switch1"] == {"built": True, "takes": "stage.output3", "result": None}
 
 
+def test_astra_view_shows_what_each_switch_takes(running: Path) -> None:
+    two = astra("view", "u2", str(running))
+    assert two.exit_code == 0
+    lines = two.stdout.splitlines()
+    assert "  decision3    a  (unused)" in lines
+    assert "  switch1      takes nothing" in lines
+    assert "  output6      not built" in lines
+    one = astra("view", "u1", str(running))
+    assert one.exit_code == 0
+    assert "  switch1      takes stage.output3" in one.stdout.splitlines()
+
+
 # --- E. the check ---
 
 CHECKED = """\
