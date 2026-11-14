@@ -1,6 +1,6 @@
 """What importing each module, and running the light commands, may pull in.
 
-`astra --help`, completion and `validate --json` import neither rich nor the heavy packages,
+`astra --help` and `validate --json` import neither rich nor the heavy packages,
 and rich is imported only under `astra/cli/text/`. Each run is a fresh interpreter, since this
 one has imported everything already.
 """
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ast
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -29,46 +28,35 @@ ALLOWED = {
     "astra.cache": (),
     "astra.check": ("ruamel.yaml",),
     "astra.cli": (),
-    "astra.cli.cache": (),
     "astra.cli.check": (),
-    "astra.cli.completion": (),
     "astra.cli.guide": (),
-    "astra.cli.history": (),
     "astra.cli.info": (),
     "astra.cli.init": (),
     "astra.cli.paper": (),
     "astra.cli.plan": (),
-    "astra.cli.rules": (),
     "astra.cli.schema": (),
     "astra.cli.spec": (),
     "astra.cli.text": ("rich",),
     "astra.cli.text.check": ("rich", "ruamel.yaml"),
-    "astra.cli.text.history": ("rich", "ruamel.yaml"),
     "astra.cli.text.info": ("rich", "ruamel.yaml"),
-    "astra.cli.text.paper": ("rich",),
     "astra.cli.text.plan": ("rich", "ruamel.yaml"),
-    "astra.cli.text.rules": ("rich",),
-    "astra.cli.text.spec": ("rich",),
     "astra.cli.text.universe": ("rich", "ruamel.yaml"),
     "astra.cli.text.validate": ("rich", "ruamel.yaml"),
-    "astra.cli.text.view": ("rich", "ruamel.yaml"),
     "astra.cli.universe": (),
     "astra.cli.validate": (),
-    "astra.cli.view": (),
     "astra.contract": (),
     "astra.diagnostics": (),
     "astra.environments": (),
-    "astra.evidence": (),
-    "astra.evidence.papers": ("pypdf",),
-    "astra.evidence.quotes": ("pypdf", "rapidfuzz"),
     "astra.grammar": (),
     "astra.hashing": (),
     "astra.history": ("ruamel.yaml",),
     "astra.load": ("ruamel.yaml",),
     "astra.model": (),
+    "astra.papers": (),
+    "astra.papers.cache": (),
+    "astra.papers.download": (),
     "astra.plan": ("ruamel.yaml",),
     "astra.records": ("ruamel.yaml",),
-    "astra.reference": (),
     "astra.rules": ("ruamel.yaml",),
     "astra.rules.commits": ("ruamel.yaml",),
     "astra.rules.context": ("ruamel.yaml",),
@@ -82,15 +70,21 @@ ALLOWED = {
     "astra.rules.pins": ("ruamel.yaml",),
     "astra.rules.recipes": ("ruamel.yaml",),
     "astra.rules.universes": ("ruamel.yaml",),
+    "astra.scaffold": (),
     "astra.sources": (),
     "astra.sources.git": (),
     "astra.sources.paths": (),
     "astra.sources.reader": (),
     "astra.sources.remote": (),
     "astra.sources.standins": (),
+    "astra.spec_render": (),
     "astra.stack": ("ruamel.yaml",),
     "astra.universes": ("ruamel.yaml",),
     "astra.validate": ("ruamel.yaml",),
+    "astra.verification": ("rapidfuzz",),
+    "astra.verification.cache": ("rapidfuzz",),
+    "astra.verification.core": ("rapidfuzz",),
+    "astra.verification.pdf": ("rapidfuzz",),
     "astra.view": ("ruamel.yaml",),
 }
 """Each module, with what importing it may pull in of `WATCHED`. A new module is added here."""
@@ -139,12 +133,6 @@ def test_help_imports_no_heavy_package() -> None:
     assert imported(run("--help")) & HEAVY == set()
 
 
-def test_completion_imports_no_heavy_package() -> None:
-    assert imported(run("completion", "bash")) & HEAVY == set()
-    env = {**os.environ, "_ASTRA_COMPLETE": "bash_complete", "COMP_WORDS": "astra va"}
-    assert imported(run(), {**env, "COMP_CWORD": "1"}) & HEAVY == set()
-
-
 def test_validate_json_imports_no_heavy_package(tmp_path: Path) -> None:
     folder = analysis(git_init(tmp_path))
     assert imported(run("validate", str(folder), "--json")) & HEAVY == set()
@@ -172,6 +160,6 @@ def test_rich_is_imported_only_under_cli_text() -> None:
     assert found and all(path.startswith("cli/text/") for path in found)
 
 
-def test_pypdf_and_rapidfuzz_are_imported_only_under_evidence() -> None:
+def test_pypdf_and_rapidfuzz_are_imported_only_under_verification() -> None:
     found = importing({"pypdf", "rapidfuzz"})
-    assert found and all(path.startswith("evidence/") for path in found)
+    assert found and all(path.startswith("verification/") for path in found)

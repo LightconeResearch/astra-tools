@@ -1,29 +1,34 @@
-"""`astra spec [TERM]`: the field reference, through LinkML."""
+"""`astra spec [TERM] [--full]`: the schema as reference text, through LinkML."""
 
 from __future__ import annotations
 
 import click
 
+from astra.cli import FAILED
+
 
 @click.command("spec")
 @click.argument("term", required=False)
-def command(term: str | None) -> None:
-    """Describe the fields of ASTRA files.
+@click.option("--full", is_flag=True, help="Dump the entire reference (VERY long).")
+def command(term: str | None, full: bool) -> None:
+    """Render the ASTRA schema as agent-friendly reference text.
 
-    Without TERM, every class, enum and type, each with its first sentence. With TERM,
-    whatever its case, a class, enum or type in full, a field of every class that has it, or
-    Class.field.
+    No args prints a concept summary; TERM prints one entry (case-insensitive);
+    --full concatenates every entry (VERY long).
     """
-    from astra.cli.text.spec import show_summary, show_terms
-    from astra.reference import load_reference, lookup
+    from astra import spec_render
 
-    terms = load_reference()
-    if term is None:
-        show_summary(terms)
+    if full and term:
+        raise click.UsageError("--full dumps every entry; drop TERM or drop --full.")
+    if full:
+        click.echo(spec_render.render_full(), nl=False)
         return
-    found = lookup(terms, term)
-    if not found:
-        raise click.BadParameter(
-            f"no class, enum, type or field is named {term}", param_hint="TERM"
-        )
-    show_terms(found)
+    if term:
+        rendered = spec_render.render_term(term)
+        if not rendered:
+            click.echo(f"Unknown term: {term}")
+            click.echo("Valid terms: " + ", ".join(spec_render.list_terms()))
+            raise click.exceptions.Exit(FAILED)
+        click.echo(rendered, nl=False)
+        return
+    click.echo(spec_render.render_summary())

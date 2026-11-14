@@ -19,11 +19,12 @@ Both `astra-spec` and this package share the `astra` Python namespace via implic
 ```
 src/astra/          # NO __init__.py (namespace package), in layers:
   0 foundations     diagnostics, grammar, model
-  1 reading         sources/ (every byte read), cache, load, contract
+  1 reading         sources/ (every byte read), cache, load, contract, scaffold
   2 binding         stack
   3 meaning         universes, rules/, validate, plan, view
   4 results         hashing, records, environments, check, history
-  5 surfaces        api (the stable functions), cli/, reference, evidence/
+  5 surfaces        api (the stable functions), cli/, spec_render,
+                    papers/ and verification/ (the paper cache and quotes, as 0.2 had them)
 ```
 
 ## Key Design Principles
@@ -65,7 +66,7 @@ The CLI reference and installation page live in astra-spec (`docs/cli.md`, `docs
 - Python >=3.11 (on 3.11, `Traversable.joinpath` takes one argument)
 - Ruff (line-length 100), mypy strict
 - Versioning: hatch-vcs (from git tags)
-- Dependencies: astra-spec, click, jsonschema, linkml-runtime, pypdf, rapidfuzz, rich, ruamel.yaml; no extras
+- Dependencies: astra-spec, click, httpx, jsonschema, linkml-runtime, pypdf, rapidfuzz, rich, ruamel.yaml; no extras
 
 ## Key Conventions
 

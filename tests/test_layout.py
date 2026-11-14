@@ -21,6 +21,7 @@ def test_the_dependencies_and_no_extras() -> None:
     assert names == {
         "astra-spec",
         "click",
+        "httpx",
         "jsonschema",
         "linkml-runtime",
         "pypdf",

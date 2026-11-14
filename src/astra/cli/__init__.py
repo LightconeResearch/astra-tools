@@ -1,11 +1,10 @@
 """The `astra` command line. Each command is a module of its own, imported when
-it is run, which imports only click until then: `astra --help` and completion load no library.
+it is run, which imports only click until then: `astra --help` loads no library.
 
 Exit codes: 0; 1 when `validate` finds an error, `check` a planned result that isn't
-`unchanged`, `plan`, `view`, `check`, `history` and `paper` an analysis that breaks a `MUST`,
-`history` nothing in git of what it is asked for, `paper seek` a quote not found in its paper,
-or `info` and `universe` no stack to show; 2 for a usage error, a broken environment or an
-internal error. `paper verify`'s warnings never change an exit code.
+`unchanged`, `plan` and `check` an analysis that breaks a `MUST`, a `paper` command a paper or
+a quote that isn't there, or `info` and `universe` no analysis or no stack to show; 2 for a
+usage error, a broken environment or an internal error.
 """
 
 from __future__ import annotations
@@ -28,21 +27,16 @@ if TYPE_CHECKING:
 
 COMMANDS = MappingProxyType(
     {
-        "cache": "astra.cli.cache",
         "check": "astra.cli.check",
-        "completion": "astra.cli.completion",
         "guide": "astra.cli.guide",
-        "history": "astra.cli.history",
         "info": "astra.cli.info",
         "init": "astra.cli.init",
         "paper": "astra.cli.paper",
         "plan": "astra.cli.plan",
-        "rules": "astra.cli.rules",
         "schema": "astra.cli.schema",
         "spec": "astra.cli.spec",
         "universe": "astra.cli.universe",
         "validate": "astra.cli.validate",
-        "view": "astra.cli.view",
     }
 )
 """Each command, by name, with the module whose `command` it is."""
@@ -95,6 +89,16 @@ def environment() -> Iterator[None]:
         fail(str(error))
     except OSError as error:
         fail(f"can't read {error.filename}: {error.strerror}")
+
+
+def find_analysis(start: Path | None = None) -> Path | None:
+    """The `astra.yaml` in `start`, the current folder by default, or the nearest folder above
+    it that has one; None where none has."""
+    folder = (Path.cwd() if start is None else start).resolve()
+    for candidate in (folder, *folder.parents):
+        if (candidate / "astra.yaml").is_file():
+            return candidate / "astra.yaml"
+    return None
 
 
 def read_stack(path: Path | None) -> Stack:

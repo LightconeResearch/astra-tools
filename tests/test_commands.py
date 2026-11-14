@@ -1,14 +1,15 @@
-"""The commands `info`, `universe`, `init` and `cache`, and the `astra.api` functions
+"""The commands `info`, `universe` and `init`, and the `astra.api` functions
 they call, on what they promise: output, exit codes and what they leave on disk."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner, Result
 
-from astra import api, cache
+from astra import api
 from astra.cli import main
 from tests.conftest import MINIMAL, analysis, git, git_init, repository
 
@@ -80,50 +81,83 @@ outputs:
 """
 
 
-def test_info_shows_each_analysis_of_the_stack_in_brief(tmp_path: Path) -> None:
-    """The root first, then each analysis it declares, by path and at a commit, each
-    with its declarations, inputs, outputs, decisions and universes; a switch with the decision
-    it switches on and its cases (Elements *switch*). It checks nothing, so a declaration that
-    reaches nothing is shown, not reported."""
+def test_info_shows_the_analysis_in_brief(tmp_path: Path) -> None:
+    """The root's label and counts, then its inputs, outputs, decisions (those of the analyses
+    it declares after its own) and universes; a switch with the decision it switches on and its
+    cases (Elements *switch*). It checks nothing, so a declaration that reaches nothing is
+    counted, not reported."""
     files = {"astra.yaml": MINIMAL, "subanalysis/astra.yaml": SUBANALYSIS, "data/input1.csv": "1\n"}
     top = repository(tmp_path, files)
-    first = git(top, "rev-parse", "HEAD").strip()
-    declared = f"  previous: {{path: ., commit: '{first}'}}\ninputs:\n"
     switch = "  switch1:\n    switch: decision1\n    cases: {a: output1, b: input1}\nuniverses:\n"
-    text = ROOT.replace("inputs:\n", declared, 1).replace("universes:\n", switch, 1)
-    repository(top, {"astra.yaml": text})
-    result = astra("info", str(top))
+    repository(top, {"astra.yaml": ROOT.replace("universes:\n", switch, 1)})
+    result = astra("info", "-f", str(top / "astra.yaml"))
     assert result.exit_code == 0
     lines = result.stdout.splitlines()
-    assert lines[:11] == [
-        "astra.yaml  Example analysis",
-        "  analyses  subanalysis: subanalysis/astra.yaml",
-        "            missing: nothing (missing)",
-        f"            previous: astra.yaml at {first}",
-        "  inputs    input1: data/input1.csv",
-        "  outputs   output1: metric, json",
-        "            switch1: switch on decision1 (a: output1, b: input1)",
-        "  decisions decision1: a, b",
-        "  universes u1",
-        "            u2: derived from u1",
-        "subanalysis/astra.yaml",
-    ]
-    assert f"astra.yaml at {first}" in lines[11:]
-    assert "  outputs   result: metric, json" in lines
+    assert lines[:2] == ["Example analysis", "Spec version: 0.1.0"]
+    assert "Inputs: 1 | Outputs: 2 | Decisions: 1 | Universes: 2" in lines
+    assert "Layout: 2 sub-analyses in ./nothere/, ./subanalysis/" in lines
+    shown = " ".join(result.stdout.split())
+    for part in ("Inputs:", "Outputs:", "Decisions:", "Universes:"):
+        assert f"\n{part}\n" in result.stdout
+    assert "input1 │ data/input1.csv" in shown
+    assert "switch1 │ switch │ on decision1 (a: output1, b: input1)" in shown
+    assert "decision1:" in shown and "Analysis: subanalysis" in shown
+    assert "u2: derived from u1" in shown
 
 
 def test_info_with_no_stack_to_show_exits_1(tmp_path: Path, outside: Path) -> None:
     """A root whose file isn't a valid document, or in no repository, has no stack."""
     for folder in (analysis(git_init(tmp_path / "repo"), MINIMAL + "name: x\n"), analysis(outside)):
-        result = astra("info", str(folder))
+        result = astra("info", "--file", str(folder / "astra.yaml"))
         assert result.exit_code == 1
         assert "astra validate" in result.stderr
 
 
-def test_info_exits_2_where_there_is_no_analysis(tmp_path: Path) -> None:
-    result = astra("info", str(git_init(tmp_path)))
-    assert result.exit_code == 2
-    assert "has no astra.yaml" in result.stderr
+def test_info_exits_1_where_there_is_no_analysis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(git_init(tmp_path))
+    result = astra("info")
+    assert result.exit_code == 1
+    assert result.stderr.startswith("Error: No astra.yaml found in current directory or parents.")
+
+
+def test_info_reads_the_astra_yaml_here_or_above(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    top = repository(tmp_path, {"astra.yaml": MINIMAL})
+    (top / "src").mkdir()
+    monkeypatch.chdir(top / "src")
+    result = astra("info")
+    assert result.exit_code == 0
+    assert "Inputs: 0 | Outputs: 1 | Decisions: 0 | Universes: 0" in result.stdout
+
+
+def test_info_shows_only_the_parts_asked_for(tmp_path: Path) -> None:
+    files = {"astra.yaml": MINIMAL, "subanalysis/astra.yaml": SUBANALYSIS, "data/input1.csv": "1\n"}
+    top = repository(tmp_path, files)
+    repository(top, {"astra.yaml": ROOT})
+    shown = astra("info", "-f", str(top / "astra.yaml"), "-d", "-i").stdout
+    parts = [part for part in ("Inputs:", "Outputs:", "Decisions:", "Universes:")]
+    assert [part for part in parts if f"\n{part}\n" in shown] == ["Inputs:", "Decisions:"]
+
+
+def test_info_json_is_every_analysis_of_the_stack(tmp_path: Path) -> None:
+    files = {"astra.yaml": MINIMAL, "subanalysis/astra.yaml": SUBANALYSIS, "data/input1.csv": "1\n"}
+    top = repository(tmp_path, files)
+    repository(top, {"astra.yaml": ROOT})
+    result = astra("info", "-f", str(top / "astra.yaml"), "--json")
+    assert result.exit_code == 0
+    document = json.loads(result.stdout)
+    assert document["shape"] == "astra-info/1"
+    root, sub = document["analyses"][:2]
+    assert (root["file"], root["label"]) == ("astra.yaml", "Example analysis")
+    assert root["analyses"] == {"subanalysis": "subanalysis/astra.yaml", "missing": None}
+    assert root["inputs"] == {"input1": {"path": "data/input1.csv", "description": None}}
+    assert root["outputs"]["output1"]["type"] == "metric"
+    assert list(root["decisions"]["decision1"]["options"]) == ["a", "b"]
+    assert root["universes"]["u2"]["derived_from"] == "u1"
+    assert sub["file"] == "subanalysis/astra.yaml"
 
 
 # --- universe ---
@@ -239,50 +273,66 @@ def test_init_makes_an_analysis_in_a_new_repository_that_validates(tmp_path: Pat
     folder = tmp_path / "new" / "analysis"
     result = astra("init", str(folder))
     assert result.exit_code == 0
-    assert (folder / ".git").is_dir()
-    assert "in a new git repository" in result.stdout
+    assert result.stdout.splitlines() == [
+        "✓ created astra.yaml",
+        "✓ created .gitignore",
+        "✓ created .git",
+        f"✓ Converged ASTRA analysis scaffold: {folder}",
+    ]
+    assert (folder / ".git").is_dir() and (folder / ".gitignore").is_file()
     assert api.validate(folder).diagnostics == ()
     assert astra("validate", str(folder)).exit_code == 0
 
 
-def test_init_inside_a_working_tree_makes_no_repository(tmp_path: Path) -> None:
-    """The analysis is in the repository that holds its folder."""
+def test_init_converges_and_never_overwrites(tmp_path: Path) -> None:
+    """Run again, it changes nothing; on a folder with an astra.yaml of its own, it keeps it."""
+    folder = tmp_path / "analysis"
+    assert astra("init", str(folder)).exit_code == 0
+    assert git(folder, "log", "--format=%s").strip() == "Initial ASTRA analysis structure"
+    again = astra("init", str(folder))
+    assert (again.exit_code, again.stdout) == (0, f"✓ {folder} already converged\n")
+    (folder / "astra.yaml").write_text("mine\n")
+    assert astra("init", str(folder)).exit_code == 0
+    assert (folder / "astra.yaml").read_text() == "mine\n"
+    assert astra("init", str(folder), "--no-git").exit_code == 2  # an analysis is in a repository
+
+
+def test_init_check_writes_nothing_and_json_reports(tmp_path: Path) -> None:
+    folder = tmp_path / "analysis"
+    result = astra("init", str(folder), "--check", "--json")
+    assert result.exit_code == 1
+    assert json.loads(result.stdout) == {
+        "converged": False,
+        "created": ["astra.yaml", ".gitignore", ".git"],
+        "repaired": [],
+        "unchanged": [],
+        "warnings": [],
+    }
+    assert not folder.exists()
+    assert astra("init", str(folder)).exit_code == 0
+    done = astra("init", str(folder), "--check")
+    assert (done.exit_code, done.stdout) == (0, f"✓ {folder} is converged — nothing to do\n")
+
+
+def test_create_boilerplate_writes_an_empty_analysis_and_nothing_else(tmp_path: Path) -> None:
+    """What `astra init` and downstream tools scaffold through: an astra.yaml, valid once its
+    folder is in a repository, with no universes folder."""
+    from astra.scaffold import create_boilerplate
+
     top = git_init(tmp_path)
-    assert api.init(top / "stage") == (top / "stage" / "astra.yaml", False)
-    assert not (top / "stage" / ".git").exists()
+    create_boilerplate(top / "stage")
+    assert [path.name for path in (top / "stage").iterdir()] == ["astra.yaml"]
+    assert 'label: "stage"' in (top / "stage" / "astra.yaml").read_text()
     assert api.validate(top / "stage").diagnostics == ()
 
 
-def test_init_exits_2_where_there_is_an_analysis_or_a_file(tmp_path: Path) -> None:
-    folder = analysis(tmp_path / "analysis")
-    result = astra("init", str(folder))
-    assert result.exit_code == 2
-    assert "has an astra.yaml already" in result.stderr
-    assert (folder / "astra.yaml").read_text() == MINIMAL
+def test_init_inside_a_working_tree_makes_no_repository_through_the_cli(tmp_path: Path) -> None:
+    top = git_init(tmp_path)
+    result = astra("init", str(top / "stage"))
+    assert result.exit_code == 0 and "✓ created .git" not in result.stdout.splitlines()
+    assert not (top / "stage" / ".git").exists()
+
+
+def test_init_exits_2_for_a_file(tmp_path: Path) -> None:
     (tmp_path / "file").write_text("x")
     assert astra("init", str(tmp_path / "file")).exit_code == 2
-
-
-# --- cache ---
-
-
-def test_cache_path_prints_the_cache_folder(monkeypatch: pytest.MonkeyPatch) -> None:
-    result = astra("cache", "path")
-    assert (result.exit_code, result.stdout) == (0, f"{cache.root()}\n")
-    monkeypatch.setenv("ASTRA_CACHE_DIR", "relative")
-    result = astra("cache", "path")
-    assert result.exit_code == 2
-    assert "ASTRA_CACHE_DIR" in result.stderr
-
-
-def test_cache_clear_deletes_only_what_astra_keeps(tmp_path: Path) -> None:
-    """The remote stores and the validity of analyses from a commit, and nothing else in
-    the folder."""
-    cache.put("validity", "key", b"value")
-    (cache.root() / "remotes" / "store").mkdir(parents=True)
-    (cache.root() / "mine.txt").write_text("not astra's")
-    result = astra("cache", "clear")
-    assert result.exit_code == 0
-    assert sorted(path.name for path in cache.root().iterdir()) == ["mine.txt"]
-    assert cache.get("validity", "key") is None
-    assert astra("cache", "clear").exit_code == 0

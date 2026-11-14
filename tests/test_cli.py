@@ -1,4 +1,4 @@
-"""The commands `validate`, `schema`, `rules`, `guide`, `spec` and `completion`, on what they
+"""The commands `validate`, `schema`, `guide` and `spec`, on what they
 promise: output, `--json` shape and exit codes. The others are in `test_commands.py`."""
 
 from __future__ import annotations
@@ -25,7 +25,18 @@ def test_help_names_every_command() -> None:
     assert result.exit_code == 0
     for name in COMMANDS:
         assert f"  {name} " in result.stdout
-    assert {"validate", "info", "universe", "init", "cache"} <= set(COMMANDS)
+    assert set(COMMANDS) == {
+        "check",
+        "guide",
+        "info",
+        "init",
+        "paper",
+        "plan",
+        "schema",
+        "spec",
+        "universe",
+        "validate",
+    }
 
 
 # --- validate ---
@@ -57,20 +68,81 @@ def test_validate_respects_no_color(tmp_path: Path) -> None:
     assert "31m" not in plain.stdout
 
 
-def test_validate_json_is_the_report(tmp_path: Path, outside: Path) -> None:
-    result = astra("validate", str(analysis(outside)), "--json")
+def test_validate_json_is_the_report_of_the_file_given(tmp_path: Path, outside: Path) -> None:
+    """`astra-validation-report/1`, with no ANSI escape, colour forced or not; the exit code
+    still carries pass or fail."""
+    result = astra("validate", str(analysis(outside)), "--json", env={"FORCE_COLOR": "1"})
     assert result.exit_code == 1
+    assert "\x1b" not in result.stdout
     report = json.loads(result.stdout)
-    assert list(report) == ["shape", "root", "valid", "diagnostics", "unchecked"]
-    assert report["shape"] == "astra-validation-report/1"
+    assert (report["shape"], report["valid"]) == ("astra-validation-report/1", False)
     assert [d["code"] for d in report["diagnostics"]] == ["NOT_IN_REPOSITORY"]
-    result = astra("validate", str(analysis(git_init(tmp_path / "repo"))), "--json")
-    assert (result.exit_code, json.loads(result.stdout)["valid"]) == (0, True)
+    result = astra("validate", str(analysis(git_init(tmp_path / "repo")) / "astra.yaml"), "--json")
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "shape": "astra-validation-report/1",
+        "root": "astra.yaml",
+        "valid": True,
+        "diagnostics": [],
+        "unchecked": [],
+    }
+
+
+def test_validate_takes_an_astra_yaml_or_its_folder(tmp_path: Path) -> None:
+    folder = analysis(git_init(tmp_path))
+    assert astra("validate", str(folder / "astra.yaml")).exit_code == 0
+    (folder / "universe.yaml").write_text("decisions: {}\n")
+    result = astra("validate", str(folder / "universe.yaml"))
+    assert result.exit_code == 2 and "universes are in astra.yaml" in result.stderr
+
+
+def test_validate_with_no_file_validates_every_root_analysis_here(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each astra.yaml under the current folder that no other declares, hidden, vendored and
+    results folders skipped; one declared is validated with the analysis that declares it."""
+    top = git_init(tmp_path)
+    declaring = MINIMAL + "analyses:\n  part: {path: part}\n"
+    analysis(top / "one", declaring)
+    analysis(top / "one" / "part")
+    analysis(top / "two", MINIMAL + "name: x\n")
+    for skipped in (".hidden", "node_modules", "results"):
+        analysis(top / skipped, MINIMAL + "name: x\n")
+    monkeypatch.chdir(top)
+    result = astra("validate")
+    assert result.exit_code == 1
+    assert "one/astra.yaml: valid" in result.stdout
+    assert "two/astra.yaml: invalid" in result.stdout
+    assert "part/astra.yaml:" not in result.stdout
+    assert result.stdout.splitlines()[-1] == "1/2 file(s) failed validation: two/astra.yaml"
+    monkeypatch.chdir(top / "one")
+    result = astra("validate", "--json")
+    assert result.exit_code == 0
+    document = json.loads(result.stdout)
+    assert (document["shape"], document["valid"]) == ("astra-validation-reports/1", True)
+    assert [report["shape"] for report in document["reports"]] == ["astra-validation-report/1"]
+    monkeypatch.chdir(top)
+    document = json.loads(astra("validate", "--json").stdout)
+    assert [(r["root"], r["valid"]) for r in document["reports"]] == [
+        ("one/astra.yaml", True),
+        ("two/astra.yaml", False),
+    ]
+    assert document["valid"] is False
+
+
+def test_validate_with_no_file_and_no_analysis_here_exits_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(git_init(tmp_path))
+    result = astra("validate")
+    assert (result.exit_code, result.stdout) == (1, "Error: No astra.yaml found here.\n")
 
 
 def test_validate_reads_the_current_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(analysis(git_init(tmp_path)))
-    assert astra("validate").exit_code == 0
+    result = astra("validate")
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[-1] == "All 1 file(s) passed validation."
 
 
 def test_validate_exits_2_where_there_is_no_analysis(tmp_path: Path) -> None:
@@ -95,68 +167,7 @@ def test_an_internal_error_exits_2(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     assert "internal error: RuntimeError: broken" in result.stderr
 
 
-# --- schema, rules, guide ---
-
-
-SCHEMAS = files("astra.schema") / "jsonschema"
-RULES = files("astra.schema") / "rules" / "rules.json"
-
-
-@pytest.mark.parametrize("name", ["analysis", "provenance", "provenance.open"])
-def test_schema_show_prints_astra_specs_schema(name: str) -> None:
-    result = astra("schema", "show", name)
-    assert result.exit_code == 0
-    assert result.stdout_bytes == (SCHEMAS / f"{name}.schema.json").read_bytes()
-
-
-def test_schema_export_writes_the_three(tmp_path: Path) -> None:
-    result = astra("schema", "export", str(tmp_path / "out"))
-    assert result.exit_code == 0
-    for name in ("analysis", "provenance", "provenance.open"):
-        written = (tmp_path / "out" / f"{name}.schema.json").read_bytes()
-        assert written == (SCHEMAS / f"{name}.schema.json").read_bytes()
-    assert sorted(path.name for path in (tmp_path / "out").iterdir()) == [
-        "analysis.schema.json",
-        "provenance.open.schema.json",
-        "provenance.schema.json",
-    ]
-
-
-def test_schema_show_refuses_another_name() -> None:
-    assert astra("schema", "show", "record").exit_code == 2
-
-
-def test_rules_lists_every_rule_by_layer() -> None:
-    rules = json.loads(RULES.read_text("utf-8"))["rules"]
-    result = astra("rules")
-    assert result.exit_code == 0
-    for rule in rules:
-        assert f"  {rule['code']} {rule['level']} " in result.stdout
-    assert result.stdout.index("validator") < result.stdout.index("NOT_IN_REPOSITORY")
-
-
-def test_rules_lists_astra_tools_own_codes_as_its_own() -> None:
-    """After rules.json's, astra-tools' own three, under a heading of their own."""
-    last = json.loads(RULES.read_text("utf-8"))["rules"][-1]["code"]
-    stdout = astra("rules").stdout
-    own = stdout.index("validator, astra-tools' own")
-    assert own > stdout.index(f"  {last} ")
-    for code, level in (
-        ("UNSUPPORTED_SPEC_VERSION", "MUST"),
-        ("REMOTE_UNREACHABLE", "MUST"),
-        ("COMMIT_NOT_ANCESTOR", "SHOULD"),
-    ):
-        assert stdout.index(f"  {code} {level} ") > own
-    shown = astra("rules", "remote_unreachable")
-    assert shown.stdout.splitlines()[:2] == ["REMOTE_UNREACHABLE", "validator, MUST, astra-tools"]
-
-
-def test_rules_shows_one_rule_whatever_its_case() -> None:
-    result = astra("rules", "absent_result")
-    assert result.exit_code == 0
-    assert result.stdout.splitlines()[:2] == ["ABSENT_RESULT", "check, SHOULD"]
-    assert "Status when broken: `absent`" in result.stdout
-    assert astra("rules", "NO_SUCH_RULE").exit_code == 2
+# --- guide, spec, schema ---
 
 
 def test_guide_prints_astra_specs_llms_txt() -> None:
@@ -165,44 +176,50 @@ def test_guide_prints_astra_specs_llms_txt() -> None:
     assert result.stdout_bytes == (files("astra") / "docs" / "llms.txt").read_bytes()
 
 
-# --- spec ---
-
-
-def test_spec_lists_the_classes_enums_and_types() -> None:
+def test_spec_prints_the_concept_summary() -> None:
     result = astra("spec")
     assert result.exit_code == 0
-    for line in ("Classes", "  Analysis ", "Enums", "  OutputType ", "Types", "  content_hash "):
-        assert line in result.stdout
+    assert "ASTRA specification -- concept vocabulary" in result.stdout
+    assert "astra spec <term> for detail" in result.stdout
+
+
+def test_spec_describes_a_term_whatever_its_case() -> None:
+    result = astra("spec", "evidence")
+    assert result.exit_code == 0
+    assert result.stdout.startswith("# Evidence\n")
+    assert "doi" in result.stdout and "artifact" in result.stdout
+
+
+def test_spec_of_an_unknown_term_lists_the_valid_ones_and_exits_1() -> None:
+    result = astra("spec", "[nothing]")
+    assert result.exit_code == 1
+    assert result.stdout.startswith("Unknown term: [nothing]\nValid terms: Analysis, ")
+
+
+def test_spec_full_dumps_every_entry() -> None:
+    result = astra("spec", "--full")
+    assert result.exit_code == 0
+    for heading in ("# Analysis", "# Universe", "# Insight"):
+        assert heading in result.stdout
+    assert astra("spec", "--full", "output").exit_code == 2
 
 
 @pytest.mark.parametrize(
-    "term, line",
-    [
-        ("Output.id", "  id (id, required) "),
-        ("output", "Output (class)"),
-        ("commit", "AnalysisDeclaration (class)"),
-        ("spec_version", "Pattern: ^(0|[1-9][0-9]*)"),
-    ],
+    ("name", "file"), [("analysis", "analysis.yaml"), ("insights", "insight.yaml")]
 )
-def test_spec_describes_a_term(term: str, line: str) -> None:
-    result = astra("spec", term)
+def test_schema_show_prints_astra_specs_linkml_schema(name: str, file: str) -> None:
+    result = astra("schema", "show", name)
     assert result.exit_code == 0
-    assert line in result.stdout
+    assert result.stdout_bytes == (files("astra.schema") / file).read_bytes()
 
 
-def test_spec_refuses_an_unknown_term() -> None:
-    assert astra("spec", "nothing_named_so").exit_code == 2
+def test_schema_show_has_no_universe_schema() -> None:
+    """Universes are part of the analysis schema since ASTRA 0.1."""
+    assert astra("schema", "show", "universe").exit_code == 2
 
 
-# --- completion ---
-
-
-@pytest.mark.parametrize("shell", ["bash", "zsh", "fish"])
-def test_completion_prints_the_shells_script(shell: str) -> None:
-    result = astra("completion", shell)
+def test_schema_export_writes_each_linkml_schema(tmp_path: Path) -> None:
+    result = astra("schema", "export", "-o", str(tmp_path / "schemas"))
     assert result.exit_code == 0
-    assert "_ASTRA_COMPLETE" in result.stdout
-
-
-def test_completion_refuses_another_shell() -> None:
-    assert astra("completion", "tcsh").exit_code == 2
+    written = {path.name for path in (tmp_path / "schemas").iterdir()}
+    assert {"analysis.yaml", "insight.yaml"} <= written

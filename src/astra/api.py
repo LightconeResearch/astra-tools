@@ -1,15 +1,12 @@
-"""The stable public functions of astra-tools: `validate`, `bind`, `init`, `plan`, `view`,
-`check` and `history`; and `papers`, `quotes` and `seek`."""
+"""The stable public functions of astra-tools: `validate`, `bind`, `plan`, `view`, `check` and
+`history`. `astra.scaffold.create_boilerplate` writes a new analysis."""
 
 from __future__ import annotations
 
-import contextlib
 import os
 import posixpath
-import tempfile
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from astra.check import CheckReport
 from astra.check import check as check_stack
@@ -26,11 +23,6 @@ from astra.validate import validate as validate_reader
 from astra.view import UniverseView
 from astra.view import view as view_stack
 
-if TYPE_CHECKING:
-    from astra.diagnostics import Diagnostic
-    from astra.evidence.papers import Cited
-    from astra.evidence.quotes import Sought
-
 __all__ = [
     "Bound",
     "CheckReport",
@@ -45,11 +37,7 @@ __all__ = [
     "bind",
     "check",
     "history",
-    "init",
-    "papers",
     "plan",
-    "quotes",
-    "seek",
     "validate",
     "view",
 ]
@@ -148,50 +136,6 @@ def history(path: str | os.PathLike[str] | None = None) -> History:
     return History(_valid(path, None, remotes), remotes)
 
 
-def papers(path: str | os.PathLike[str] | None = None) -> tuple[Cited, ...]:
-    """Each work the evidence of the analysis whose folder is `path` cites by DOI, read as
-    `validate` reads it, at each version it cites, once, and whether the cache holds its paper.
-    Raises InvalidAnalysisError where the analysis breaks a `MUST`, and otherwise as `validate`
-    does."""
-    from astra.evidence.papers import cited
-
-    return cited(_valid(path))
-
-
-def quotes(path: str | os.PathLike[str] | None = None) -> tuple[Diagnostic, ...]:
-    """The `EVIDENCE_` warnings on the quotes that the evidence of the analysis whose folder is
-    `path` takes from works it cites by DOI, read as `validate` reads it (`evidence.quotes`): a
-    paper not in the cache, or a quote not found in it. Raises `evidence.papers.PaperError`
-    where a paper the cache holds can't be read, and otherwise as `papers` does."""
-    from astra.evidence.quotes import verify
-
-    return verify(_valid(path))
-
-
-def seek(
-    doi: str, *quotes: str, version: int | None = None, page: int | None = None
-) -> tuple[Sought, ...]:
-    """Each of `quotes`, in order, sought in the paper of `doi` at `version` (None for no
-    version) that the cache holds, with no analysis, as a quote that evidence takes from it is
-    sought: within `page`, counted from 1, or in the whole text, with the pages it is found on
-    (`evidence.quotes.seek`). The paper's text is read once. Raises `evidence.papers.PaperError`
-    where the cache doesn't hold the
-    paper or it can't be read, RequestError where the paper has no page `page`, and CacheError
-    where the cache can't be used."""
-    from astra.evidence import papers
-    from astra.evidence.quotes import seek as seek_quote
-
-    named = papers.named(doi, version)
-    data = papers.get(doi, version)
-    if data is None:
-        command = papers.command(doi, version)
-        raise papers.PaperError(f"the paper of {named} isn't in the cache: run `{command}`")
-    pages = papers.pages(data)
-    if page is not None and not 1 <= page <= len(pages):
-        raise RequestError(f"the paper of {named} has {len(pages)} page(s), and no page {page}")
-    return tuple(seek_quote(exact, pages, page) for exact in quotes)
-
-
 def _valid(
     path: str | os.PathLike[str] | None, at: str | None = None, remotes: Remotes | None = None
 ) -> Stack:
@@ -222,46 +166,6 @@ def _read(
             raise NoAnalysisError(f"{root or '.'} has no astra.yaml file at {commit}")
     report, stack = validated(reader, root, remotes)
     return reader, report, stack
-
-
-MINIMAL = """\
-spec_version: "0.1.0"
-outputs:
-  result:
-    type: metric
-    format: json
-    recipe:
-      command: python src/result.py '{output}'
-"""
-"""What `init` writes: a `spec_version` and one output, `result`, to start from."""
-
-
-def init(path: str | os.PathLike[str] | None = None) -> tuple[Path, bool]:
-    """Make a minimal analysis in the folder `path`, the current folder by default, made if need
-    be: its `astra.yaml` holds `MINIMAL`. Where no git repository holds the folder, it becomes a
-    new one. Gives the file written, and whether a repository was made. Raises FileExistsError
-    where the folder has an `astra.yaml` or is a file, GitError where git can't be run, and
-    OSError where the folder can't be written."""
-    folder = Path.cwd() if path is None else Path(path)
-    file = folder / "astra.yaml"
-    if os.path.lexists(folder) and not folder.is_dir():
-        raise FileExistsError(f"{folder} isn't a folder: give a folder for the analysis")
-    if os.path.lexists(file):
-        raise FileExistsError(f"{folder} has an astra.yaml already: give a folder without one")
-    folder.mkdir(parents=True, exist_ok=True)
-    made = Repository.discover(folder) is None  # none inside a working tree
-    if made:
-        Repository.init(folder)
-    descriptor, temporary = tempfile.mkstemp(prefix=".astra.yaml.", dir=folder)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            stream.write(MINIMAL)
-        os.chmod(temporary, 0o644)
-        os.replace(temporary, file)
-    finally:
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(temporary)
-    return file, made
 
 
 def _root(path: str | os.PathLike[str] | None) -> tuple[Reader, str]:

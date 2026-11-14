@@ -8,9 +8,12 @@ from itertools import groupby
 from types import MappingProxyType
 
 from rich.console import Console
+from rich.table import Table
 from rich.text import Text
 
 from astra.diagnostics import Diagnostic, Level, Location
+
+__all__ = ["Table", "by_file", "console", "file_named", "rule_line"]
 
 _LEVELS = MappingProxyType({"error": "bold red", "warning": "yellow"})
 

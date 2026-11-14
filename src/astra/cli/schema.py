@@ -1,46 +1,58 @@
-"""`astra schema show|export`: astra-spec's JSON Schemas, byte for byte (Schema files)."""
+"""`astra schema export|show`: astra-spec's LinkML schemas, as it ships them."""
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
+from types import MappingProxyType
 
 import click
 
-from astra.cli import fail
-from astra.contract import SCHEMA_NAMES, SchemaName, schema_file
+SCHEMAS = MappingProxyType(
+    {
+        "analysis": "analysis.yaml",
+        "insights": "insight.yaml",
+        "provenance": "provenance.yaml",
+        "types": "types.yaml",
+    }
+)
+"""Each schema `show` prints, with its file. Universes are part of `analysis` since ASTRA 0.1."""
 
 
 @click.group("schema")
 def command() -> None:
-    """Show or export the JSON Schemas of ASTRA files.
-
-    They are astra-spec's: `analysis` for astra.yaml, `provenance` for a record, and
-    `provenance.open` for a record of a later minor version.
-    """
-
-
-@command.command("show")
-@click.argument("name", type=click.Choice(SCHEMA_NAMES))
-def show(name: SchemaName) -> None:
-    """Print the JSON Schema NAME."""
-    click.echo(schema_file(name).read_bytes(), nl=False)
+    """Schema commands."""
 
 
 @command.command("export")
-@click.argument("folder", type=click.Path(file_okay=False, path_type=Path))
-def export(folder: Path) -> None:
-    """Write the three JSON Schemas into FOLDER, as NAME.schema.json."""
-    try:
-        folder.mkdir(parents=True, exist_ok=True)
-        for name in SCHEMA_NAMES:
-            path = folder / f"{name}.schema.json"
-            descriptor, temporary = tempfile.mkstemp(dir=folder, prefix=f".{path.name}.")
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(schema_file(name).read_bytes())
-            os.chmod(temporary, 0o644)
-            os.replace(temporary, path)
-            click.echo(path)
-    except OSError as error:
-        fail(f"can't write to {folder}: {error.strerror}")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default="schemas",
+    help="Output directory (default: schemas/)",
+)
+def schema_export(output: Path) -> None:
+    """Export LinkML schemas to files."""
+    from astra.scaffold import write_text
+
+    exported = []
+    for schema_file in sorted(_directory().glob("*.yaml")):
+        write_text(output / schema_file.name, schema_file.read_text(encoding="utf-8"))
+        exported.append(schema_file.name)
+    click.echo(f"✓ Exported schemas to {output}/")
+    for name in exported:
+        click.echo(f"  • {output}/{name}")
+
+
+@command.command("show")
+@click.argument("schema_type", type=click.Choice(sorted(SCHEMAS)))
+def schema_show(schema_type: str) -> None:
+    """Print a LinkML schema to stdout."""
+    click.echo((_directory() / SCHEMAS[schema_type]).read_text(encoding="utf-8"), nl=False)
+
+
+def _directory() -> Path:
+    """The folder of astra-spec's LinkML schemas: the one that holds analysis.yaml."""
+    from importlib.resources import files
+
+    return Path(str(files("astra.schema") / "analysis.yaml")).parent

@@ -38,42 +38,33 @@ gives the details.
 
 ```console
 $ astra init my-analysis
-Made my-analysis/astra.yaml, in a new git repository.
-Check it with: astra validate my-analysis
+✓ created astra.yaml
+✓ created .gitignore
+✓ created .git
+✓ Converged ASTRA analysis scaffold: my-analysis
 $ astra validate my-analysis
 astra.yaml: valid, 0 error(s), 0 warning(s)
-$ astra plan my-analysis
-result
-  record    .astra/records/result.json
-  bytes     results/result.json
-  run in    .
-  command   python src/result.py 'results/result.json'
-1 planned result(s)
 ```
 
-`astra init` writes an `astra.yaml` with one output, `result`. `astra plan` shows where its
-record and its bytes go, and the command that builds it.
+`astra init` writes an empty `astra.yaml`, with a `spec_version` and a label, in a git
+repository; run again, it changes nothing. Once the analysis has outputs, `astra plan` shows
+where each result's record and bytes go, and the command that builds it.
 [Getting started](https://astra-spec.org/0.1/getting-started/) goes further.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| [`astra init`](https://astra-spec.org/0.1.0rc1/cli/#astra-init) | Make a minimal analysis |
-| [`astra validate`](https://astra-spec.org/0.1.0rc1/cli/#astra-validate) | Validate an analysis and its whole stack |
-| [`astra info`](https://astra-spec.org/0.1.0rc1/cli/#astra-info) | Show the stack in brief |
+| [`astra init`](https://astra-spec.org/0.1.0rc1/cli/#astra-init) | Make a minimal analysis, or complete one (idempotent) |
+| [`astra validate`](https://astra-spec.org/0.1.0rc1/cli/#astra-validate) | Validate an analysis and its whole stack, or every analysis under the current folder |
+| [`astra info`](https://astra-spec.org/0.1.0rc1/cli/#astra-info) | Show an analysis in brief |
 | [`astra universe`](https://astra-spec.org/0.1.0rc1/cli/#astra-universe) | List the universes, or show one's selection |
 | [`astra plan`](https://astra-spec.org/0.1.0rc1/cli/#astra-plan) | Show the planned results, their places and commands |
-| [`astra view`](https://astra-spec.org/0.1.0rc1/cli/#astra-view) | Show the analysis as it is in one universe |
 | [`astra check`](https://astra-spec.org/0.1.0rc1/cli/#astra-check) | Check the records and bytes of the planned results |
-| [`astra history`](https://astra-spec.org/0.1.0rc1/cli/#astra-history) | Show what git holds of a result's records over time |
-| [`astra rules`](https://astra-spec.org/0.1.0rc1/cli/#astra-rules) | List the rules, or show one |
 | [`astra spec`](https://astra-spec.org/0.1.0rc1/cli/#astra-spec) | Describe the fields of ASTRA files |
-| [`astra schema`](https://astra-spec.org/0.1.0rc1/cli/#astra-schema) | Show or export the JSON Schemas |
+| [`astra schema`](https://astra-spec.org/0.1.0rc1/cli/#astra-schema) | Show or export the LinkML schemas |
 | [`astra guide`](https://astra-spec.org/0.1.0rc1/cli/#astra-guide) | Print the guide for agents |
-| [`astra paper`](https://astra-spec.org/0.1.0rc1/cli/#astra-paper) | Keep cited papers, and seek quotes in them |
-| [`astra cache`](https://astra-spec.org/0.1.0rc1/cli/#astra-cache) | Show or clear the cache |
-| [`astra completion`](https://astra-spec.org/0.1.0rc1/cli/#astra-completion) | Print a shell completion script |
+| [`astra paper`](https://astra-spec.org/0.1.0rc1/cli/#astra-paper) | Keep papers by DOI, and verify quotes in them |
 
 The [CLI reference](https://astra-spec.org/0.1.0rc1/cli/) gives
 each command's options, exit codes and examples. The
