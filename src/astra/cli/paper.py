@@ -25,7 +25,7 @@ def command() -> None:
 
     Papers are kept in the cache, by DOI and version. A quote is sought in its paper's text,
     within the page its location gives (`page=6`), or in the whole text. `verify` seeks the
-    quotes an analysis's evidence takes, and one not found is a warning, never an error; `seek`
+    quotes an analysis's evidence takes, and one not found is an error (QUOTE_NOT_FOUND); `seek`
     seeks the quotes you give it, with no analysis.
     """
     # Text alone, with no --json.
@@ -113,18 +113,20 @@ def verify(path: Path | None) -> None:
     """Seek each quote that the evidence of the analysis in PATH takes from a work it cites by
     DOI, in its paper in the cache.
 
-    PATH is the analysis's folder, the current one by default. A paper not in the cache, and a
-    quote not found in its paper, are warnings, shown as `astra validate` shows them. Exits 0
-    whatever it finds; 1 when the analysis breaks a MUST, which is shown as `astra validate`
-    shows it; and 2 where it can't be read.
+    PATH is the analysis's folder, the current one by default. A quote not found in its paper
+    is an error (QUOTE_NOT_FOUND), and a paper not in the cache a warning, shown as `astra
+    validate` shows them. Exits 0 when no quote is not found; 1 when one isn't, or the analysis
+    breaks a MUST, which is shown as `astra validate` shows it; and 2 where it can't be read.
     """
     from astra import api
 
     with _evidence():
-        warnings = api.quotes(path)
+        diagnostics = api.quotes(path)
     from astra.cli.text.paper import show
 
-    show(warnings)
+    show(diagnostics)
+    if any(diagnostic.level == "error" for diagnostic in diagnostics):
+        raise click.exceptions.Exit(FAILED)
 
 
 @command.command("seek")

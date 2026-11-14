@@ -6,6 +6,7 @@ import pytest
 
 from astra import contract, load, rules, validate
 from astra.diagnostics import OWN, Catalogue, Location
+from astra.evidence import quotes
 
 AT = Location("astra.yaml", "", None, None)
 
@@ -39,18 +40,28 @@ def test_the_other_declared_codes_are_the_catalogues_or_astra_tools() -> None:
 
 
 def test_astra_tools_own_codes_are_none_of_rules_json() -> None:
-    """The three codes astra-tools has of its own, beside rules.json's, which has none of them."""
+    """The four codes astra-tools has of its own, beside rules.json's, which has none of them."""
     catalogue = Catalogue.load()
-    assert set(OWN) == {"UNSUPPORTED_SPEC_VERSION", "REMOTE_UNREACHABLE", "COMMIT_NOT_ANCESTOR"}
+    assert set(OWN) == {
+        "UNSUPPORTED_SPEC_VERSION",
+        "REMOTE_UNREACHABLE",
+        "COMMIT_NOT_ANCESTOR",
+        "EVIDENCE_PAPER_MISSING",
+    }
     assert not set(OWN) & set(catalogue.rules)
-    assert [catalogue.level(code) for code in OWN] == ["error", "error", "warning"]
+    assert [catalogue.level(code) for code in OWN] == ["error", "error", "warning", "warning"]
 
 
 def test_every_code_astra_tools_has_of_its_own_is_checked() -> None:
     """Each of astra-tools' own codes is declared by a check, as rules.json's are."""
-    assert set(OWN) <= contract.CODES | validate.CODES | rules.CODES
+    assert set(OWN) <= contract.CODES | validate.CODES | rules.CODES | quotes.CODES
+
+
+def test_the_evidence_layer_is_what_quotes_declares() -> None:
+    assert set(Catalogue.load().codes("evidence")) == quotes.CODES
 
 
 def test_no_two_checks_declare_one_code() -> None:
-    declared = [load.CODES, contract.CODES, validate.CODES, *(m.CODES for m in rules.MODULES)]
+    declared = [load.CODES, contract.CODES, validate.CODES, quotes.CODES]
+    declared += [m.CODES for m in rules.MODULES]
     assert sum(len(codes) for codes in declared) == len(frozenset().union(*declared))

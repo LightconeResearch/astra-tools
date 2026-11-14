@@ -40,7 +40,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "astra-spec >= 0.1.0rc1, < 0.2",
+    "astra-spec >= 0.1.0rc2, < 0.2",
     "click >= 8.2.1",
     "jsonschema >= 4.23",
     "linkml-runtime >= 1.12",

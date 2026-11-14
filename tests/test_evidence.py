@@ -121,10 +121,11 @@ def test_a_quote_in_its_paper_gives_nothing(verified: Mapping[str, Diagnostic]) 
     assert at("whole", 1, "quote") not in verified  # across a line break
 
 
-def test_a_quote_not_in_its_paper_is_a_warning(verified: Mapping[str, Diagnostic]) -> None:
-    """A quote not found is an `EVIDENCE_` warning, at the evidence's `quote`."""
+def test_a_quote_not_in_its_paper_is_an_error(verified: Mapping[str, Diagnostic]) -> None:
+    """A quote not found breaks the specification's `QUOTE_NOT_FOUND`, a `MUST`: an error, at the
+    evidence's `quote`."""
     found = verified[at("whole", 2, "quote")]
-    assert (found.code, found.level) == ("EVIDENCE_QUOTE_NOT_FOUND", "warning")
+    assert (found.code, found.level) == ("QUOTE_NOT_FOUND", "error")
     assert "sought in its whole text" in found.message
     assert (found.location.file, found.location.line) == ("astra.yaml", 14)
 
@@ -153,7 +154,7 @@ def test_a_location_that_gives_no_page_is_the_whole_text(
 
 def test_a_page_the_paper_hasnt_holds_no_quote(verified: Mapping[str, Diagnostic]) -> None:
     found = verified[at("paged", 6, "quote")]
-    assert found.code == "EVIDENCE_QUOTE_NOT_FOUND"
+    assert found.code == "QUOTE_NOT_FOUND"
     assert "sought on page 3" in found.message and "has 2 page(s)" in found.message
 
 
@@ -173,8 +174,9 @@ def test_a_doi_is_read_without_its_case(verified: Mapping[str, Diagnostic]) -> N
     assert not any(found.startswith(pointer) for found in verified)
 
 
-def test_the_warnings_are_astra_tools_own(verified: Mapping[str, Diagnostic]) -> None:
-    """`EVIDENCE_` warnings, outside `rules.json`, which leave the analysis valid."""
+def test_the_codes_and_their_levels(verified: Mapping[str, Diagnostic]) -> None:
+    """`QUOTE_NOT_FOUND` is the specification's, in its evidence layer, a `MUST`;
+    `EVIDENCE_PAPER_MISSING` is astra-tools' own, a `SHOULD`."""
     assert set(verified) == {
         at("whole", 2, "quote"),
         at("paged", 1, "quote"),
@@ -185,7 +187,12 @@ def test_the_warnings_are_astra_tools_own(verified: Mapping[str, Diagnostic]) ->
     }
     codes = {found.code for found in verified.values()}
     assert codes == {quotes.PAPER_MISSING, quotes.QUOTE_NOT_FOUND}
-    assert not codes & set(Catalogue.load().rules)
+    catalogue = Catalogue.load()
+    spec = catalogue.rules[quotes.QUOTE_NOT_FOUND]
+    assert (spec.layer, spec.level, spec.source) == ("evidence", "MUST", None)
+    assert quotes.PAPER_MISSING not in catalogue.rules
+    own = catalogue.rule(quotes.PAPER_MISSING)
+    assert (own.layer, own.level, own.source) == ("evidence", "SHOULD", "astra-tools")
 
 
 def test_astra_specs_insights_fixture(tmp_path: Path) -> None:
@@ -278,22 +285,31 @@ def test_add_file_keeps_a_paper_that_list_shows(cited: Path) -> None:
     assert (after.exit_code, after.stdout) == (0, f"{DOI}: in the cache\n")
 
 
-def test_verify_exits_0_whether_or_not_a_quote_is_found(cited: Path) -> None:
-    """The warnings never change an exit code."""
+def test_verify_exits_1_for_a_quote_not_found_and_0_for_a_paper_missing(cited: Path) -> None:
+    """A paper not in the cache is a warning, which changes no exit code; a quote not found in
+    its paper is an error."""
+    unsought = astra("paper", "verify", str(cited))
+    assert (unsought.exit_code, unsought.stdout.splitlines()[-1]) == (
+        0,
+        "Each quote sought is in its paper; 1 not sought, their paper not in the cache.",
+    )
     assert astra("paper", "add", DOI, "--file", str(cited.parent / "paper.pdf")).exit_code == 0
     found = astra("paper", "verify", str(cited))
     assert (found.exit_code, found.stdout.splitlines()[-1]) == (
         0,
-        "No warnings: each quote cited by DOI is in its paper.",
+        "Each quote cited by DOI is in its paper.",
     )
     (cited / "astra.yaml").write_text(
         (cited / "astra.yaml").read_text().replace("lost less than one point", "gained two points")
     )
     missing = astra("paper", "verify", str(cited))
-    assert missing.exit_code == 0
+    assert missing.exit_code == 1
     lines = missing.stdout.splitlines()
     assert lines[0] == "astra.yaml"
-    assert lines[1].startswith("  12:42 warning EVIDENCE_QUOTE_NOT_FOUND the quote isn't found")
+    assert lines[1].startswith("  12:42 error QUOTE_NOT_FOUND the quote isn't found")
+    assert lines[-1] == (
+        "1 quote(s) not found in their paper; 0 not sought, their paper not in the cache."
+    )
 
 
 def test_verify_exits_1_for_an_invalid_analysis(cited: Path) -> None:

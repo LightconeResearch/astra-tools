@@ -50,7 +50,7 @@ class Rule:
     """One row of the specification's table of rules, as `rules.json` gives it."""
 
     code: str
-    layer: str  # parse, schema, validator, check or runner
+    layer: str  # parse, schema, validator, check, evidence or runner
     level: str  # MUST or SHOULD
     statement: str
     source: str | None = None  # "astra-tools" for astra-tools' own; rules.json gives none
@@ -85,11 +85,20 @@ OWN: Mapping[str, Rule] = MappingProxyType(
                 "the working tree, HEAD or an ancestor of it",
                 "astra-tools",
             ),
+            Rule(
+                "EVIDENCE_PAPER_MISSING",
+                "evidence",
+                "SHOULD",
+                "The cache holds the paper of every work that evidence cites by `doi` with a "
+                "`quote`, so that the quote can be sought (`QUOTE_NOT_FOUND`)",
+                "astra-tools",
+            ),
         )
     }
 )
 """astra-tools' own codes, which the specification left to tools, with their layer, level and
-statement: the first two are errors, since without them the stack can't be read."""
+statement: the first two are errors, since without them the stack can't be read. A paper not
+in the cache is a fact about one machine, not about the analysis: a warning."""
 
 
 @dataclass(frozen=True)

@@ -3,9 +3,9 @@ it is run, which imports only click until then: `astra --help` and completion lo
 
 Exit codes: 0; 1 when `validate` finds an error, `check` a planned result that isn't
 `unchanged`, `plan`, `view`, `check`, `history` and `paper` an analysis that breaks a `MUST`,
-`history` nothing in git of what it is asked for, `paper seek` a quote not found in its paper,
-or `info` and `universe` no stack to show; 2 for a usage error, a broken environment or an
-internal error. `paper verify`'s warnings never change an exit code.
+`history` nothing in git of what it is asked for, `paper verify` and `paper seek` a quote not
+found in its paper, or `info` and `universe` no stack to show; 2 for a usage error, a broken
+environment or an internal error. A paper not in the cache never changes an exit code.
 """
 
 from __future__ import annotations

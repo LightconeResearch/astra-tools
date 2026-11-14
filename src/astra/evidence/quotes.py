@@ -1,12 +1,13 @@
-"""Quotes sought in the papers they are taken from, advisory only.
+"""Quotes sought in the papers they are taken from.
 
 For a `doi`, the cited resource is the work's full text, and with both a `quote` and a
 `location`, the quote is sought within the location. `verify` seeks each quote's `exact`
 in the text of the work's PDF, kept in the cache by `astra paper add` (`papers`): within the
 page that a PDF fragment identifier's `page=` gives (RFC 8118), or
-in the whole text. Its warnings are codes of astra-tools' own, outside `rules.json`: always
-warnings, which never change a verdict, a status or an exit code. `seek` seeks a quote given,
-with no analysis, as `verify` seeks one, and says on which pages it is found (`Sought`).
+in the whole text. A quote not found breaks the specification's `QUOTE_NOT_FOUND`, a `MUST`
+of its evidence layer: an error. A paper not in the cache is astra-tools' own
+`EVIDENCE_PAPER_MISSING`, a warning: the quote can't be sought. `seek` seeks a quote given, with
+no analysis, as `verify` seeks one, and says on which pages it is found (`Sought`).
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from typing import TYPE_CHECKING
 from rapidfuzz import fuzz
 
 from astra import model
-from astra.diagnostics import Diagnostic
+from astra.diagnostics import Catalogue, Diagnostic
 from astra.evidence import papers
 
 if TYPE_CHECKING:
@@ -27,8 +28,11 @@ if TYPE_CHECKING:
 PAPER_MISSING = "EVIDENCE_PAPER_MISSING"
 """A quote's paper isn't in the cache, so the quote can't be sought."""
 
-QUOTE_NOT_FOUND = "EVIDENCE_QUOTE_NOT_FOUND"
-"""A quote isn't in its paper's text, where it was sought."""
+QUOTE_NOT_FOUND = "QUOTE_NOT_FOUND"
+"""A quote isn't in its paper's text, where it was sought: the specification's rule."""
+
+CODES = frozenset({PAPER_MISSING, QUOTE_NOT_FOUND})
+"""The codes `verify` checks: the evidence layer's."""
 
 THRESHOLD = 90
 """How well, out of 100, the text sought must match a quote for it to be found: rapidfuzz's
@@ -53,11 +57,13 @@ class Sought:
 
 
 def verify(stack: Stack) -> tuple[Diagnostic, ...]:
-    """A warning for each item of the root's evidence citing a `doi` with a `quote` whose paper
-    isn't in the cache (`EVIDENCE_PAPER_MISSING`, at its `doi`), or whose `exact` isn't found
-    where it is sought (`EVIDENCE_QUOTE_NOT_FOUND`, at its `quote`); nothing for one found.
+    """For each item of the root's evidence citing a `doi` with a `quote`: a warning where its
+    paper isn't in the cache (`EVIDENCE_PAPER_MISSING`, at its `doi`), an error where its
+    `exact` isn't found where it is sought (`QUOTE_NOT_FOUND`, at its `quote`); nothing for one
+    found.
     Reads only the cache: `papers.add` keeps a paper."""
     # Only the cache is read.
+    catalogue = Catalogue.load()
     found: list[Diagnostic] = []
     texts: dict[tuple[str, int | None], tuple[str, ...] | None] = {}
     for pointer, doi, item in papers.evidence(stack):
@@ -71,7 +77,7 @@ def verify(stack: Stack) -> tuple[Diagnostic, ...]:
         if pages is None:
             message = f"the paper of {named} isn't in the cache, so its quote isn't sought"
             message += f": run `{papers.command(doi, item.version)}`"
-            found.append(_warning(PAPER_MISSING, message, stack, (*pointer, "doi")))
+            found.append(_diagnostic(catalogue, PAPER_MISSING, message, stack, (*pointer, "doi")))
             continue
         page = _page(item.location)
         sought = _within(pages, page)
@@ -81,7 +87,7 @@ def verify(stack: Stack) -> tuple[Diagnostic, ...]:
         if not sought:
             where += f", but the PDF has {len(pages)} page(s)"
         message = f"the quote isn't found in the paper of {named}, sought {where}"
-        found.append(_warning(QUOTE_NOT_FOUND, message, stack, (*pointer, "quote")))
+        found.append(_diagnostic(catalogue, QUOTE_NOT_FOUND, message, stack, (*pointer, "quote")))
     return tuple(sorted(found, key=lambda d: (d.location.line or 0, d.location.column or 0)))
 
 
@@ -131,7 +137,8 @@ def _found(exact: str, text: str) -> bool:
     return score >= THRESHOLD
 
 
-def _warning(code: str, message: str, stack: Stack, pointer: Pointer) -> Diagnostic:
-    """`code`'s warning at `pointer` in the root's file: a code of astra-tools' own, always a
-    warning."""
-    return Diagnostic(code, "warning", message, stack.location(stack.root, pointer))
+def _diagnostic(
+    catalogue: Catalogue, code: str, message: str, stack: Stack, pointer: Pointer
+) -> Diagnostic:
+    """`code`'s diagnostic at `pointer` in the root's file, at its rule's level."""
+    return catalogue.diagnostic(code, message, stack.location(stack.root, pointer))

@@ -10,7 +10,7 @@ from rich.text import Text
 from astra.cli.text import console
 from astra.diagnostics import OWN, Catalogue, Rule
 
-LAYERS = ("parse", "schema", "validator", "check", "runner")
+LAYERS = ("parse", "schema", "validator", "check", "evidence", "runner")
 
 
 def show_rules(catalogue: Catalogue) -> None:
