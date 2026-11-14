@@ -363,7 +363,7 @@ def test_the_cli_shows_a_commits_file_with_its_commit(
     assert result.exit_code == 1
     assert f"astra.yaml at {commit} from {url}\n" in result.stdout
     result = CliRunner().invoke(main, ["validate", str(root), "--json"], prog_name="astra")
-    locations = [d["location"] for d in json.loads(result.stdout)["diagnostics"]]
+    locations = [d["location"] for d in json.loads(result.stdout)["reports"][0]["diagnostics"]]
     assert {(at["commit"], at["url"]) for at in locations} == {(None, None), (commit, url)}
 
 
