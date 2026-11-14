@@ -26,7 +26,8 @@ from astra.model import Resources
 from astra.plan import Plan, outside, render_command
 from astra.records import new_record
 from astra.stack import Identity
-from tests.conftest import ENVIRONMENT, MINIMAL, RUNNER, SPEC, git, git_init, repository
+from tests.conftest import ENVIRONMENT, MINIMAL, RUNNER, git, git_init, repository
+from tests.spec import SPEC
 from tests.test_planned import ROOT, SUBANALYSIS
 from tests.test_validate import WORKED_EXAMPLE
 

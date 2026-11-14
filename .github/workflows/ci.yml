@@ -1,8 +1,8 @@
 name: CI
 
-# The tests read astra-spec's fixtures and examples from its source tree, so astra-spec is checked
-# out at the commit in astra-spec.pin, beside astra-tools, where [tool.uv.sources] expects it
-# (../astra-spec-pinned).
+# astra-spec is the release uv.lock installs from PyPI. The tests read that release's conformance
+# suite, examples and test documents from astra-spec's source tree, so astra-spec is checked out at
+# the release's tag, which ASTRA_SPEC_SOURCE names.
 
 on:
   push:
@@ -36,25 +36,6 @@ jobs:
           fetch-depth: 0  # hatch-vcs reads the version from the tags
           persist-credentials: false
 
-      - name: Read the astra-spec pin
-        id: pin
-        run: |
-          commit="$(tr -d '[:space:]' < astra-spec.pin)"
-          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error file=astra-spec.pin::astra-spec.pin must hold one full 40-character commit id"
-            exit 1
-          fi
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
-
-      - name: Check out astra-spec at the pin
-        uses: actions/checkout@v4
-        with:
-          repository: LightconeResearch/astra-spec
-          ref: ${{ steps.pin.outputs.commit }}
-          path: astra-spec-pinned
-          fetch-depth: 0  # its version comes from its tags
-          persist-credentials: false
-
       - name: Set up uv and Python ${{ matrix.python-version }}
         uses: astral-sh/setup-uv@v8.0.0
         with:
@@ -64,7 +45,23 @@ jobs:
       - name: Install astra-tools with the dev group, which brings both extras
         run: uv sync --frozen
 
+      - name: Read the version of astra-spec installed
+        id: spec
+        run: |
+          version="$(uv run --frozen python -c 'import importlib.metadata as m; print(m.version("astra-spec"))')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check out astra-spec at that release's tag
+        uses: actions/checkout@v4
+        with:
+          repository: LightconeResearch/astra-spec
+          ref: v${{ steps.spec.outputs.version }}
+          path: astra-spec
+          persist-credentials: false
+
       - name: Run tests
+        env:
+          ASTRA_SPEC_SOURCE: ${{ github.workspace }}/astra-spec
         run: uv run --frozen pytest -q -p no:cacheprovider
 
       - name: Run mypy

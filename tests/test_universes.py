@@ -21,7 +21,8 @@ from astra.sources.git import Repository
 from astra.sources.reader import WorktreeReader
 from astra.stack import Element, Identity, bind
 from astra.universes import Selection, selections
-from tests.conftest import SPEC, repository
+from tests.conftest import repository
+from tests.spec import SPEC
 
 SUBANALYSIS = """\
 spec_version: "0.1.0"

@@ -1,13 +1,13 @@
-"""Shared by the tests: the cache kept apart, astra-spec's fixtures and examples, git, and
-results built as a runner builds them."""
+"""Shared by the tests: the cache kept apart, git, and results built as a runner builds them.
+astra-spec's conformance suite and examples are in `tests/spec.py`."""
 
 from __future__ import annotations
 
 import importlib.metadata
+import os
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator, Mapping
-from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -15,13 +15,6 @@ import pytest
 from astra import api
 from astra.plan import Result
 from astra.records import Runner, new_record, write_record
-
-SPEC = Path(str(files("astra.schema") / "analysis.yaml")).parents[3]
-"""The astra-spec the installed `astra.schema` comes from: its conformance suite (`conformance/`)
-and its `examples/` are the oracle."""
-
-DOCUMENTS = SPEC / "tests" / "data"
-"""The conformance suite's documents: `valid/` and `invalid/`."""
 
 MINIMAL = """\
 spec_version: "0.1.0"
@@ -36,7 +29,8 @@ outputs:
 
 
 def pytest_report_header(config: pytest.Config) -> str:
-    return f"astra-spec {importlib.metadata.version('astra-spec')} at {SPEC}"
+    source = os.environ.get("ASTRA_SPEC_SOURCE", "unset")
+    return f"astra-spec {importlib.metadata.version('astra-spec')}, ASTRA_SPEC_SOURCE {source}"
 
 
 @pytest.fixture(autouse=True, scope="session")

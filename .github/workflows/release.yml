@@ -39,10 +39,9 @@ jobs:
           name: distribution-files
           path: dist/
 
-  # Tests the built wheel against astra-spec at the commit in astra-spec.pin, installed editable
-  # from its source tree: the tests read its fixtures and examples there. That commit must be the
-  # commit of an astra-spec tag, so that the editable install reports that tag's version, and the
-  # wheel's requirement on astra-spec must accept it.
+  # Tests the built wheel as users install it: pip takes astra-spec from PyPI, the newest release
+  # the wheel's requirement accepts. The tests read that release's conformance suite, examples and
+  # test documents from astra-spec's source tree, checked out at the release's tag.
   test:
     name: Test built package
     needs: build
@@ -60,25 +59,6 @@ jobs:
           path: astra-tools
           persist-credentials: false
 
-      - name: Read the astra-spec pin
-        id: pin
-        run: |
-          commit="$(tr -d '[:space:]' < astra-tools/astra-spec.pin)"
-          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error file=astra-spec.pin::astra-spec.pin must hold one full 40-character commit id"
-            exit 1
-          fi
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
-
-      - name: Check out astra-spec at the pin
-        uses: actions/checkout@v4
-        with:
-          repository: LightconeResearch/astra-spec
-          ref: ${{ steps.pin.outputs.commit }}
-          path: astra-spec-pinned
-          fetch-depth: 0  # its version comes from its tags
-          persist-credentials: false
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -90,71 +70,34 @@ jobs:
           name: distribution-files
           path: dist/
 
-      - name: Install astra-spec at the pin, pytest and packaging
+      - name: Install the wheel with its extras, and pytest
         run: |
+          wheels=(dist/*.whl)
+          if [[ ${#wheels[@]} -ne 1 ]]; then
+            echo "::error::dist/ holds ${#wheels[@]} wheels, not one"
+            exit 1
+          fi
           python -m pip install --upgrade pip
-          python -m pip install -e ./astra-spec-pinned "pytest >= 8.3" packaging
+          python -m pip install "${wheels[0]}[reference,evidence]" "pytest >= 8.3"
 
-      # pip doesn't refuse a wheel whose requirement the editable install misses: it replaces
-      # the editable install with astra-spec from PyPI, and the tests lose its source tree.
-      - name: Check the pin against the wheel's astra-spec requirement
-        id: wheel
-        shell: python
+      - name: Read the version of astra-spec installed
+        id: spec
         run: |
-          import email
-          import glob
-          import importlib.metadata
-          import os
-          import sys
-          import zipfile
+          version="$(python -c 'import importlib.metadata as m; print(m.version("astra-spec"))')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-          from packaging.requirements import Requirement
-          from packaging.utils import canonicalize_name
-          from packaging.version import Version
-
-
-          def fail(message):
-              print(f"::error::{message}")
-              sys.exit(1)
-
-
-          wheels = glob.glob("dist/*.whl")
-          if len(wheels) != 1:
-              fail(f"dist/ holds {len(wheels)} wheels, not one")
-          wheel = wheels[0]
-          with zipfile.ZipFile(wheel) as archive:
-              names = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
-              metadata = email.message_from_bytes(archive.read(names[0]))
-          required = [
-              requirement
-              for requirement in map(Requirement, metadata.get_all("Requires-Dist", []))
-              if canonicalize_name(requirement.name) == "astra-spec"
-          ]
-          if len(required) != 1:
-              fail(f"{wheel} has {len(required)} requirements on astra-spec, not one")
-          required = required[0]
-          version = Version(importlib.metadata.version("astra-spec"))
-          print(f"{wheel} requires {required}; astra-spec.pin gives astra-spec {version}")
-          if version.is_devrelease or version.local is not None:
-              fail(
-                  f"astra-spec.pin's commit gives astra-spec {version}, which is no release: "
-                  f"the pin must be the commit of an astra-spec tag that {required} accepts"
-              )
-          if not required.specifier.contains(version, prereleases=True):
-              fail(
-                  f"the wheel requires {required}, but astra-spec.pin's commit gives "
-                  f"astra-spec {version}: the pin must be the commit of a tag that it accepts"
-              )
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"wheel={wheel}\n")
-
-      - name: Install the wheel with its extras
-        env:
-          WHEEL: ${{ steps.wheel.outputs.wheel }}
-        run: python -m pip install "${WHEEL}[reference,evidence]"
+      - name: Check out astra-spec at that release's tag
+        uses: actions/checkout@v4
+        with:
+          repository: LightconeResearch/astra-spec
+          ref: v${{ steps.spec.outputs.version }}
+          path: astra-spec
+          persist-credentials: false
 
       - name: Run tests
         working-directory: astra-tools
+        env:
+          ASTRA_SPEC_SOURCE: ${{ github.workspace }}/astra-spec
         run: pytest -q -p no:cacheprovider
 
   pypi-publish:

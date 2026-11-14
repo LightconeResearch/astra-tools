@@ -36,10 +36,12 @@ docs/               # cli.md and installation.md, shown on astra-spec.org
 ## Development Commands
 
 ### Setup
-astra-spec is installed, editable, from `../astra-spec-pinned`, a worktree at the commit in `astra-spec.pin`:
+astra-spec is the release `uv.lock` installs from PyPI. The tests read its conformance suite, examples and test documents from `ASTRA_SPEC_SOURCE`, a checkout of astra-spec at that release's tag (`tests/spec.py` checks the tag):
 ```bash
-git -C ../astra-spec worktree add --detach ../astra-spec-pinned "$(cat astra-spec.pin)"
 uv sync --frozen
+version="$(uv run --frozen python -c 'import importlib.metadata as m; print(m.version("astra-spec"))')"
+git clone --depth 1 --branch "v$version" https://github.com/LightconeResearch/astra-spec ../astra-spec-release
+export ASTRA_SPEC_SOURCE="$PWD/../astra-spec-release"
 ```
 
 ### Testing and linting
@@ -52,13 +54,13 @@ uv run --frozen ruff format --check src/ tests/
 
 ## Common Development Tasks
 
-### Moving the pin
-Write the new commit's full id into `astra-spec.pin`, in the same commit as the changes it needs, then:
+### Moving to a new astra-spec release
+astra-tools only ever uses an astra-spec published on PyPI. Once it is, widen the requirement in `pyproject.toml` if need be and, in the same commit as the changes it needs:
 ```bash
-git -C ../astra-spec-pinned checkout --detach "$(cat astra-spec.pin)"
-uv sync --reinstall-package astra-spec
+uv lock --upgrade-package astra-spec
+uv sync --frozen
 ```
-CI checks astra-spec out at the pin, so it must be a commit on astra-spec's main or a tag.
+Then check `ASTRA_SPEC_SOURCE` out at the new release's tag. CI does the same, from the version `uv.lock` installs.
 
 ### Changing a command
 Change `docs/cli.md` (and `docs/installation.md` for an extra) in the same commit; `tests/test_cli_docs.py` checks it. astra-spec.org shows both pages, so their links into the specification are full URLs.

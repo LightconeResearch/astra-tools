@@ -17,7 +17,8 @@ from astra.hashing import digest_bytes
 from astra.load import ParseError, load_json
 from astra.records import Record, RecordedInput, Runner, new_record, read_record, write_record
 from astra.sources.reader import WorktreeReader
-from tests.conftest import DOCUMENTS, RUNNER, git, repository
+from tests.conftest import RUNNER, git, repository
+from tests.spec import DOCUMENTS
 from tests.test_plan import INNER, PAIR, STAGE
 
 RECORD = json.loads((DOCUMENTS / "valid" / "ProvenanceRecord-001-full.json").read_text("utf-8"))

@@ -82,13 +82,15 @@ each command's options, exit codes and examples. The
 
 ## Development
 
-astra-tools is tested against one commit of astra-spec, the one `astra-spec.pin` names. uv
-installs astra-spec, editable, from `../astra-spec-pinned`: a git worktree of astra-spec, beside
-this repository, detached at that commit. With astra-spec cloned at `../astra-spec`:
+astra-tools is tested against the astra-spec release `uv.lock` installs from PyPI. The tests read
+that release's conformance suite, examples and test documents from astra-spec's source tree, at the
+release's tag: `ASTRA_SPEC_SOURCE` names a checkout of it.
 
 ```bash
-git -C ../astra-spec worktree add --detach ../astra-spec-pinned "$(cat astra-spec.pin)"
-uv sync
+uv sync --frozen
+version="$(uv run --frozen python -c 'import importlib.metadata as m; print(m.version("astra-spec"))')"
+git clone --depth 1 --branch "v$version" https://github.com/LightconeResearch/astra-spec ../astra-spec-release
+export ASTRA_SPEC_SOURCE="$PWD/../astra-spec-release"
 ```
 
 The checks:
@@ -101,7 +103,7 @@ uv run --frozen ruff format --check src/ tests/
 ```
 
 [CLAUDE.md](https://github.com/LightconeResearch/astra-tools/blob/main/CLAUDE.md) gives the
-layout, the constraints the code keeps, and how to move the pin.
+layout, the constraints the code keeps, and how to move to a new astra-spec release.
 
 ## Licence
 

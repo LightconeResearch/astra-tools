@@ -40,7 +40,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "astra-spec >= 0.0.14.post1.dev0, < 0.2",  # becomes "== 0.1.0rc1", then "~= 0.1.0"
+    "astra-spec >= 0.1.0rc1, < 0.2",
     "click >= 8.2.1",
     "jsonschema >= 4.23",
     "rich >= 13.8",
@@ -89,9 +89,6 @@ include = [
     "/pyproject.toml",
     "/LICENSE",
 ]
-
-[tool.uv.sources]
-astra-spec = { path = "../astra-spec-pinned", editable = true }
 
 [tool.ruff]
 target-version = "py311"
