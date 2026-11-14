@@ -52,3 +52,15 @@ def test_a_value_put_is_got_until_another_replaces_it(tmp_path: Path) -> None:
     cache.put("validity", "key", b"three")
     assert cache.get("validity", "key") == b"three"
     assert len(list((cache.root() / "validity").iterdir())) == 2  # no temporary file is left
+
+
+def test_clear_deletes_what_astra_keeps_and_leaves_the_papers(tmp_path: Path) -> None:
+    """The paper cache is beside the cache's own folders, and isn't one of them."""
+    cache.put("validity", "key", b"one")
+    cache.put("hashes", "key", b"one")
+    paper = cache.root() / "papers" / "10.1234_example" / "paper.pdf"
+    paper.parent.mkdir(parents=True)
+    paper.write_bytes(b"%PDF")
+    assert cache.clear() == cache.root()
+    assert cache.get("validity", "key") is None and cache.get("hashes", "key") is None
+    assert paper.read_bytes() == b"%PDF"

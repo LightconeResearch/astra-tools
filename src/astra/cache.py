@@ -18,11 +18,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-NAMESPACES = ("remotes", "validity", "hashes", "worktrees", "papers")
+NAMESPACES = ("remotes", "validity", "hashes")
 """The folders astra-tools keeps in the cache: the remote stores (`sources.remote`), the
-validity of analyses from a commit (`rules.commits`), the hashes of files (`hashing`), the
-checkouts made for runs (`Repository.worktree`) and the papers cited by DOI
-(`evidence.papers`)."""
+validity of analyses from a commit (`rules.commits`) and the hashes of files (`hashing`). The
+paper cache (`papers.cache`) is beside them and isn't one of them: `clear` leaves it."""
 
 
 class CacheError(Exception):

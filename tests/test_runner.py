@@ -1,6 +1,6 @@
-"""A runner's building blocks: what stops a run in a checkout (`records.uncommitted_changes`), a
-checkout of its own for a run (`Repository.worktree`), and landing what a run made there in the
-main checkout (`records.land`), which the main checkout's `check` then judges.
+"""A runner's building blocks: what stops a run in a checkout (`records.uncommitted_changes`),
+and landing what a run made in a checkout of its own in the main checkout (`records.land`), which
+the main checkout's `check` then judges.
 
 The stack is `test_validate`'s worked example, committed with its input and the script its first
 recipe runs, and built as a runner builds it (`conftest.build`).
@@ -17,9 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from astra import api, cache
+from astra import api
 from astra.records import land, uncommitted_changes
-from astra.sources.git import Repository
 from tests.conftest import MINIMAL, build, git, repository
 from tests.test_check import UNCHANGED, statuses
 from tests.test_validate import WORKED_EXAMPLE
@@ -43,6 +42,14 @@ def main(committed: Path, tmp_path: Path) -> Path:
 
 def head(top: Path) -> str:
     return git(top, "rev-parse", "HEAD").strip()
+
+
+def checkout(main: Path, commit: str, folder: Path | None = None) -> Path:
+    """A checkout of `commit` of its own, as a runner makes for a run: a detached `git worktree
+    add` in a new folder, beside `main` or in `folder`."""
+    path = Path(tempfile.mkdtemp(prefix="run-", dir=folder or main.parent))
+    git(main, "worktree", "add", "--quiet", "--detach", str(path), commit)
+    return path
 
 
 def commit_of(top: Path, record: str) -> str:
@@ -135,21 +142,6 @@ def test_a_change_in_a_submodule_stops_a_run(with_submodule: Path) -> None:
     assert uncommitted_changes(top) == ("sub", "sub/b.csv")
 
 
-# --- Repository.worktree ---
-
-
-def test_a_run_gets_a_checkout_of_its_own_with_its_submodules(with_submodule: Path) -> None:
-    """A detached `git worktree add` in the cache, its submodules updated; each run its own."""
-    commit = head(with_submodule)
-    run = Repository(with_submodule).worktree(commit)
-    assert run.top.parent == cache.root() / "worktrees"
-    assert (run.head(), git(run.top, "branch", "--show-current")) == (commit, "")
-    assert (run.top / "astra.yaml").read_text() == MINIMAL
-    assert (run.top / "sub" / "a.csv").read_text() == "1\n"
-    assert run.changes() == ()
-    assert Repository(with_submodule).worktree(commit).top != run.top
-
-
 # --- land, and the main checkout's check ---
 
 
@@ -157,17 +149,17 @@ def test_a_run_in_its_own_checkout_lands_its_results_in_the_main_one(main: Path)
     """A run in a checkout of its own makes the results there, while the main checkout is
     edited, which doesn't stop it; `land` moves them into the main checkout, whose `check`
     judges them unchanged and present, not committed until they are."""
-    run = Repository(main).worktree(head(main))
-    results = api.plan(run.top).results
+    run = checkout(main, head(main))
+    results = api.plan(run).results
     (main / "notes.txt").write_text("an agent keeps editing\n")
-    assert uncommitted_changes(run.top) == ()
-    build(run.top)
-    assert uncommitted_changes(run.top) == ()
+    assert uncommitted_changes(run) == ()
+    build(run)
+    assert uncommitted_changes(run) == ()
     assert {s[0] for s in statuses(api.check(main)).values()} == {"missing"}
 
-    landed = land(run.top, main, results)
+    landed = land(run, main, results)
     assert [place.address for place in landed] == list(UNCHANGED)
-    assert not (run.top / "results" / "output2.csv").exists()
+    assert not (run / "results" / "output2.csv").exists()
     report = api.check(main)
     assert statuses(report) == UNCHANGED
     assert {s.committed for c in report.results for s in c.statuses} == {False}
@@ -183,55 +175,53 @@ def test_a_run_in_its_own_checkout_lands_its_results_in_the_main_one(main: Path)
 def test_land_moves_only_finished_results(main: Path) -> None:
     """A result is finished where its record is there and its bytes are the recorded ones;
     what isn't stays in the run's checkout."""
-    run = Repository(main).worktree(head(main))
-    results = api.plan(run.top).results
-    build(run.top)
-    (run.top / "results" / "output2.csv").write_text("other\n")
-    (run.top / ".astra" / "records" / "u2" / "output1.json").unlink()
-    assert [place.address for place in land(run.top, main, results)] == ["output1#u1"]
+    run = checkout(main, head(main))
+    results = api.plan(run).results
+    build(run)
+    (run / "results" / "output2.csv").write_text("other\n")
+    (run / ".astra" / "records" / "u2" / "output1.json").unlink()
+    assert [place.address for place in land(run, main, results)] == ["output1#u1"]
     assert not (main / "results" / "output2.csv").exists()
-    assert (run.top / "results" / "output2.csv").exists()
+    assert (run / "results" / "output2.csv").exists()
 
 
 def test_land_never_replaces_a_record_whose_commit_is_later_than_the_runs(main: Path) -> None:
     """A run from a later commit replaces the main checkout's records, and one from an earlier
     commit doesn't."""
     earlier = head(main)
-    first, last = (Repository(main).worktree(earlier) for _ in range(2))
+    first, last = (checkout(main, earlier) for _ in range(2))
     later = head(repository(main, {"src/output1.py": "print('edited')\n"}))
-    between = Repository(main).worktree(later)
+    between = checkout(main, later)
     results = api.plan(main).results
     for run in (first, between, last):
-        build(run.top)
+        build(run)
     record = ".astra/records/output2.json"
-    assert len(land(first.top, main, results)) == 3
+    assert len(land(first, main, results)) == 3
     assert commit_of(main, record) == earlier
-    assert len(land(between.top, main, results)) == 3
+    assert len(land(between, main, results)) == 3
     assert commit_of(main, record) == later
-    assert land(last.top, main, results) == ()
+    assert land(last, main, results) == ()
     assert commit_of(main, record) == later
-    assert commit_of(last.top, record) == earlier
+    assert commit_of(last, record) == earlier
 
 
 @pytest.fixture
-def cache_elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    """The cache on another file system than the main checkout, as the default cache in the home
-    folder is where the project is on a scratch disk: a folder in /dev/shm, where that is one."""
+def elsewhere(tmp_path: Path) -> Iterator[Path]:
+    """A folder on another file system than the main checkout, as a run's checkout is where the
+    project is on a scratch disk: a folder in /dev/shm, where that is one."""
     shm = Path("/dev/shm")
     if not os.access(shm, os.W_OK) or shm.stat().st_dev == tmp_path.stat().st_dev:
-        pytest.skip("no other file system to put the cache on")
+        pytest.skip("no other file system to put the run's checkout on")
     with tempfile.TemporaryDirectory(dir=shm) as folder:
-        monkeypatch.setenv("ASTRA_CACHE_DIR", folder)
         yield Path(folder)
 
 
-def test_land_moves_results_from_another_file_system(main: Path, cache_elsewhere: Path) -> None:
-    """A run's checkout in a cache on another file system lands its results in the main checkout
+def test_land_moves_results_from_another_file_system(main: Path, elsewhere: Path) -> None:
+    """A run's checkout on another file system lands its results in the main checkout
     all the same, where `check` judges them."""
-    run = Repository(main).worktree(head(main))
-    assert run.top.is_relative_to(cache_elsewhere)
-    results = api.plan(run.top).results
-    build(run.top)
-    assert [place.address for place in land(run.top, main, results)] == list(UNCHANGED)
-    assert not (run.top / "results" / "output2.csv").exists()
+    run = checkout(main, head(main), elsewhere)
+    results = api.plan(run).results
+    build(run)
+    assert [place.address for place in land(run, main, results)] == list(UNCHANGED)
+    assert not (run / "results" / "output2.csv").exists()
     assert statuses(api.check(main)) == UNCHANGED

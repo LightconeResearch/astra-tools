@@ -256,7 +256,7 @@ def _analysis(reader: Reader, folder: list[str]) -> bool:
 
 def land(run: Path, main: Path, results: Iterable[Result]) -> tuple[Place, ...]:
     """Move what a run in a checkout of its own made into the main checkout, and give the places
-    moved: `run` is the top of the run's checkout (`Repository.worktree`), and `main` the top of the
+    moved: `run` is the top of the run's checkout, which the runner makes, and `main` the top of the
     main one. Each place of `results`, the planned results (`plan.plan`) other than those read
     through a record, is moved where its result is finished in `run`: its record there is valid and
     the result's, and the bytes at its default place are the recorded ones. The bytes, then the

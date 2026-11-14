@@ -6,13 +6,10 @@ from __future__ import annotations
 
 import os
 import subprocess
-import tempfile
 import weakref
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-
-from astra import cache
 
 
 class GitError(Exception):
@@ -188,31 +185,6 @@ class Repository:
                 if sub[1:2] == b"C" or xy != b".M":
                     found.append(path)
         return tuple(sorted(found))
-
-    def worktree(self, commit: str) -> Repository:
-        """A checkout of `commit` of its own, for a run: a detached `git worktree add` in a new
-        folder of the cache's `worktrees`, its submodules updated (`git submodule update --init
-        --recursive`). Raises GitError where git can't make it, and CacheError where the cache can't
-        be used."""
-        folder = cache.root() / "worktrees"
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            path = Path(tempfile.mkdtemp(prefix=f"{commit[:12]}-", dir=folder))
-        except OSError as cant:
-            raise cache.CacheError(
-                f"can't make a folder in {folder}: {cant.strerror}; set ASTRA_CACHE_DIR to a "
-                "folder astra can write"
-            ) from cant
-        commands = (
-            ("-C", str(self.top), "worktree", "add", "--quiet", "--detach", str(path), commit),
-            ("-C", str(path), "submodule", "update", "--quiet", "--init", "--recursive"),
-        )
-        for args in commands:
-            result = _git(*args)
-            if result.returncode != 0:
-                error = os.fsdecode(result.stderr).strip()
-                raise GitError(f"git can't make a checkout of {commit} in {path}: {error}")
-        return Repository(path)
 
 
 class Objects:
