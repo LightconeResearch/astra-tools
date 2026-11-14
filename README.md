@@ -32,7 +32,7 @@ uv tool install 'astra-tools<0.3'
 ```
 
 `astra spec` needs the `[reference]` extra, and `astra paper` the `[evidence]` extra.
-[Installation](https://github.com/astra-project/astra-tools/blob/main/docs/installation.md)
+[Installation](https://astra-spec.org/0.1.0rc1/installation/)
 gives the details.
 
 ## First use
@@ -60,23 +60,23 @@ record and its bytes go, and the command that builds it.
 
 | Command | What it does |
 |---|---|
-| [`astra init`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-init) | Make a minimal analysis |
-| [`astra validate`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-validate) | Validate an analysis and its whole stack |
-| [`astra info`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-info) | Show the stack in brief |
-| [`astra universe`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-universe) | List the universes, or show one's selection |
-| [`astra plan`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-plan) | Show the planned results, their places and commands |
-| [`astra view`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-view) | Show the analysis as it is in one universe |
-| [`astra check`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-check) | Check the records and bytes of the planned results |
-| [`astra history`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-history) | Show what git holds of a result's records over time |
-| [`astra rules`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-rules) | List the rules, or show one |
-| [`astra spec`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-spec) | Describe the fields of ASTRA files |
-| [`astra schema`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-schema) | Show or export the JSON Schemas |
-| [`astra guide`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-guide) | Print the guide for agents |
-| [`astra paper`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-paper) | Keep cited papers, and seek quotes in them |
-| [`astra cache`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-cache) | Show or clear the cache |
-| [`astra completion`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-completion) | Print a shell completion script |
+| [`astra init`](https://astra-spec.org/0.1.0rc1/cli/#astra-init) | Make a minimal analysis |
+| [`astra validate`](https://astra-spec.org/0.1.0rc1/cli/#astra-validate) | Validate an analysis and its whole stack |
+| [`astra info`](https://astra-spec.org/0.1.0rc1/cli/#astra-info) | Show the stack in brief |
+| [`astra universe`](https://astra-spec.org/0.1.0rc1/cli/#astra-universe) | List the universes, or show one's selection |
+| [`astra plan`](https://astra-spec.org/0.1.0rc1/cli/#astra-plan) | Show the planned results, their places and commands |
+| [`astra view`](https://astra-spec.org/0.1.0rc1/cli/#astra-view) | Show the analysis as it is in one universe |
+| [`astra check`](https://astra-spec.org/0.1.0rc1/cli/#astra-check) | Check the records and bytes of the planned results |
+| [`astra history`](https://astra-spec.org/0.1.0rc1/cli/#astra-history) | Show what git holds of a result's records over time |
+| [`astra rules`](https://astra-spec.org/0.1.0rc1/cli/#astra-rules) | List the rules, or show one |
+| [`astra spec`](https://astra-spec.org/0.1.0rc1/cli/#astra-spec) | Describe the fields of ASTRA files |
+| [`astra schema`](https://astra-spec.org/0.1.0rc1/cli/#astra-schema) | Show or export the JSON Schemas |
+| [`astra guide`](https://astra-spec.org/0.1.0rc1/cli/#astra-guide) | Print the guide for agents |
+| [`astra paper`](https://astra-spec.org/0.1.0rc1/cli/#astra-paper) | Keep cited papers, and seek quotes in them |
+| [`astra cache`](https://astra-spec.org/0.1.0rc1/cli/#astra-cache) | Show or clear the cache |
+| [`astra completion`](https://astra-spec.org/0.1.0rc1/cli/#astra-completion) | Print a shell completion script |
 
-The [CLI reference](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md) gives
+The [CLI reference](https://astra-spec.org/0.1.0rc1/cli/) gives
 each command's options, exit codes and examples. The
 [specification](https://astra-spec.org/0.1/) says what an analysis means and what each rule asks.
 
