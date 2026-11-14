@@ -10,6 +10,7 @@ objects and dispatch through the verification machinery directly.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -171,45 +172,28 @@ def test_prior_insights_still_walked(patch_extract: Any) -> None:
 
 def test_cli_validate_reports_findings_artifact_skipped(tmp_path: Path, patch_extract: Any) -> None:
     """`astra validate --verify-evidence` walks findings and reports SKIPPED (artifact)."""
+    from tests.conftest import MINIMAL, analysis, git_init
+
     # No paper-backed PDFs needed: all evidence is artifact-backed.
     patch_extract({})
-
-    yaml_text = """\
-version: "1.0"
-name: "Findings walk smoke test"
-description: |
-  Smoke-test fixture for the findings.evidence walk. The result is
-  supported by an artifact-backed evidence item.
-inputs:
-  - id: data
-    type: data
-outputs:
-  - id: accuracy_table
-    type: table
-decisions:
-  method:
-    label: Method
-    default: a
-    options:
-      a: {label: A}
-      b: {label: B}
-findings:
-  result:
-    id: result
-    claim: "Method A is best."
-    created_at: "2026-01-01T00:00:00Z"
-    evidence:
-      - id: ev_acc
-        artifact: accuracy_table
-"""
-    analysis_path = tmp_path / "astra.yaml"
-    analysis_path.write_text(yaml_text)
+    findings = "findings:\n  best:\n    claim: The result is best.\n    evidence:\n"
+    folder = analysis(git_init(tmp_path), MINIMAL + findings + "      - artifact: result\n")
 
     runner = CliRunner()
-    result = runner.invoke(main, ["validate", str(analysis_path), "--verify-evidence"])
-
+    result = runner.invoke(main, ["validate", str(folder / "astra.yaml"), "--verify-evidence"])
     assert result.exit_code == 0, result.output
     assert "Verifying evidence" in result.output
-    assert "findings" in result.output
-    assert "SKIPPED (artifact)" in result.output
-    assert "Validation successful" in result.output
+    assert "✓ Evidence (findings): 0/1 verified, 1 SKIPPED (artifact)" in result.output
+
+    hinted = runner.invoke(main, ["validate", str(folder)])
+    assert "Run with --verify-evidence to verify quotes exist in papers." in hinted.output
+    assert (
+        "--verify-evidence"
+        not in runner.invoke(main, ["validate", str(folder), "--skip-evidence"]).output
+    )
+
+    as_json = runner.invoke(main, ["validate", str(folder), "-e", "--json"])
+    evidence = json.loads(as_json.output)["reports"][0]["evidence"]
+    assert [(item["in"], item["insight"], item["status"]) for item in evidence] == [
+        ("findings", "best", "skipped")
+    ]

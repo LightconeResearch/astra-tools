@@ -4,147 +4,72 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ASTRA (Agentic Schema for Transparent Research Analysis) is the **Python CLI and SDK** for working with ASTRA analysis specifications. It provides validation, paper management, evidence verification, and exploration utilities.
+astra-tools is the **Python CLI and library** for ASTRA 0.1 analyses: validator, planner, checker and a runner's building blocks. It reads only `0.1.x` analyses; older ones need `astra-tools<0.3`.
 
 **Architecture**:
-- **astra-spec** ([separate repo](https://github.com/LightconeResearch/astra-spec)) = the specification: LinkML schemas, generated data models
-- **ASTRA** (this repo) = tooling layer: validation, CLI, helpers, paper management, evidence verification
+- **astra-spec** ([separate repo](https://github.com/astra-project/astra-spec)) = the specification. astra-tools reads its JSON Schemas and rule catalogue (`astra.schema`: `jsonschema/`, `rules/rules.json`) at run time, copying nothing.
+- **astra-tools** (this repo) = tooling layer: validation, planning, checking, records, CLI, papers.
 
-ASTRA is intentionally agnostic to any specific agentic layer or UI; downstream tools may consume ASTRA specifications, but this project does not depend on or prescribe one.
+astra-tools is intentionally agnostic to any agentic layer or UI. It answers to the specification: argue from it, its conformance suite and its examples, never from one analysis that uses ASTRA.
 
-Both `astra-spec` and this package share the `astra` Python namespace via implicit namespace packages (PEP 420). There is **no** `src/astra/__init__.py`.
+Both `astra-spec` and this package share the `astra` Python namespace via implicit namespace packages (PEP 420). There is **no** `src/astra/__init__.py`, and never create `src/astra/schema/`.
 
 ## Repository Structure
 
 ```
-ASTRA/
-├── src/astra/                     # NO __init__.py (namespace package)
-│   ├── cli.py                     # Click-based CLI
-│   ├── helpers.py                 # Dict-based utilities
-│   ├── validation/
-│   │   ├── schema.py              # Pydantic model validation (models from astra-spec)
-│   │   └── semantic.py            # Semantic cross-reference validation
-│   ├── papers/                    # Paper downloading and caching
-│   └── verification/              # PDF processing and insight verification
-│
-├── examples/                      # Example projects
-│   ├── iris/                      # Simple flat analysis
-│   └── iris_pipeline/             # Nested analysis with sub-analyses
-│
-└── tests/
-    └── fixtures/                  # Test fixtures
+src/astra/          # NO __init__.py (namespace package), in layers:
+  0 foundations     diagnostics, grammar, model
+  1 reading         sources/ (every byte read), cache, load, contract, scaffold
+  2 binding         stack
+  3 meaning         universes, rules/, validate, plan, view
+  4 results         hashing, records, environments, check, history
+  5 surfaces        api (the stable functions), cli/, spec_render,
+                    papers/ and verification/ (the paper cache and quotes, as 0.2 had them)
 ```
 
 ## Key Design Principles
 
-1. **astra-spec owns the specification** - LinkML schemas and Pydantic models
-2. **This repo owns the tooling** - validation, CLI, paper management
-3. **Namespace sharing** - Both packages provide modules under `astra.*`
-4. **Two-stage validation** - Pydantic (structural) then semantic (cross-references)
-
-## Core Components
-
-1. **Validation** (`src/astra/validation/`)
-   - `schema.py`: Structural validation using Pydantic models from `astra.datamodel`
-   - `semantic.py`: Cross-reference validation (IDs, constraints, universe coverage)
-   - `schema.collect_recommendations`: advisory pass for fields the schema marks
-     `recommended` rather than `required` (currently `Output.format`, mandatory
-     from ASTRA 0.1.0). Reported as warnings; never affects the exit code.
-
-2. **CLI** (`src/astra/cli.py`)
-   - Built with Click and Rich
-   - Commands: init, validate, info, universe, viz, spec, guide, schema, paper
-   - `validate` with no FILE validates the whole project; `validate` and `info` accept `--json`
-
-3. **Helpers** (`src/astra/helpers.py`)
-   - Dict-based utilities: `load_yaml`, `get_decision`, `get_default_universe`
-
-4. **Papers & Verification** (`src/astra/papers/`, `src/astra/verification/`)
-   - Paper downloading and caching by DOI
-   - PDF text extraction and evidence quote verification
+1. **Layers**: a module imports only from its own layer or the ones before it. Rich is imported only under `cli/text/`.
+2. **Levels come from the catalogue**: `MUST` is an error, `SHOULD` a warning. astra-tools' own codes are in `diagnostics.py`.
+3. **Import cost is part of the API**: `tests/test_import_cost.py` lists what each module may import. Add new modules there.
 
 ## Development Commands
 
 ### Setup
+astra-spec is the release `uv.lock` installs from PyPI. `tests/spec.py` downloads that release's conformance suite, examples and test documents from its tag on GitHub, once, into `~/.cache/astra-tools-tests/`:
 ```bash
-# Install for development (includes pytest, ruff, mypy)
-pip install -e ".[dev]"
+uv sync --frozen
 ```
 
-### Testing
+### Testing and linting
 ```bash
-pytest
-pytest --cov=astra tests/
-astra validate examples/iris/astra.yaml
-```
-
-### Linting
-```bash
-ruff check src/ tests/
-ruff format src/ tests/
-mypy src/
-```
-
-## Important Design Patterns
-
-### 1. Two-Stage Validation
-```python
-from astra.validation import validate_analysis_schema, validate_analysis_file
-
-# Stage 1: Schema validation (structure, types)
-schema_errors = validate_analysis_schema(file)
-
-# Stage 2: Semantic validation (references, constraints)
-semantic_errors = validate_analysis_file(file)
-```
-
-### 2. Dict-Based API
-```python
-from astra.helpers import load_yaml, get_decision, get_default_universe
-
-data = load_yaml("astra.yaml")
-decision = get_decision(data, "preprocessing")
-defaults = get_default_universe(data)
-```
-
-### 3. Universe Format
-Universe decisions use a compact dict (decision ID → option ID):
-```yaml
-decisions:
-  scaling: standard
-  model: random_forest
-```
-
-### 4. Namespace Package
-Both `astra-spec` and this package contribute to the `astra` namespace:
-```python
-from astra.datamodel import Analysis    # from astra-spec
-from astra.helpers import load_yaml     # from this package
-from astra.validation import validate_analysis_file  # from this package
+uv run --frozen pytest -q -p no:cacheprovider
+uv run --frozen mypy --strict src/
+uv run --frozen ruff check src/ tests/
+uv run --frozen ruff format --check src/ tests/
 ```
 
 ## Common Development Tasks
 
-### Adding a New Validation Rule
-1. For semantic validation: Add check to `src/astra/validation/semantic.py`
-2. Create test fixture in `tests/fixtures/invalid/`
-3. Add test case in `tests/test_validation.py`
+### Moving to a new astra-spec release
+astra-tools only ever uses an astra-spec published on PyPI. Once it is, widen the requirement in `pyproject.toml` if need be and, in the same commit as the changes it needs:
+```bash
+uv lock --upgrade-package astra-spec
+uv sync --frozen
+```
+
+### Changing a command
+The CLI reference and installation page live in astra-spec (`docs/cli.md`, `docs/installation.md`), which astra-spec.org shows. Change them there too, for a new command or option.
 
 ## Configuration
 
-### pyproject.toml
-- Python >=3.11
-- Ruff: line-length = 100, target-version = "py311"
-- MyPy: strict mode
+- Python >=3.11 (on 3.11, `Traversable.joinpath` takes one argument)
+- Ruff (line-length 100), mypy strict
 - Versioning: hatch-vcs (from git tags)
-
-### Dependencies
-- Core: astra-spec, click, pyyaml, rich, pypdf, httpx, rapidfuzz
-- Dev: pytest, pytest-cov, ruff, mypy
+- Dependencies: astra-spec, click, httpx, jsonschema, linkml-runtime, pypdf, rapidfuzz, rich, ruamel.yaml; no extras
 
 ## Key Conventions
 
-1. **ID patterns**: `^[a-z][a-z0-9_]*$`
-2. **Version format**: `^\d+\.\d+(\.\d+)?$`
-3. **Constraint references**: `decision.option` format (e.g., "scaling.standard")
-4. **DOI format**: `10\.\d{4,}/.*`
+1. git only through the `git` binary; no module-level mutable state; every write atomic (`os.replace`).
+2. `README.md` is the PyPI page, so its links are full URLs.
+3. Commit subjects: `Area: what changed`.

@@ -1,1110 +1,235 @@
-"""Tests for CLI commands."""
+"""The commands `validate`, `schema`, `guide` and `spec`, on what they
+promise: output, `--json` shape and exit codes. The others are in `test_commands.py`."""
+
+from __future__ import annotations
 
 import json
-import os
-import shutil
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 
-from astra.cli import main
-from astra.helpers import load_yaml, save_yaml
-
-
-@pytest.fixture
-def runner() -> CliRunner:
-    """Return a CLI runner."""
-    return CliRunner()
+from astra import validate
+from astra.cli import COMMANDS, main
+from astra.diagnostics import Catalogue
+from tests.conftest import MINIMAL, analysis, git_init
 
 
-class TestValidateCommand:
-    """Tests for the validate command."""
+def astra(*args: str, env: dict[str, str] | None = None) -> Result:
+    return CliRunner().invoke(main, list(args), env=env)
 
-    def test_validate_valid_analysis(self, runner: CliRunner, minimal_analysis_path: Path):
-        result = runner.invoke(main, ["validate", str(minimal_analysis_path)])
-        assert result.exit_code == 0
-        assert "Validation successful" in result.output
 
-    def test_validate_valid_full_analysis(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["validate", str(full_analysis_path)])
-        assert result.exit_code == 0
-        assert "Validation successful" in result.output
+def test_help_names_every_command() -> None:
+    result = astra("--help")
+    assert result.exit_code == 0
+    for name in COMMANDS:
+        assert f"  {name} " in result.stdout
+    assert set(COMMANDS) == {
+        "check",
+        "guide",
+        "info",
+        "init",
+        "paper",
+        "plan",
+        "schema",
+        "spec",
+        "universe",
+        "validate",
+    }
 
-    def test_validate_valid_universe(
-        self,
-        runner: CliRunner,
-        baseline_universe_path: Path,
-        full_analysis_path: Path,
-    ):
-        result = runner.invoke(
-            main,
-            ["validate", str(baseline_universe_path), "-a", str(full_analysis_path)],
-        )
-        assert result.exit_code == 0
-        assert "Validation successful" in result.output
 
-    def test_validate_invalid_analysis(self, runner: CliRunner, invalid_dir: Path):
-        result = runner.invoke(main, ["validate", str(invalid_dir / "missing_version.yaml")])
-        assert result.exit_code == 1
-        assert "validation errors" in result.output
+# --- validate ---
 
-    def test_validate_universe_without_analysis(
-        self, runner: CliRunner, baseline_universe_path: Path, tmp_path: Path
-    ):
-        # Copy universe to temp dir where there's no astra.yaml
-        temp_universe = tmp_path / "universes" / "test.yaml"
-        temp_universe.parent.mkdir(parents=True)
-        shutil.copy(baseline_universe_path, temp_universe)
 
-        result = runner.invoke(main, ["validate", str(temp_universe)])
-        assert result.exit_code == 1
-        assert "requires an analysis file" in result.output
+def test_validate_exits_0_for_a_valid_analysis(tmp_path: Path) -> None:
+    result = astra("validate", str(analysis(git_init(tmp_path))))
+    assert result.exit_code == 0
+    assert "astra.yaml: valid, 0 error(s), 0 warning(s)" in result.stdout
+    assert validate.unchecked(Catalogue.load()) == ()  # every validator rule is checked
+    assert "aren't checked" not in result.stdout
 
-    def test_validate_nonexistent_file(self, runner: CliRunner):
-        result = runner.invoke(main, ["validate", "nonexistent.yaml"])
-        assert result.exit_code != 0
 
-    def test_an_external_sub_analysis_is_checked_for_recommended_fields(
-        self, runner: CliRunner, tmp_path: Path, minimal_analysis_path: Path
-    ):
-        """A `path:` sub-analysis is skipped as a standalone target, so if the
-        recommendation pass ran on the unresolved tree its outputs would be
-        checked nowhere at all — and hard-fail at 0.1.0 with no warning."""
-        child = tmp_path / "child"
-        child.mkdir()
-        save_yaml(
+def test_validate_prints_line_col_level_code_message_by_file(tmp_path: Path) -> None:
+    folder = analysis(git_init(tmp_path), MINIMAL.replace("type: metric", "type: plot"))
+    result = astra("validate", str(folder))
+    assert result.exit_code == 1
+    lines = result.stdout.splitlines()
+    assert lines[0] == "astra.yaml"
+    assert lines[1].startswith('  4:11 error INVALID_VALUE `type` is "plot"')
+    assert "astra.yaml: invalid, 1 error(s), 0 warning(s)" in result.stdout
+
+
+def test_validate_respects_no_color(tmp_path: Path) -> None:
+    folder = analysis(git_init(tmp_path), MINIMAL + "name: x\n")
+    coloured = astra("validate", str(folder), env={"FORCE_COLOR": "1"})
+    plain = astra("validate", str(folder), env={"FORCE_COLOR": "1", "NO_COLOR": "1"})
+    assert "\x1b[1;31m" in coloured.stdout
+    assert "31m" not in plain.stdout
+
+
+def test_validate_json_is_the_reports_whether_a_file_is_given_or_not(
+    tmp_path: Path, outside: Path
+) -> None:
+    """`astra-validation-reports/1`, with no ANSI escape, colour forced or not; the exit code
+    still carries pass or fail."""
+    result = astra("validate", str(analysis(outside)), "--json", env={"FORCE_COLOR": "1"})
+    assert result.exit_code == 1
+    assert "\x1b" not in result.stdout
+    document = json.loads(result.stdout)
+    assert (document["shape"], document["valid"]) == ("astra-validation-reports/1", False)
+    (report,) = document["reports"]
+    assert (report["shape"], report["valid"]) == ("astra-validation-report/1", False)
+    assert [d["code"] for d in report["diagnostics"]] == ["NOT_IN_REPOSITORY"]
+    result = astra("validate", str(analysis(git_init(tmp_path / "repo")) / "astra.yaml"), "--json")
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "shape": "astra-validation-reports/1",
+        "valid": True,
+        "reports": [
             {
-                "inputs": [{"id": "raw", "type": "data", "source": "data/raw.csv"}],
-                "outputs": [
-                    {
-                        "id": "child_out",
-                        "type": "metric",
-                        "description": "No format declared",
-                        "inputs": ["raw"],
-                        "recipe": {"command": "python c.py --out {output}"},
-                    }
-                ],
-            },
-            child / "astra.yaml",
-        )
-        root = load_yaml(minimal_analysis_path)
-        root["analyses"] = {"child": {"path": "child"}}
-        save_yaml(root, tmp_path / "astra.yaml")
-
-        result = runner.invoke(main, ["validate", str(tmp_path / "astra.yaml")])
-        assert result.exit_code == 0  # advisory only, never fatal
-        assert "child.child_out" in result.output
-        assert "without a 'format'" in result.output
-
-
-class TestValidateProjectMode:
-    """Tests for `astra validate` with no FILE (whole-project validation)."""
-
-    @pytest.fixture
-    def project(self, tmp_path: Path, valid_dir: Path, monkeypatch) -> Path:
-        """A project: root spec, one standalone sub-project, one universe file."""
-        shutil.copy(valid_dir / "full.yaml", tmp_path / "astra.yaml")
-        (tmp_path / "universes").mkdir()
-        shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universes" / "baseline.yaml")
-        (tmp_path / "mocks").mkdir()
-        shutil.copy(valid_dir / "minimal.yaml", tmp_path / "mocks" / "astra.yaml")
-        monkeypatch.chdir(tmp_path)
-        return tmp_path
-
-    def test_validates_every_spec_and_universe(self, runner: CliRunner, project: Path):
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 0
-        assert "All 3 file(s) passed validation." in result.output
-
-    @pytest.mark.parametrize(
-        "corrupt",
-        [
-            pytest.param(
-                lambda target, invalid_dir: shutil.copy(
-                    invalid_dir / "missing_version.yaml", target
-                ),
-                id="invalid-spec",
-            ),
-            pytest.param(
-                lambda target, invalid_dir: target.write_text("key: [unclosed\n"),
-                id="malformed-yaml",
-            ),
+                "shape": "astra-validation-report/1",
+                "root": "astra.yaml",
+                "valid": True,
+                "diagnostics": [],
+                "unchecked": [],
+            }
         ],
-    )
-    def test_reports_failing_files_and_keeps_going(
-        self, runner: CliRunner, project: Path, invalid_dir: Path, corrupt
-    ):
-        corrupt(project / "mocks" / "astra.yaml", invalid_dir)
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 1
-        assert "1/3 file(s) failed validation" in result.output
-        assert "mocks/astra.yaml" in result.output
-        # The other files were still validated.
-        assert "universes/baseline.yaml" in result.output
-
-    def test_empty_directory_errors(self, runner: CliRunner, tmp_path: Path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 1
-        assert "No astra.yaml or universe files found" in result.output
-
-    def test_external_path_sub_analysis_validates_via_its_root(
-        self, runner: CliRunner, tmp_path: Path, valid_dir: Path, monkeypatch
-    ):
-        # Split nested.yaml: one sub-analysis moves to its own build_mocks/astra.yaml.
-        # Standalone that file is invalid (no name/version, ../ refs); in context
-        # through the root it is valid, and project mode must treat it that way.
-        nested = load_yaml(valid_dir / "nested.yaml")
-        sub = nested["analyses"].pop("build_mocks")
-        nested["analyses"]["build_mocks"] = {"path": "build_mocks"}
-        (tmp_path / "build_mocks").mkdir()
-        save_yaml(sub, tmp_path / "build_mocks" / "astra.yaml")
-        save_yaml(nested, tmp_path / "astra.yaml")
-        monkeypatch.chdir(tmp_path)
-
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 0
-        assert "All 1 file(s) passed validation." in result.output
-        assert "build_mocks/astra.yaml" not in result.output
-
-    def test_empty_universe_file_fails_without_aborting_the_sweep(
-        self, runner: CliRunner, project: Path
-    ):
-        (project / "universes" / "empty.yaml").write_text("")
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 1
-        assert "1/4 file(s) failed validation" in result.output
-        assert "universes/empty.yaml" in result.output
-
-    def test_universe_named_astra_yaml_is_counted_once(
-        self, runner: CliRunner, project: Path, valid_dir: Path
-    ):
-        shutil.copy(valid_dir / "universe_baseline.yaml", project / "universes" / "astra.yaml")
-        result = runner.invoke(main, ["validate"])
-        assert result.output.count("Validating universes/astra.yaml") == 1
-
-    def test_universe_files_outside_universes_dir_are_discovered(
-        self, runner: CliRunner, tmp_path: Path, valid_dir: Path, monkeypatch
-    ):
-        shutil.copy(valid_dir / "full.yaml", tmp_path / "astra.yaml")
-        shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universe_baseline.yaml")
-        monkeypatch.chdir(tmp_path)
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 0
-        assert "Validating universe_baseline.yaml" in result.output
-        assert "All 2 file(s) passed validation." in result.output
-
-    def test_hidden_and_vendored_dirs_are_skipped(
-        self, runner: CliRunner, project: Path, invalid_dir: Path
-    ):
-        for vendored in (".venv", "node_modules"):
-            (project / vendored / "pkg").mkdir(parents=True)
-            shutil.copy(
-                invalid_dir / "missing_version.yaml", project / vendored / "pkg" / "astra.yaml"
-            )
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 0
-        assert "All 3 file(s) passed validation." in result.output
-
-    def test_universe_analysis_search_does_not_climb_past_cwd(
-        self, runner: CliRunner, tmp_path: Path, valid_dir: Path, monkeypatch
-    ):
-        # An astra.yaml above cwd must not be picked up as the universe's analysis.
-        shutil.copy(valid_dir / "full.yaml", tmp_path / "astra.yaml")
-        subproject = tmp_path / "project"
-        (subproject / "universes").mkdir(parents=True)
-        shutil.copy(
-            valid_dir / "universe_baseline.yaml", subproject / "universes" / "baseline.yaml"
-        )
-        monkeypatch.chdir(subproject)
-
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 1
-        assert "requires an analysis file" in result.output
-
-    def test_bracketed_path_segments_render_literally(
-        self, runner: CliRunner, project: Path, invalid_dir: Path
-    ):
-        weird = project / "sensitivity[alpha]"
-        weird.mkdir()
-        shutil.copy(invalid_dir / "missing_version.yaml", weird / "astra.yaml")
-        result = runner.invoke(main, ["validate"])
-        assert result.exit_code == 1
-        assert "sensitivity[alpha]/astra.yaml" in result.output
-
-    def test_analysis_flag_requires_file_argument(self, runner: CliRunner, project: Path):
-        result = runner.invoke(main, ["validate", "--analysis", "astra.yaml"])
-        assert result.exit_code == 2
-        assert "--analysis requires a FILE argument" in result.output
-
-
-class TestJsonOutput:
-    """--json: the report as one JSON-encoded string, exit code unchanged."""
-
-    def test_validate_json_pass(self, runner: CliRunner, minimal_analysis_path: Path):
-        result = runner.invoke(main, ["validate", str(minimal_analysis_path), "--json"])
-        assert result.exit_code == 0
-        report = json.loads(result.output)
-        assert isinstance(report, str)
-        assert "Validation successful" in report
-
-    def test_validate_json_fail(self, runner: CliRunner, invalid_dir: Path):
-        result = runner.invoke(
-            main, ["validate", str(invalid_dir / "missing_version.yaml"), "--json"]
-        )
-        assert result.exit_code == 1
-        report = json.loads(result.output)
-        assert "validation errors" in report
-
-    def test_info_json(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--json"])
-        assert result.exit_code == 0
-        report = json.loads(result.output)
-        assert isinstance(report, str)
-        assert "Full Analysis" in report
-        assert "Inputs: 2 | Outputs: 6 | Decisions: 4" in report
-
-    def test_json_is_plain_even_when_color_is_forced(
-        self, runner: CliRunner, minimal_analysis_path: Path, monkeypatch
-    ):
-        from rich.console import Console
-
-        import astra.cli
-
-        monkeypatch.setattr(astra.cli, "console", Console(force_terminal=True))
-        result = runner.invoke(main, ["validate", str(minimal_analysis_path), "--json"])
-        assert result.exit_code == 0
-        report = json.loads(result.output)
-        assert "\x1b" not in report
-        assert "Validation successful" in report
-
-
-class TestGuideCommand:
-    """Tests for the guide command."""
-
-    def test_guide_prints_packaged_guide(self, runner: CliRunner, monkeypatch):
-        import astra.cli
-
-        monkeypatch.setattr(astra.cli, "_packaged_guide", lambda: "# ASTRA\npackaged briefing\n")
-        result = runner.invoke(main, ["guide"])
-        assert result.exit_code == 0
-        assert result.output == "# ASTRA\npackaged briefing\n"
-
-    def test_guide_errors_when_unpackaged(self, runner: CliRunner, monkeypatch):
-        import astra.cli
-
-        monkeypatch.setattr(astra.cli, "_packaged_guide", lambda: None)
-        result = runner.invoke(main, ["guide"])
-        assert result.exit_code == 1
-        assert "astra-spec.org" in result.output
-
-
-class TestInfoCommand:
-    """Tests for the info command."""
-
-    def test_info_with_file(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path)])
-        assert result.exit_code == 0
-        assert "Full Analysis" in result.output
-        assert "Inputs:" in result.output
-        assert "Outputs:" in result.output
-        assert "Decisions:" in result.output
-
-    def test_info_decisions_only(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--decisions"])
-        assert result.exit_code == 0
-        assert "Decisions:" in result.output
-        assert "preprocessing" in result.output
-
-    def test_info_inputs_only(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--inputs"])
-        assert result.exit_code == 0
-        assert "Inputs:" in result.output
-        assert "primary_data" in result.output
-
-    def test_info_outputs_only(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path), "--outputs"])
-        assert result.exit_code == 0
-        assert "Outputs:" in result.output
-        assert "accuracy" in result.output
-
-    def test_info_layout_line(self, runner: CliRunner, tmp_path: Path, valid_dir: Path):
-        data = load_yaml(valid_dir / "full.yaml")
-        data["analyses"] = {"mocks": {"path": "mocks"}}
-        save_yaml(data, tmp_path / "astra.yaml")
-        (tmp_path / "universes").mkdir()
-        shutil.copy(valid_dir / "universe_baseline.yaml", tmp_path / "universes" / "baseline.yaml")
-        # An astra.yaml on disk the spec does not declare is not a sub-analysis.
-        (tmp_path / "scratch").mkdir()
-        shutil.copy(valid_dir / "minimal.yaml", tmp_path / "scratch" / "astra.yaml")
-
-        result = runner.invoke(main, ["info", "-f", str(tmp_path / "astra.yaml")])
-        assert result.exit_code == 0
-        assert "Layout: 1 sub-analysis in ./mocks/, 1 universe in ./universes/" in result.output
-        assert "scratch" not in result.output
-
-    def test_info_layout_counts_inline_sub_analyses(self, runner: CliRunner, valid_dir: Path):
-        result = runner.invoke(main, ["info", "-f", str(valid_dir / "nested.yaml")])
-        assert result.exit_code == 0
-        assert "Layout: 3 sub-analyses" in result.output
-
-    def test_info_no_layout_line_when_flat(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["info", "-f", str(full_analysis_path)])
-        assert result.exit_code == 0
-        assert "Layout:" not in result.output
-
-    def test_info_no_file(self, runner: CliRunner, tmp_path: Path):
-        # Run in a directory without astra.yaml
-        result = runner.invoke(main, ["info"], catch_exceptions=False)
-        assert result.exit_code == 1
-        assert "No astra.yaml found" in result.output
-
-
-class TestUniverseCommands:
-    """Tests for universe subcommands."""
-
-    def test_universe_generate(self, runner: CliRunner, full_analysis_path: Path, tmp_path: Path):
-        output_path = tmp_path / "generated.yaml"
-        result = runner.invoke(
-            main,
-            [
-                "universe",
-                "generate",
-                "-a",
-                str(full_analysis_path),
-                "-n",
-                "test-universe",
-                "-o",
-                str(output_path),
-            ],
-        )
-        assert result.exit_code == 0
-        assert "Generated universe" in result.output
-        assert output_path.exists()
-
-    def test_universe_generate_default_output(
-        self, runner: CliRunner, full_analysis_path: Path, tmp_path: Path
-    ):
-        # Copy analysis to temp dir
-        temp_analysis = tmp_path / "astra.yaml"
-        shutil.copy(full_analysis_path, temp_analysis)
-
-        result = runner.invoke(
-            main,
-            ["universe", "generate", "-a", str(temp_analysis), "-n", "baseline"],
-        )
-        assert result.exit_code == 0
-        assert (tmp_path / "universes" / "baseline.yaml").exists()
-
-    def test_universe_generate_refuses_to_overwrite(
-        self, runner: CliRunner, full_analysis_path: Path, tmp_path: Path
-    ):
-        output_path = tmp_path / "generated.yaml"
-        output_path.write_text("id: hand-edited\n")
-
-        result = runner.invoke(
-            main,
-            [
-                "universe",
-                "generate",
-                "-a",
-                str(full_analysis_path),
-                "-n",
-                "test-universe",
-                "-o",
-                str(output_path),
-            ],
-        )
-        assert result.exit_code != 0
-        assert "already exists" in result.output
-        # The hand-edited file must be left untouched.
-        assert output_path.read_text() == "id: hand-edited\n"
-
-    def test_universe_generate_force_overwrites(
-        self, runner: CliRunner, full_analysis_path: Path, tmp_path: Path
-    ):
-        output_path = tmp_path / "generated.yaml"
-        output_path.write_text("id: hand-edited\n")
-
-        result = runner.invoke(
-            main,
-            [
-                "universe",
-                "generate",
-                "-a",
-                str(full_analysis_path),
-                "-n",
-                "test-universe",
-                "-o",
-                str(output_path),
-                "--force",
-            ],
-        )
-        assert result.exit_code == 0
-        assert "Generated universe" in result.output
-        assert load_yaml(output_path)["id"] == "test-universe"
-
-    def test_universe_check_valid(
-        self,
-        runner: CliRunner,
-        baseline_universe_path: Path,
-        full_analysis_path: Path,
-    ):
-        result = runner.invoke(
-            main,
-            ["universe", "check", str(baseline_universe_path), "-a", str(full_analysis_path)],
-        )
-        assert result.exit_code == 0
-        assert "Universe is valid" in result.output
-
-    def test_universe_check_invalid(
-        self, runner: CliRunner, invalid_dir: Path, full_analysis_path: Path
-    ):
-        result = runner.invoke(
-            main,
-            [
-                "universe",
-                "check",
-                str(invalid_dir / "universe_incompatible.yaml"),
-                "-a",
-                str(full_analysis_path),
-            ],
-        )
-        assert result.exit_code == 1
-        assert "validation errors" in result.output
-
-
-class TestVizCommand:
-    """Tests for the viz command."""
-
-    def test_viz_ascii(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["viz", "-f", str(full_analysis_path)])
-        assert result.exit_code == 0
-        assert "Full Analysis" in result.output
-        assert "preprocessing" in result.output
-
-    def test_viz_mermaid(self, runner: CliRunner, full_analysis_path: Path):
-        result = runner.invoke(main, ["viz", "-f", str(full_analysis_path), "--format", "mermaid"])
-        assert result.exit_code == 0
-        assert "graph TD" in result.output
-
-
-class TestSchemaCommands:
-    """Tests for schema subcommands."""
-
-    def test_schema_export(self, runner: CliRunner, tmp_path: Path):
-        result = runner.invoke(main, ["schema", "export", "-o", str(tmp_path / "schemas")])
-        assert result.exit_code == 0
-        assert "Exported schemas" in result.output
-        assert (tmp_path / "schemas" / "analysis.yaml").exists()
-        assert (tmp_path / "schemas" / "universe.yaml").exists()
-
-    def test_schema_show_analysis(self, runner: CliRunner):
-        result = runner.invoke(main, ["schema", "show", "analysis"])
-        assert result.exit_code == 0
-        assert "Analysis" in result.output
-
-    def test_schema_show_universe(self, runner: CliRunner):
-        result = runner.invoke(main, ["schema", "show", "universe"])
-        assert result.exit_code == 0
-        assert "Universe" in result.output
-
-
-class TestVersionOption:
-    """Tests for version option."""
-
-    def test_version(self, runner: CliRunner):
-        result = runner.invoke(main, ["--version"])
-        assert result.exit_code == 0
-        # Version format: "main, version X.Y.Z" or "main, version X.Y.devN+gHASH.dDATE"
-        assert "version" in result.output
-
-
-class TestHelpOption:
-    """Tests for help option."""
-
-    def test_help(self, runner: CliRunner):
-        result = runner.invoke(main, ["--help"])
-        assert result.exit_code == 0
-        assert "ASTRA - Agentic Schema for Transparent Research Analysis CLI" in result.output
-
-    def test_validate_help(self, runner: CliRunner):
-        result = runner.invoke(main, ["validate", "--help"])
-        assert result.exit_code == 0
-
-    def test_info_help(self, runner: CliRunner):
-        result = runner.invoke(main, ["info", "--help"])
-        assert result.exit_code == 0
-
-    def test_universe_help(self, runner: CliRunner):
-        result = runner.invoke(main, ["universe", "--help"])
-        assert result.exit_code == 0
-
-    def test_schema_help(self, runner: CliRunner):
-        result = runner.invoke(main, ["schema", "--help"])
-        assert result.exit_code == 0
-
-
-class TestInitCommand:
-    """Tests for the init command."""
-
-    def test_init_creates_project_structure(self, runner: CliRunner, tmp_path: Path):
-        """Test that basic init creates the minimal ASTRA scaffold."""
-        project_dir = tmp_path / "my-analysis"
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 0
-        assert "Converged ASTRA analysis scaffold" in result.output
-
-        # Check directory structure (minimal scaffold)
-        assert (project_dir / "astra.yaml").exists()
-        assert (project_dir / ".gitignore").exists()
-        assert (project_dir / "universes").is_dir()
-        assert (project_dir / "universes" / "baseline.yaml").exists()
-
-        # User-owned layout NOT created (init produces only the minimal spec
-        # scaffold; where code lives is the user's choice — recipes name
-        # their paths explicitly)
-        assert not (project_dir / "src").exists()
-        assert not (project_dir / ".claude").exists()
-        assert not (project_dir / "CLAUDE.md").exists()
-        assert not (project_dir / "workflows").exists()
-        assert not (project_dir / "steps").exists()
-        assert not (project_dir / "scripts").exists()
-
-    def test_init_astra_yaml_content(self, runner: CliRunner, tmp_path: Path):
-        """Test that the generated astra.yaml has the expected content."""
-        project_dir = tmp_path / "content-test"
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 0
-        assert (project_dir / "astra.yaml").exists()
-
-        # Verify the file content
-        content = (project_dir / "astra.yaml").read_text()
-        assert "content-test" in content  # Directory name used as analysis name
-        assert "version:" in content
-        # Empty: no example elements for the user to delete first.
-        data = load_yaml(project_dir / "astra.yaml")
-        assert data["inputs"] == []
-        assert data["outputs"] == []
-        assert data["decisions"] == {}
-        assert "container" not in data
-
-    def test_init_gitignore_content(self, runner: CliRunner, tmp_path: Path):
-        """Test gitignore content."""
-        project_dir = tmp_path / "gitignore-test"
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 0
-
-        gitignore = (project_dir / ".gitignore").read_text()
-        assert "__pycache__/" in gitignore
-        assert ".venv/" in gitignore
-        assert "outputs/" not in gitignore
-
-    def test_init_adopts_existing_nonempty_dir(self, runner: CliRunner, tmp_path: Path):
-        """Init converges a non-empty directory, leaving existing files alone."""
-        project_dir = tmp_path / "existing"
-        project_dir.mkdir()
-        (project_dir / "some_file.txt").write_text("existing content")
-        (project_dir / ".gitignore").write_text("*.log\n")
-
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 0
-        assert (project_dir / "astra.yaml").exists()
-        assert (project_dir / "some_file.txt").read_text() == "existing content"
-        # Existing .gitignore is never overwritten.
-        assert (project_dir / ".gitignore").read_text() == "*.log\n"
-
-    def test_init_is_idempotent(self, runner: CliRunner, tmp_path: Path):
-        """A second init reports converged and rewrites nothing."""
-        project_dir = tmp_path / "already-init"
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 0
-        before = {p: p.read_text() for p in project_dir.rglob("*") if p.is_file()}
-
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git", "--json"],
-        )
-        assert result.exit_code == 0
-        report = json.loads(result.output)
-        assert report["converged"] is True
-        assert report["created"] == []
-        assert {p: p.read_text() for p in project_dir.rglob("*") if p.is_file()} == before
-
-    def test_init_does_not_scaffold_baseline_next_to_user_spec(
-        self, runner: CliRunner, tmp_path: Path
-    ):
-        """astra.yaml + baseline are one unit: a user-authored spec must not
-        get the scaffold's baseline next to it."""
-        project_dir = tmp_path / "user-spec"
-        project_dir.mkdir()
-        (project_dir / "astra.yaml").write_text("# user spec\n")
-
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 0
-        assert (project_dir / "astra.yaml").read_text() == "# user spec\n"
-        assert not (project_dir / "universes" / "baseline.yaml").exists()
-        # The bare universes/ directory is still converged.
-        assert (project_dir / "universes").is_dir()
-
-    def test_init_check_reports_drift_without_writing(self, runner: CliRunner, tmp_path: Path):
-        """--check exits 1 on drift and writes nothing, --json is parseable."""
-        project_dir = tmp_path / "check-test"
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git", "--check", "--json"],
-        )
-        assert result.exit_code == 1
-        report = json.loads(result.output)
-        assert report["converged"] is False
-        assert "astra.yaml" in report["created"]
-        assert not project_dir.exists()
-
-    def test_init_check_passes_on_converged_project(self, runner: CliRunner, tmp_path: Path):
-        project_dir = tmp_path / "check-ok"
-        result = runner.invoke(main, ["init", str(project_dir), "--no-git"])
-        assert result.exit_code == 0
-        result = runner.invoke(main, ["init", str(project_dir), "--no-git", "--check"])
-        assert result.exit_code == 0
-
-    def test_init_existing_empty_dir_succeeds(self, runner: CliRunner, tmp_path: Path):
-        """Test that init succeeds on existing empty directory."""
-        project_dir = tmp_path / "existing-empty"
-        project_dir.mkdir()
-
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 0
-        assert (project_dir / "astra.yaml").exists()
-
-    def test_init_current_directory(self, runner: CliRunner, tmp_path: Path):
-        """Test init with default '.' directory."""
-        old_cwd = os.getcwd()
-        try:
-            os.chdir(tmp_path)
-            result = runner.invoke(
-                main,
-                ["init", "--no-git"],
-            )
-            assert result.exit_code == 0
-            assert (tmp_path / "astra.yaml").exists()
-        finally:
-            os.chdir(old_cwd)
-
-    def test_init_generated_files_are_valid(self, runner: CliRunner, tmp_path: Path):
-        """Test that generated files pass validation."""
-        project_dir = tmp_path / "valid-test"
-        runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-
-        # Validate the generated astra.yaml
-        result = runner.invoke(main, ["validate", str(project_dir / "astra.yaml")])
-        assert result.exit_code == 0
-        assert "Validation successful" in result.output
-
-        # Validate the generated baseline.yaml
-        result = runner.invoke(
-            main,
-            [
-                "validate",
-                str(project_dir / "universes" / "baseline.yaml"),
-                "-a",
-                str(project_dir / "astra.yaml"),
-            ],
-        )
-        assert result.exit_code == 0
-        assert "Validation successful" in result.output
-
-    def test_init_with_git(self, runner: CliRunner, tmp_path: Path):
-        """Test that git is initialized by default (when --no-git not passed)."""
-        project_dir = tmp_path / "git-test"
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir)],
-        )
-        assert result.exit_code == 0
-
-        # Git directory should exist (if git is available)
-        if (project_dir / ".git").exists():
-            assert "Initialized git repository" in result.output
-
-    def test_init_no_git_flag(self, runner: CliRunner, tmp_path: Path):
-        """Test that --no-git flag prevents git initialization."""
-        project_dir = tmp_path / "no-git-test"
-        result = runner.invoke(
-            main,
-            ["init", str(project_dir), "--no-git"],
-        )
-        assert result.exit_code == 0
-        # Git directory should NOT exist
-        assert not (project_dir / ".git").exists()
-
-
-class TestCreateBoilerplate:
-    """Tests for the public create_boilerplate scaffold helper."""
-
-    def test_still_importable_from_astra_cli(self):
-        """``astra.cli`` re-exports it: downstream tools imported it from
-        there before it moved, and that path keeps working."""
-        from astra.cli import create_boilerplate as from_cli
-        from astra.scaffold import create_boilerplate as from_scaffold
-
-        assert from_cli is from_scaffold
-
-    def test_writes_spec_scaffold(self, tmp_path: Path):
-        """Creates universes/, astra.yaml, and baseline.yaml."""
-        from astra.scaffold import create_boilerplate
-
-        project_dir = tmp_path / "proj"
-        create_boilerplate(project_dir)
-        assert (project_dir / "astra.yaml").exists()
-        assert (project_dir / "universes" / "baseline.yaml").exists()
-        # No side effects beyond the spec scaffold.
-        assert not (project_dir / "src").exists()
-        assert not (project_dir / ".gitignore").exists()
-        assert not (project_dir / ".git").exists()
-
-    def test_scaffolds_into_nonempty_directory(self, tmp_path: Path):
-        """Unlike `astra init`, works in a directory with existing files
-        (downstream tools adopt existing codebases) and leaves them alone."""
-        from astra.cli import create_boilerplate
-
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-        (project_dir / "notes.txt").write_text("keep me")
-        (project_dir / ".gitignore").write_text("*.log\n")
-        create_boilerplate(project_dir)
-        assert (project_dir / "astra.yaml").exists()
-        assert (project_dir / "notes.txt").read_text() == "keep me"
-        assert (project_dir / ".gitignore").read_text() == "*.log\n"
-
-
-class TestBatchQuoteVerification:
-    """Tests for the batch quote verification command (astra paper verify-quotes)."""
-
-    def test_verify_quotes_no_input(self, runner: CliRunner):
-        """Test error handling when no input is provided on stdin."""
-        result = runner.invoke(
-            main,
-            ["paper", "verify-quotes", "10.1234/test"],
-            input="",  # Empty input
-        )
-        assert result.exit_code == 2
-        output = json.loads(result.output)
-        assert "error" in output
-        assert "No input" in output["error"]
-
-    def test_verify_quotes_invalid_json(self, runner: CliRunner):
-        """Test error handling for malformed JSON input."""
-        result = runner.invoke(
-            main,
-            ["paper", "verify-quotes", "10.1234/test"],
-            input="not valid json{",
-        )
-        assert result.exit_code == 2
-        output = json.loads(result.output)
-        assert "error" in output
-        assert "Invalid JSON" in output["error"]
-
-    def test_verify_quotes_paper_not_cached(self, runner: CliRunner):
-        """Test error when paper is not in cache."""
-        input_data = json.dumps({"quotes": [{"text": "some quote"}]})
-        result = runner.invoke(
-            main,
-            ["paper", "verify-quotes", "10.9999/nonexistent"],
-            input=input_data,
-        )
-        assert result.exit_code == 2
-        output = json.loads(result.output)
-        assert "error" in output
-        assert "not in cache" in output["error"]
-
-    def test_verify_quotes_empty_quotes_list(self, runner: CliRunner):
-        """Test handling of empty quotes list."""
-        input_data = json.dumps({"quotes": []})
-        result = runner.invoke(
-            main,
-            ["paper", "verify-quotes", "10.9999/nonexistent"],
-            input=input_data,
-        )
-        # Either error (not cached) or success with empty results
-        assert result.exit_code in (0, 2)
-
-    def test_verify_quotes_output_format(self, runner: CliRunner):
-        """Test that output has the expected JSON structure."""
-        input_data = json.dumps({"quotes": [{"text": "test quote"}]})
-        result = runner.invoke(
-            main,
-            ["paper", "verify-quotes", "10.9999/test", "--version", "1"],
-            input=input_data,
-        )
-        # Will fail because paper not cached, but check structure
-        output = json.loads(result.output)
-        assert "doi" in output
-        assert output["doi"] == "10.9999/test"
-        assert "version" in output
-        assert output["version"] == 1
-        # Either results or error
-        assert "results" in output or "error" in output
-        assert "summary" in output
-
-    def test_verify_quotes_help(self, runner: CliRunner):
-        """Test help output for verify-quotes command."""
-        result = runner.invoke(main, ["paper", "verify-quotes", "--help"])
-        assert result.exit_code == 0
-        assert "Verify multiple quotes" in result.output
-        assert "stdin" in result.output
-        assert "JSON" in result.output
-
-
-class TestSpecCommand:
-    """Tests for the `spec` schema-reference renderer.
-
-    Output is a pure transformation of the installed astra-spec schema, so
-    these assert structural invariants and a few load-bearing concepts rather
-    than exact prose.
-    """
-
-    def test_summary_groups_by_schema(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec"])
-        assert result.exit_code == 0
-        out = result.output
-        assert "concept vocabulary" in out
-        # The three schema layers appear as group headers, in display order.
-        for label in ("ANALYSIS", "UNIVERSE", "INSIGHT"):
-            assert label in out
-        assert out.index("ANALYSIS") < out.index("UNIVERSE") < out.index("INSIGHT")
-
-    def test_summary_footer_points_at_term_and_full(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec"])
-        assert result.exit_code == 0
-        assert "astra spec <term>" in result.output
-        assert "astra spec --full" in result.output
-
-    def test_summary_lists_core_concepts(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec"])
-        for term in ("Analysis", "Decision", "Universe", "Insight"):
-            assert term in result.output
-
-    def test_term_renders_class_in_full(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec", "analysis"])
-        assert result.exit_code == 0
-        out = result.output
-        assert out.startswith("# Analysis")
-        assert "Fields:" in out
-        # Slot ranges that are classes render as `astra spec <term>` links.
-        assert "-> astra spec input" in out
-
-    def test_term_lookup_is_case_insensitive(self, runner: CliRunner):
-        lower = runner.invoke(main, ["spec", "analysis"])
-        upper = runner.invoke(main, ["spec", "ANALYSIS"])
-        assert lower.exit_code == upper.exit_code == 0
-        assert lower.output == upper.output
-        assert upper.output.startswith("# Analysis")
-
-    def test_term_collapses_parallel_forbid_rules(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec", "decision"])
-        assert result.exit_code == 0
-        out = result.output
-        assert "Rules:" in out
-        # Rules sharing a title stem collapse to one line listing the suffixes.
-        forbid_lines = [ln for ln in out.splitlines() if "From alias forbids:" in ln]
-        assert len(forbid_lines) == 1
-        assert forbid_lines[0].count(",") >= 1
-
-    def test_enum_renders_values_and_used_by(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec", "inputtype"])
-        assert result.exit_code == 0
-        out = result.output
-        assert "(enum)" in out
-        assert "Values:" in out
-        assert "data" in out
-        assert "Used by:" in out
-
-    def test_unknown_term_exits_1_and_lists_terms(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec", "not_a_real_term"])
-        assert result.exit_code == 1
-        assert "Unknown term" in result.output
-        assert "Valid terms" in result.output
-        # A genuine term is offered among the valid ones.
-        assert "Analysis" in result.output
-
-    def test_full_concatenates_every_entry(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec", "--full"])
-        assert result.exit_code == 0
-        out = result.output
-        # Sanity: substantial, spanning far more than any single entry.
-        assert len(out.splitlines()) > 300
-        for heading in ("# Analysis", "# Decision", "# Universe"):
-            assert heading in out
-        # Enums are inlined into the fields that use them, not standalone entries.
-        assert "# InputType" not in out
-        assert "data | analysis" in out
-
-    def test_cross_references_link_related_terms(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec", "decision"])
-        out = result.output
-        assert "References:" in out
-        assert "Option (astra spec option)" in out
-        assert "Used by:" in out
-        assert "Analysis (astra spec analysis)" in out
-
-    def test_self_recursive_edge_is_marked_not_dropped(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec", "analysis"])
-        out = result.output
-        # Analysis contains sub-Analyses; the self edge is flagged, not silent.
-        assert "Analysis (self-recursive)" in out
-        assert "Used by:" in out
-
-    def test_term_collapses_forbid_rules_with_underscored_slots(self, runner: CliRunner):
-        # Input's forbidden slots include multi-token names (ref_version,
-        # use_outputs). All from_alias_forbids_* rules must collapse to ONE
-        # line, with the underscored names intact as suffixes -- not orphaned
-        # onto standalone "From alias forbids ref version" lines.
-        result = runner.invoke(main, ["spec", "input"])
-        assert result.exit_code == 0
-        lines = result.output.splitlines()
-        forbid_lines = [ln for ln in lines if "From alias forbids:" in ln]
-        assert len(forbid_lines) == 1
-        collapsed = forbid_lines[0]
-        for slot in ("type", "label", "description", "source", "ref", "ref_version", "use_outputs"):
-            assert slot in collapsed
-        # No forbid slot fragments onto its own humanized rule line.
-        assert not any("From alias forbids ref version" in ln for ln in lines)
-        assert not any("From alias forbids use outputs" in ln for ln in lines)
-
-    def test_class_description_rendered_verbatim(self, runner: CliRunner):
-        # A class description renders VERBATIM with newlines preserved -- in
-        # deliberate contrast to first-sentence-flattened field descriptions.
-        # Decision carries an indented reference-grammar block that only
-        # survives if the line breaks are kept.
-        result = runner.invoke(main, ["spec", "decision"])
-        assert result.exit_code == 0
-        lines = result.output.splitlines()
-        assert "Reference grammar:" in lines  # its own line, not folded in
-        grammar_idx = lines.index("Reference grammar:")
-        # The indented example lines follow on their own separate lines.
-        block = lines[grammar_idx : grammar_idx + 4]
-        assert any(ln.startswith("  from: ../id") for ln in block)
-        assert any(ln.startswith("  from: ../../id") for ln in block)
-
-    def test_field_table_derives_flags_and_pattern(self, runner: CliRunner):
-        # Requiredness, multivalued/inlined flags, and pattern are induced from
-        # the slots. Decision exercises all three.
-        result = runner.invoke(main, ["spec", "decision"])
-        out = result.output
-        lines = out.splitlines()
-
-        def field_line(name: str) -> str:
-            return next(ln for ln in lines if ln.strip().startswith(name + " "))
-
-        # `options` is a multivalued, inlined map of Option.
-        opts = field_line("options")
-        assert "multivalued" in opts and "inlined" in opts
-        # `when` is multivalued but not inlined.
-        when = field_line("when")
-        assert "multivalued" in when and "inlined" not in when
-        # `from` carries a pattern, emitted on its own indented line.
-        assert any(ln.strip().startswith("pattern: ^(\\.\\./)") for ln in lines)
-
-    def test_field_table_honors_slot_usage_overrides(self, runner: CliRunner):
-        # Input.from and Output.from are the same slot with per-class
-        # slot_usage overrides; they must render distinct patterns. This holds
-        # only because the renderer reads class_induced_slots, not plain slots.
-        input_from = runner.invoke(main, ["spec", "input"]).output
-        output_from = runner.invoke(main, ["spec", "output"]).output
-        input_pattern = r"^(\.\./)+[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$"
-        output_pattern = r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$"
-        assert input_pattern in input_from
-        assert output_pattern in output_from
-        # The override is real: neither class shows the other's pattern.
-        assert input_pattern not in output_from
-        assert output_pattern not in input_from
-
-    def test_field_table_renders_requiredness(self, runner: CliRunner):
-        # Requiredness is a contract-named field-table property. Option pins both
-        # tokens in one class: `label` is explicitly required and `id` is required
-        # by LinkML identifier semantics, while the rest are optional. Inverting the
-        # ternary (required<->optional) must fail this.
-        result = runner.invoke(main, ["spec", "option"])
-        assert result.exit_code == 0
-        lines = result.output.splitlines()
-
-        def field_line(name: str) -> str:
-            return next(ln for ln in lines if ln.strip().startswith(name + " "))
-
-        # `id` is `identifier: true`; class_induced_slots resolves it to required.
-        for required_field in ("label", "id"):
-            ln = field_line(required_field)
-            assert "required" in ln and "optional" not in ln
-        for optional_field in ("description", "excluded"):
-            ln = field_line(optional_field)
-            assert "optional" in ln and "required" not in ln
-
-    def test_field_table_flattens_field_descriptions_to_first_sentence(self, runner: CliRunner):
-        # First-sentence flattening is an accepted judgment call and load-bearing:
-        # Recipe.command carries a multi-paragraph template description that would
-        # dump into the table verbatim if `_first_sentence` were dropped. Only the
-        # opening sentence survives; the later-paragraph body does not.
-        result = runner.invoke(main, ["spec", "recipe"])
-        assert result.exit_code == 0
-        out = result.output
-        assert "POSIX shell command to execute" in out
-        # Tokens exclusive to later paragraphs of the command description; their
-        # presence would mean the field description was rendered verbatim.
-        assert "{inputs.<id>}" not in out
-        assert "placeholders" not in out
-        assert "Runners substitute" not in out
-
-    def test_full_includes_every_schema_group(self, runner: CliRunner):
-        # --full completeness is the whole point of the command. Pin at least one
-        # heading from each of the three schema buckets so a regression dropping a
-        # whole group (e.g. the insight per-schema loop) is caught, not just the
-        # already-guarded analysis/universe ones.
-        result = runner.invoke(main, ["spec", "--full"])
-        assert result.exit_code == 0
-        out = result.output
-        for heading in (
-            "# Analysis",  # analysis group
-            "# Universe",  # universe group
-            "# Evidence",  # insight group
-            "# Insight",
-            "# InsightCollection",
-            "# TextQuoteSelector",
-        ):
-            assert heading in out, f"{heading} missing from --full"
-
-    def test_full_with_term_is_rejected(self, runner: CliRunner):
-        # --full and a positional TERM are mutually exclusive; passing both
-        # errors rather than silently dumping the whole reference.
-        result = runner.invoke(main, ["spec", "analysis", "--full"])
-        assert result.exit_code != 0
-        assert "--full" in result.output
-
-    def test_spec_help(self, runner: CliRunner):
-        result = runner.invoke(main, ["spec", "--help"])
-        assert result.exit_code == 0
-        assert "reference" in result.output.lower()
+    }
+
+
+def test_validate_takes_an_astra_yaml_or_its_folder(tmp_path: Path) -> None:
+    folder = analysis(git_init(tmp_path))
+    assert astra("validate", str(folder / "astra.yaml")).exit_code == 0
+    (folder / "universe.yaml").write_text("decisions: {}\n")
+    result = astra("validate", str(folder / "universe.yaml"))
+    assert result.exit_code == 2 and "universes are in astra.yaml" in result.stderr
+
+
+def test_validate_with_no_file_validates_every_root_analysis_here(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each astra.yaml under the current folder that no other declares, hidden, vendored and
+    results folders skipped; one declared is validated with the analysis that declares it."""
+    top = git_init(tmp_path)
+    declaring = MINIMAL + "analyses:\n  part: {path: part}\n"
+    analysis(top / "one", declaring)
+    analysis(top / "one" / "part")
+    analysis(top / "two", MINIMAL + "name: x\n")
+    for skipped in (".hidden", "node_modules", "results"):
+        analysis(top / skipped, MINIMAL + "name: x\n")
+    monkeypatch.chdir(top)
+    result = astra("validate")
+    assert result.exit_code == 1
+    assert "one/astra.yaml: valid" in result.stdout
+    assert "two/astra.yaml: invalid" in result.stdout
+    assert "part/astra.yaml:" not in result.stdout
+    assert result.stdout.splitlines()[-1] == "1/2 file(s) failed validation: two/astra.yaml"
+    monkeypatch.chdir(top / "one")
+    result = astra("validate", "--json")
+    assert result.exit_code == 0
+    document = json.loads(result.stdout)
+    assert (document["shape"], document["valid"]) == ("astra-validation-reports/1", True)
+    assert [report["shape"] for report in document["reports"]] == ["astra-validation-report/1"]
+    monkeypatch.chdir(top)
+    document = json.loads(astra("validate", "--json").stdout)
+    assert [(r["root"], r["valid"]) for r in document["reports"]] == [
+        ("one/astra.yaml", True),
+        ("two/astra.yaml", False),
+    ]
+    assert document["valid"] is False
+
+
+def test_validate_with_no_file_and_no_analysis_here_exits_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(git_init(tmp_path))
+    result = astra("validate")
+    assert (result.exit_code, result.stdout) == (1, "Error: No astra.yaml found here.\n")
+
+
+def test_validate_reads_the_current_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(analysis(git_init(tmp_path)))
+    result = astra("validate")
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[-1] == "All 1 file(s) passed validation."
+
+
+def test_validate_exits_2_where_there_is_no_analysis(tmp_path: Path) -> None:
+    result = astra("validate", str(git_init(tmp_path)))
+    assert result.exit_code == 2
+    assert result.stderr.startswith("astra: ")
+    assert "has no astra.yaml" in result.stderr
+    assert astra("validate", str(tmp_path / "missing")).exit_code == 2
+    (tmp_path / "file").write_text("x")
+    assert astra("validate", str(tmp_path / "file")).exit_code == 2
+
+
+def test_an_internal_error_exits_2(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from astra import api
+
+    def broken(path: object, **options: object) -> None:
+        raise RuntimeError("broken")
+
+    monkeypatch.setattr(api, "validate", broken)
+    result = astra("validate", str(tmp_path))
+    assert result.exit_code == 2
+    assert "internal error: RuntimeError: broken" in result.stderr
+
+
+# --- guide, spec, schema ---
+
+
+def test_guide_prints_astra_specs_llms_txt() -> None:
+    result = astra("guide")
+    assert result.exit_code == 0
+    assert result.stdout_bytes == (files("astra") / "docs" / "llms.txt").read_bytes()
+
+
+def test_spec_prints_the_concept_summary() -> None:
+    result = astra("spec")
+    assert result.exit_code == 0
+    assert "ASTRA specification -- concept vocabulary" in result.stdout
+    assert "astra spec <term> for detail" in result.stdout
+
+
+def test_spec_describes_a_term_whatever_its_case() -> None:
+    result = astra("spec", "evidence")
+    assert result.exit_code == 0
+    assert result.stdout.startswith("# Evidence\n")
+    assert "doi" in result.stdout and "artifact" in result.stdout
+
+
+def test_spec_of_an_unknown_term_lists_the_valid_ones_and_exits_1() -> None:
+    result = astra("spec", "[nothing]")
+    assert result.exit_code == 1
+    assert result.stdout.startswith("Unknown term: [nothing]\nValid terms: Analysis, ")
+
+
+def test_spec_full_dumps_every_entry() -> None:
+    result = astra("spec", "--full")
+    assert result.exit_code == 0
+    for heading in ("# Analysis", "# Universe", "# Insight"):
+        assert heading in result.stdout
+    assert astra("spec", "--full", "output").exit_code == 2
+
+
+@pytest.mark.parametrize(
+    ("name", "file"), [("analysis", "analysis.yaml"), ("insights", "insight.yaml")]
+)
+def test_schema_show_prints_astra_specs_linkml_schema(name: str, file: str) -> None:
+    result = astra("schema", "show", name)
+    assert result.exit_code == 0
+    assert result.stdout_bytes == (files("astra.schema") / file).read_bytes()
+
+
+def test_schema_show_has_no_universe_schema() -> None:
+    """Universes are part of the analysis schema since ASTRA 0.1."""
+    assert astra("schema", "show", "universe").exit_code == 2
+
+
+def test_schema_export_writes_each_linkml_schema(tmp_path: Path) -> None:
+    result = astra("schema", "export", "-o", str(tmp_path / "schemas"))
+    assert result.exit_code == 0
+    written = {path.name for path in (tmp_path / "schemas").iterdir()}
+    assert {"analysis.yaml", "insight.yaml"} <= written

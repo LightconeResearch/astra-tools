@@ -1,65 +1,53 @@
-"""The empty spec scaffold: ``astra.yaml`` + ``universes/baseline.yaml``.
+"""The empty spec scaffold: an ``astra.yaml`` with nothing declared yet.
 
-Its own module rather than part of :mod:`astra.cli`, so that scaffolding
-costs what writing two template files should cost. Importing ``astra.cli``
-pulls in Click, Rich and the validation stack — and through the datamodel,
-``linkml_runtime`` — about half a second, none of which writing a template
-needs. This module imports stdlib only.
+Its own module rather than part of :mod:`astra.cli`, so that scaffolding costs what writing
+one template file should cost: this module imports the standard library only.
 
-``astra init`` and downstream tools (e.g. lightcone-cli) both scaffold
-through :func:`create_boilerplate`, so this is the one definition of what
-a fresh ASTRA project contains.
+``astra init`` and downstream tools (e.g. lightcone-cli) both scaffold through
+:func:`create_boilerplate`, so this is the one definition of what a fresh ASTRA project
+contains.
 """
 
 from __future__ import annotations
 
+import contextlib
+import json
+import os
+import tempfile
 from pathlib import Path
 
-from astra.spec_version import installed_spec_version
+SPEC_VERSION = "0.1.0"
+"""The `spec_version` a new analysis is written at."""
 
 
 def create_boilerplate(directory: Path) -> None:
     """Write the empty spec scaffold into ``directory``.
 
-    Creates ``universes/`` and writes an empty ``astra.yaml``
-    and ``universes/baseline.yaml``. Touches nothing
-    else — no ``.gitignore``, no git init, no emptiness checks — so
-    downstream tools (e.g. lightcone-cli) can scaffold into existing
-    directories under their own conventions. Existing files are
-    overwritten; callers guard on ``astra.yaml`` presence.
+    Writes an empty ``astra.yaml``, making the folder if need be, and touches nothing else (no
+    ``.gitignore``, no git init, no emptiness checks), so downstream tools can scaffold into
+    existing directories under their own conventions. Universes are written in ``astra.yaml``
+    since ASTRA 0.1, so there is no ``universes/`` folder. An existing file is overwritten;
+    callers guard on ``astra.yaml`` presence.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / "universes").mkdir(parents=True, exist_ok=True)
-    _create_boilerplate_astra_yaml(directory)
+    name = directory.resolve().name or "My Analysis"
+    write_text(
+        directory / "astra.yaml",
+        "# ASTRA Analysis Specification\n\n"
+        f'spec_version: "{SPEC_VERSION}"\n'
+        f"label: {json.dumps(name, ensure_ascii=False)}\n",
+    )
 
 
-def _create_boilerplate_astra_yaml(directory: Path) -> None:
-    """Create an empty astra.yaml and a baseline universe that selects nothing."""
-    name = directory.name if directory != Path(".") else "My Analysis"
-    spec_version = installed_spec_version() or "1.0"
-
-    # The root collections are required fields, so an empty analysis
-    # spells them out as empty rather than omitting them.
-    astra_yaml = f"""# ASTRA Analysis Specification
-
-version: "{spec_version}"
-name: "{name}"
-description: ""
-
-inputs: []
-
-outputs: []
-
-decisions: {{}}
-"""
-    (directory / "astra.yaml").write_text(astra_yaml)
-
-    # An analysis runs under at least one universe, even with no decisions.
-    baseline_universe = """# Baseline Universe
-
-id: baseline
-description: "Default configuration"
-
-decisions: {}
-"""
-    (directory / "universes" / "baseline.yaml").write_text(baseline_universe)
+def write_text(file: Path, text: str) -> None:
+    """Write ``text`` to ``file`` atomically; its folder is made if need be."""
+    file.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{file.name}.", dir=file.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(text)
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, file)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(temporary)

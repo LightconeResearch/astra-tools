@@ -6,7 +6,6 @@ Pure transformation: every string emitted here comes from the schema via
 
 from __future__ import annotations
 
-import os
 import shutil
 import textwrap
 from functools import lru_cache
@@ -25,11 +24,12 @@ def _view() -> SchemaView:
     # Imported here rather than at module scope: `linkml_runtime` costs
     # ~200 ms to import, and every renderer below goes through this cache,
     # so nothing pays it until a `spec` command actually renders.
-    from astra.datamodel import SCHEMA_DIRECTORY
+    from importlib.resources import files
+
     from linkml_runtime.utils.schemaview import SchemaView
 
-    # analysis.yaml imports insight + universe, so one load closes over all three.
-    return SchemaView(os.path.join(SCHEMA_DIRECTORY, "analysis.yaml"))
+    # analysis.yaml imports insight, so one load closes over both.
+    return SchemaView(str(files("astra.schema") / "analysis.yaml"))
 
 
 def _schema_of(from_schema: str | None) -> str:

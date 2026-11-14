@@ -1,8 +1,0 @@
-# Missing required 'version' field
-name: "Test"
-inputs:
-  - id: data
-    type: data
-outputs:
-  - id: result
-    type: metric
