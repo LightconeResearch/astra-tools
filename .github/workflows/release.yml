@@ -89,7 +89,7 @@ jobs:
       - name: Check out astra-spec at that release's tag
         uses: actions/checkout@v4
         with:
-          repository: LightconeResearch/astra-spec
+          repository: astra-project/astra-spec
           ref: v${{ steps.spec.outputs.version }}
           path: astra-spec
           persist-credentials: false

@@ -32,7 +32,7 @@ NAMESPACE = "papers"
 ARXIV = "10.48550/arxiv."
 """How the DOIs arXiv gives its papers begin, lowercased: `10.48550/arXiv.<id>`."""
 
-AGENT = "astra-tools (https://github.com/LightconeResearch/astra-tools)"
+AGENT = "astra-tools (https://github.com/astra-project/astra-tools)"
 """The User-Agent of each request: some servers refuse Python's own."""
 
 TIMEOUT = 60

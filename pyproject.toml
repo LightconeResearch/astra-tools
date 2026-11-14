@@ -59,9 +59,9 @@ astra-tools = "astra.cli:main"
 
 [project.urls]
 Homepage = "https://astra-spec.org/"
-Repository = "https://github.com/LightconeResearch/astra-tools"
-Issues = "https://github.com/LightconeResearch/astra-tools/issues"
-Specification = "https://github.com/LightconeResearch/astra-spec"
+Repository = "https://github.com/astra-project/astra-tools"
+Issues = "https://github.com/astra-project/astra-tools/issues"
+Specification = "https://github.com/astra-project/astra-spec"
 
 [dependency-groups]
 dev = [
