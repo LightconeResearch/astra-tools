@@ -1,5 +1,5 @@
 """The stable public functions of astra-tools: `validate`, `bind`, `init`, `plan`, `view`,
-`check` and `history`; and, with the extra `[evidence]`, `papers`, `quotes` and `seek`."""
+`check` and `history`; and `papers`, `quotes` and `seek`."""
 
 from __future__ import annotations
 
@@ -151,9 +151,9 @@ def history(path: str | os.PathLike[str] | None = None) -> History:
 def papers(path: str | os.PathLike[str] | None = None) -> tuple[Cited, ...]:
     """Each work the evidence of the analysis whose folder is `path` cites by DOI, read as
     `validate` reads it, at each version it cites, once, and whether the cache holds its paper.
-    Raises ImportError where the extra `[evidence]` isn't installed, InvalidAnalysisError where
-    the analysis breaks a `MUST`, and otherwise as `validate` does."""
-    from astra.evidence.papers import cited  # the extra's API
+    Raises InvalidAnalysisError where the analysis breaks a `MUST`, and otherwise as `validate`
+    does."""
+    from astra.evidence.papers import cited
 
     return cited(_valid(path))
 
@@ -174,8 +174,8 @@ def seek(
     """Each of `quotes`, in order, sought in the paper of `doi` at `version` (None for no
     version) that the cache holds, with no analysis, as a quote that evidence takes from it is
     sought: within `page`, counted from 1, or in the whole text, with the pages it is found on
-    (`evidence.quotes.seek`). The paper's text is read once. Raises ImportError where the extra
-    `[evidence]` isn't installed, `evidence.papers.PaperError` where the cache doesn't hold the
+    (`evidence.quotes.seek`). The paper's text is read once. Raises `evidence.papers.PaperError`
+    where the cache doesn't hold the
     paper or it can't be read, RequestError where the paper has no page `page`, and CacheError
     where the cache can't be used."""
     from astra.evidence import papers

@@ -1,6 +1,6 @@
 """The field reference behind `astra spec`: the classes, enums and types of ASTRA's files, read
-from astra-spec's LinkML sources through linkml-runtime, the extra `[reference]` (Schema
-files). Their descriptions are the normative definitions of the fields.
+from astra-spec's LinkML sources through linkml-runtime (Schema files). Their descriptions are the
+normative definitions of the fields.
 """
 
 from __future__ import annotations
@@ -11,10 +11,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 _TYPES = "https://w3id.org/astra/types"
-
-
-class ReferenceUnavailable(Exception):  # noqa: N818
-    """linkml-runtime isn't installed."""
 
 
 @dataclass(frozen=True)
@@ -41,17 +37,10 @@ class Term:
 
 
 def load_reference() -> tuple[Term, ...]:
-    """Every class, then every enum, then every type of ASTRA's own, from astra-spec's sources.
+    """Every class, then every enum, then every type of ASTRA's own, from astra-spec's sources."""
+    from linkml_runtime.linkml_model.meta import SchemaDefinition
+    from linkml_runtime.utils.schemaview import SchemaView
 
-    Raises ReferenceUnavailable when linkml-runtime isn't installed.
-    """
-    try:
-        from linkml_runtime.linkml_model.meta import SchemaDefinition
-        from linkml_runtime.utils.schemaview import SchemaView
-    except ImportError:
-        raise ReferenceUnavailable(
-            "astra spec needs the [reference] extra: pip install 'astra-tools[reference]'"
-        ) from None
     view = SchemaView(
         SchemaDefinition(
             id="https://w3id.org/astra/reference",

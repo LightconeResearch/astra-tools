@@ -58,14 +58,14 @@ uv sync --frozen
 ```
 
 ### Changing a command
-The CLI reference and installation page live in astra-spec (`docs/cli.md`, `docs/installation.md`), which astra-spec.org shows. Change them there too, for a new command, option or extra.
+The CLI reference and installation page live in astra-spec (`docs/cli.md`, `docs/installation.md`), which astra-spec.org shows. Change them there too, for a new command or option.
 
 ## Configuration
 
 - Python >=3.11 (on 3.11, `Traversable.joinpath` takes one argument)
 - Ruff (line-length 100), mypy strict
 - Versioning: hatch-vcs (from git tags)
-- Core dependencies: astra-spec, click, jsonschema, rich, ruamel.yaml; extras `[reference]`, `[evidence]`
+- Dependencies: astra-spec, click, jsonschema, linkml-runtime, pypdf, rapidfuzz, rich, ruamel.yaml; no extras
 
 ## Key Conventions
 

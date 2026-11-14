@@ -1,10 +1,8 @@
-"""`astra spec [TERM]`: the field reference, through LinkML (extra [reference])."""
+"""`astra spec [TERM]`: the field reference, through LinkML."""
 
 from __future__ import annotations
 
 import click
-
-from astra.cli import fail
 
 
 @click.command("spec")
@@ -12,17 +10,14 @@ from astra.cli import fail
 def command(term: str | None) -> None:
     """Describe the fields of ASTRA files.
 
-    It needs the [reference] extra. Without TERM, every class, enum and type, each with its
-    first sentence. With TERM, whatever its case, a class, enum or type in full, a field of
-    every class that has it, or Class.field.
+    Without TERM, every class, enum and type, each with its first sentence. With TERM,
+    whatever its case, a class, enum or type in full, a field of every class that has it, or
+    Class.field.
     """
     from astra.cli.text.spec import show_summary, show_terms
-    from astra.reference import ReferenceUnavailable, load_reference, lookup
+    from astra.reference import load_reference, lookup
 
-    try:
-        terms = load_reference()
-    except ReferenceUnavailable as error:
-        fail(str(error))
+    terms = load_reference()
     if term is None:
         show_summary(terms)
         return

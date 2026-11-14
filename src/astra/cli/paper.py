@@ -1,7 +1,7 @@
 """`astra paper add DOI [--version N] [--file PDF] [--email ADDRESS] | list [PATH] | verify
 [PATH] | seek DOI QUOTE... [--version N] [--page N]`: the papers that the root's evidence cites
-by DOI, kept in the cache, and the quotes it takes from them, or quotes given, with the extra
-`[evidence]`. Text alone, as `info` is.
+by DOI, kept in the cache, and the quotes it takes from them, or quotes given. Text alone, as
+`info` is.
 """
 
 from __future__ import annotations
@@ -18,9 +18,6 @@ from astra.cli import FAILED, environment, fail, write_report
 if TYPE_CHECKING:
     from astra.evidence.quotes import Sought
 
-EXTRA = ("pypdf", "rapidfuzz")
-"""The packages of the extra `[evidence]`."""
-
 
 @click.group("paper")
 def command() -> None:
@@ -29,28 +26,18 @@ def command() -> None:
     Papers are kept in the cache, by DOI and version. A quote is sought in its paper's text,
     within the page its location gives (`page=6`), or in the whole text. `verify` seeks the
     quotes an analysis's evidence takes, and one not found is a warning, never an error; `seek`
-    seeks the quotes you give it, with no analysis. These commands need the extra [evidence]:
-    pip install 'astra-tools[evidence]'.
+    seeks the quotes you give it, with no analysis.
     """
     # Text alone, with no --json.
 
 
 @contextlib.contextmanager
 def _evidence() -> Iterator[None]:
-    """Stop with exit 2 where the extra isn't installed, a paper can't be got or read, or the
-    analysis can't be read; and with exit 1 where it breaks a `MUST`."""
+    """Stop with exit 2 where a paper can't be got or read, or the analysis can't be read; and
+    with exit 1 where it breaks a `MUST`."""
     from astra import api
+    from astra.evidence.papers import PaperError
 
-    try:
-        from astra.evidence import quotes  # noqa: F401  (imports the extra's two packages)
-        from astra.evidence.papers import PaperError
-    except ModuleNotFoundError as error:
-        if error.name not in EXTRA:
-            raise
-        fail(
-            f"`astra paper` needs the extra [evidence], whose {error.name} isn't installed: "
-            "pip install 'astra-tools[evidence]'"
-        )
     with environment():
         try:
             yield
