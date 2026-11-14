@@ -5,6 +5,8 @@ Downloads papers by DOI, with special handling for arXiv papers.
 
 from __future__ import annotations
 
+import html
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -48,6 +50,22 @@ class DOIMetadata:
     container_title: str | None = None
 
 
+def plain_title(title: str) -> str:
+    """Return a registered title as plain text.
+
+    Crossref serves titles with their JATS/HTML markup and line breaks
+    (``<tt>emcee</tt>\\n : The MCMC Hammer``); a cached title is shown as
+    text, so only the words are kept.
+
+    Args:
+        title: The title as the registry returned it.
+
+    Returns:
+        The title without tags or entities, its whitespace collapsed.
+    """
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", "", title)).split())
+
+
 def fetch_doi_metadata(doi: str) -> DOIMetadata:
     """Fetch metadata for any DOI using content negotiation.
 
@@ -75,6 +93,8 @@ def fetch_doi_metadata(doi: str) -> DOIMetadata:
 
         # Extract title
         title = data.get("title")
+        if isinstance(title, str):
+            title = plain_title(title)
 
         # Extract authors - CSL-JSON uses "author" array with "family" and "given"
         authors = None
