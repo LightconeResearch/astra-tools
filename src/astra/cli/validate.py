@@ -20,7 +20,7 @@ SKIPPED = frozenset({"node_modules", "venv", "__pycache__", "results"})
 results an analysis makes."""
 
 SHAPE = "astra-validation-reports/1"
-"""The JSON of `validate --json` with no FILE: every root analysis's report."""
+"""The JSON of `validate --json`: the report of each analysis validated."""
 
 
 @click.command("validate")
@@ -54,17 +54,17 @@ def command(
     findings actually exist in the source papers. Papers must be cached first using 'astra
     paper add'. Artifact-backed evidence is reported as SKIPPED.
 
-    With --json, the report is printed as JSON: `astra-validation-report/1` for FILE, and
-    `astra-validation-reports/1`, which holds each root analysis's report, with no FILE. With
-    --verify-evidence, a report has an `evidence` member too. The exit code is unchanged: 0
-    when every analysis is valid, 1 when one breaks a MUST or a quote isn't verified, and 2
-    when one can't be validated.
+    With --json, the reports are printed as JSON, `astra-validation-reports/1`: whether every
+    analysis is valid, and each analysis's report (`astra-validation-report/1`), one for FILE
+    or one for each root analysis. With --verify-evidence, a report has an `evidence` member
+    too. The exit code is unchanged: 0 when every analysis is valid, 1 when one breaks a MUST
+    or a quote isn't verified, and 2 when one can't be validated.
     """
     options = (verify_evidence and not skip_evidence, skip_evidence, as_json, offline)
     if file is not None:
         valid, document = _validate_one(_folder(file), *options)
         if as_json:
-            write_json(document)
+            write_json({"shape": SHAPE, "valid": valid, "reports": [document]})
         if not valid:
             raise click.exceptions.Exit(FAILED)
         return

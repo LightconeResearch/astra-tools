@@ -68,23 +68,33 @@ def test_validate_respects_no_color(tmp_path: Path) -> None:
     assert "31m" not in plain.stdout
 
 
-def test_validate_json_is_the_report_of_the_file_given(tmp_path: Path, outside: Path) -> None:
-    """`astra-validation-report/1`, with no ANSI escape, colour forced or not; the exit code
+def test_validate_json_is_the_reports_whether_a_file_is_given_or_not(
+    tmp_path: Path, outside: Path
+) -> None:
+    """`astra-validation-reports/1`, with no ANSI escape, colour forced or not; the exit code
     still carries pass or fail."""
     result = astra("validate", str(analysis(outside)), "--json", env={"FORCE_COLOR": "1"})
     assert result.exit_code == 1
     assert "\x1b" not in result.stdout
-    report = json.loads(result.stdout)
+    document = json.loads(result.stdout)
+    assert (document["shape"], document["valid"]) == ("astra-validation-reports/1", False)
+    (report,) = document["reports"]
     assert (report["shape"], report["valid"]) == ("astra-validation-report/1", False)
     assert [d["code"] for d in report["diagnostics"]] == ["NOT_IN_REPOSITORY"]
     result = astra("validate", str(analysis(git_init(tmp_path / "repo")) / "astra.yaml"), "--json")
     assert result.exit_code == 0
     assert json.loads(result.stdout) == {
-        "shape": "astra-validation-report/1",
-        "root": "astra.yaml",
+        "shape": "astra-validation-reports/1",
         "valid": True,
-        "diagnostics": [],
-        "unchecked": [],
+        "reports": [
+            {
+                "shape": "astra-validation-report/1",
+                "root": "astra.yaml",
+                "valid": True,
+                "diagnostics": [],
+                "unchecked": [],
+            }
+        ],
     }
 
 

@@ -193,7 +193,7 @@ def test_cli_validate_reports_findings_artifact_skipped(tmp_path: Path, patch_ex
     )
 
     as_json = runner.invoke(main, ["validate", str(folder), "-e", "--json"])
-    evidence = json.loads(as_json.output)["evidence"]
+    evidence = json.loads(as_json.output)["reports"][0]["evidence"]
     assert [(item["in"], item["insight"], item["status"]) for item in evidence] == [
         ("findings", "best", "skipped")
     ]
