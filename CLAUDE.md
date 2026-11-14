@@ -24,7 +24,6 @@ src/astra/          # NO __init__.py (namespace package), in layers:
   3 meaning         universes, rules/, validate, plan, view
   4 results         hashing, records, environments, check, history
   5 surfaces        api (the stable functions), cli/, reference, evidence/
-docs/               # cli.md and installation.md, shown on astra-spec.org
 ```
 
 ## Key Design Principles
@@ -59,7 +58,7 @@ uv sync --frozen
 ```
 
 ### Changing a command
-Change `docs/cli.md` (and `docs/installation.md` for an extra) in the same commit; `tests/test_cli_docs.py` checks it. astra-spec.org shows both pages, so their links into the specification are full URLs.
+The CLI reference and installation page live in astra-spec (`docs/cli.md`, `docs/installation.md`), which astra-spec.org shows. Change them there too, for a new command, option or extra.
 
 ## Configuration
 
