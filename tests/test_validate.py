@@ -12,7 +12,8 @@ import pytest
 
 from astra import api, contract, rules, validate
 from astra.diagnostics import Catalogue
-from tests.conftest import MINIMAL, SPEC, analysis, git_init, repository
+from tests.conftest import MINIMAL, analysis, git_init, repository
+from tests.spec import SPEC
 
 
 def pairs(report: api.ValidationReport) -> list[tuple[str, str]]:

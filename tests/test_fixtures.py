@@ -15,7 +15,8 @@ from astra import api
 from astra.contract import Contract
 from astra.diagnostics import Catalogue
 from astra.load import ParseError, load_json
-from tests.conftest import DOCUMENTS, git_init
+from tests.conftest import git_init
+from tests.spec import DOCUMENTS
 
 
 def fixtures(kind: str) -> list[Path]:

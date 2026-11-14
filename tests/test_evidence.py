@@ -23,7 +23,8 @@ from astra import api
 from astra.cli import main
 from astra.diagnostics import Catalogue, Diagnostic, json_pointer
 from astra.evidence import papers, quotes
-from tests.conftest import DOCUMENTS, MINIMAL, repository
+from tests.conftest import MINIMAL, repository
+from tests.spec import DOCUMENTS
 
 
 def pdf(*pages: tuple[str, ...]) -> bytes:

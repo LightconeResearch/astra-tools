@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from astra import api
-from tests.conftest import SPEC
+from tests.spec import SPEC
 
 ANALYSES = SPEC / "conformance" / "analyses"
 CASES = sorted(ANALYSES.glob("[0-9]*"))

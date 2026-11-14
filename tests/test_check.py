@@ -25,7 +25,8 @@ from astra.check import CODES, CheckReport
 from astra.cli import main
 from astra.diagnostics import Catalogue
 from astra.records import new_record, write_record
-from tests.conftest import DOCUMENTS, ENVIRONMENT, MINIMAL, RUNNER, build, git, repository
+from tests.conftest import ENVIRONMENT, MINIMAL, RUNNER, build, git, repository
+from tests.spec import DOCUMENTS
 from tests.test_plan import FROM_COMMIT as DRIVING
 from tests.test_plan import INNER, LIB, PAIR, STAGE
 from tests.test_planned import ROOT, SUBANALYSIS

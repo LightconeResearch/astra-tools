@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -82,28 +82,14 @@ wheels = [
 
 [[package]]
 name = "astra-spec"
-source = { editable = "../astra-spec-pinned" }
+version = "0.1.0rc1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "linkml-runtime" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "linkml-runtime", specifier = ">=1.9.4" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jschon", specifier = "==0.11.1" },
-    { name = "jsonschema", specifier = ">=4.23" },
-    { name = "linkml", specifier = "==1.12.1" },
-    { name = "markdown-it-py", specifier = ">=3" },
-    { name = "pytest", specifier = ">=8" },
-    { name = "rdflib", specifier = ">=7" },
-    { name = "ruamel-yaml", specifier = ">=0.18" },
-]
-docs = [
-    { name = "ghp-import", specifier = ">=2" },
-    { name = "mike", marker = "python_full_version >= '3.10'", git = "https://github.com/squidfunk/mike.git" },
-    { name = "zensical", marker = "python_full_version >= '3.10'", specifier = ">=0.0.33" },
+sdist = { url = "https://files.pythonhosted.org/packages/d4/0e/80f0465fab20d07844269af43e08fe1672c1e0e451a2eb91648467a6192a/astra_spec-0.1.0rc1.tar.gz", hash = "sha256:191dc3d1f776bbb916a433e69a80cee26911b92a011ec6dadc773dadfbc3e18b", size = 55204, upload-time = "2026-11-14T09:26:31.683Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/a9/438489b09e518f800717e7a9efda773b83d4f08ed835822c8da7c0a238e4/astra_spec-0.1.0rc1-py3-none-any.whl", hash = "sha256:f787a0db093b19ed1c803ddac2226a8a070265fec38675ca1a6d323f97002108", size = 63792, upload-time = "2026-11-14T09:26:30.208Z" },
 ]
 
 [[package]]
@@ -138,7 +124,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "astra-spec", editable = "../astra-spec-pinned" },
+    { name = "astra-spec", specifier = ">=0.1.0rc1,<0.2" },
     { name = "click", specifier = ">=8.2.1" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "linkml-runtime", marker = "extra == 'reference'", specifier = ">=1.12" },

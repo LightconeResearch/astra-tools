@@ -1,6 +1,6 @@
 # astra-tools
 
-[![CI](https://github.com/LightconeResearch/astra-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/LightconeResearch/astra-tools/actions/workflows/ci.yml)
+[![CI](https://github.com/astra-project/astra-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/astra-project/astra-tools/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-BSD_3--Clause-green.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -32,7 +32,7 @@ uv tool install 'astra-tools<0.3'
 ```
 
 `astra spec` needs the `[reference]` extra, and `astra paper` the `[evidence]` extra.
-[Installation](https://github.com/LightconeResearch/astra-tools/blob/main/docs/installation.md)
+[Installation](https://github.com/astra-project/astra-tools/blob/main/docs/installation.md)
 gives the details.
 
 ## First use
@@ -60,35 +60,34 @@ record and its bytes go, and the command that builds it.
 
 | Command | What it does |
 |---|---|
-| [`astra init`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-init) | Make a minimal analysis |
-| [`astra validate`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-validate) | Validate an analysis and its whole stack |
-| [`astra info`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-info) | Show the stack in brief |
-| [`astra universe`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-universe) | List the universes, or show one's selection |
-| [`astra plan`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-plan) | Show the planned results, their places and commands |
-| [`astra view`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-view) | Show the analysis as it is in one universe |
-| [`astra check`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-check) | Check the records and bytes of the planned results |
-| [`astra history`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-history) | Show what git holds of a result's records over time |
-| [`astra rules`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-rules) | List the rules, or show one |
-| [`astra spec`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-spec) | Describe the fields of ASTRA files |
-| [`astra schema`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-schema) | Show or export the JSON Schemas |
-| [`astra guide`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-guide) | Print the guide for agents |
-| [`astra paper`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-paper) | Keep cited papers, and seek quotes in them |
-| [`astra cache`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-cache) | Show or clear the cache |
-| [`astra completion`](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md#astra-completion) | Print a shell completion script |
+| [`astra init`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-init) | Make a minimal analysis |
+| [`astra validate`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-validate) | Validate an analysis and its whole stack |
+| [`astra info`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-info) | Show the stack in brief |
+| [`astra universe`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-universe) | List the universes, or show one's selection |
+| [`astra plan`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-plan) | Show the planned results, their places and commands |
+| [`astra view`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-view) | Show the analysis as it is in one universe |
+| [`astra check`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-check) | Check the records and bytes of the planned results |
+| [`astra history`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-history) | Show what git holds of a result's records over time |
+| [`astra rules`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-rules) | List the rules, or show one |
+| [`astra spec`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-spec) | Describe the fields of ASTRA files |
+| [`astra schema`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-schema) | Show or export the JSON Schemas |
+| [`astra guide`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-guide) | Print the guide for agents |
+| [`astra paper`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-paper) | Keep cited papers, and seek quotes in them |
+| [`astra cache`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-cache) | Show or clear the cache |
+| [`astra completion`](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md#astra-completion) | Print a shell completion script |
 
-The [CLI reference](https://github.com/LightconeResearch/astra-tools/blob/main/docs/cli.md) gives
+The [CLI reference](https://github.com/astra-project/astra-tools/blob/main/docs/cli.md) gives
 each command's options, exit codes and examples. The
 [specification](https://astra-spec.org/0.1/) says what an analysis means and what each rule asks.
 
 ## Development
 
-astra-tools is tested against one commit of astra-spec, the one `astra-spec.pin` names. uv
-installs astra-spec, editable, from `../astra-spec-pinned`: a git worktree of astra-spec, beside
-this repository, detached at that commit. With astra-spec cloned at `../astra-spec`:
+astra-tools is tested against the astra-spec release `uv.lock` installs from PyPI. The tests'
+first run downloads that release's conformance suite, examples and test documents from its tag on
+GitHub, and keeps them in `~/.cache/astra-tools-tests/`.
 
 ```bash
-git -C ../astra-spec worktree add --detach ../astra-spec-pinned "$(cat astra-spec.pin)"
-uv sync
+uv sync --frozen
 ```
 
 The checks:
@@ -100,9 +99,9 @@ uv run --frozen ruff check src/ tests/
 uv run --frozen ruff format --check src/ tests/
 ```
 
-[CLAUDE.md](https://github.com/LightconeResearch/astra-tools/blob/main/CLAUDE.md) gives the
-layout, the constraints the code keeps, and how to move the pin.
+[CLAUDE.md](https://github.com/astra-project/astra-tools/blob/main/CLAUDE.md) gives the
+layout, the constraints the code keeps, and how to move to a new astra-spec release.
 
 ## Licence
 
-BSD 3-Clause: see [LICENSE](https://github.com/LightconeResearch/astra-tools/blob/main/LICENSE).
+BSD 3-Clause: see [LICENSE](https://github.com/astra-project/astra-tools/blob/main/LICENSE).

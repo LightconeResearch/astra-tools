@@ -12,7 +12,7 @@ import pytest
 from astra import model
 from astra.contract import schema_file
 from astra.load import load_yaml
-from tests.conftest import DOCUMENTS
+from tests.spec import DOCUMENTS
 
 CLASSES = {
     model.Analysis: None,  # the schema's root

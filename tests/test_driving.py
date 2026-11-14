@@ -22,7 +22,8 @@ from astra.sources.git import Repository
 from astra.sources.reader import WorktreeReader
 from astra.stack import Element, Identity, Stack, bind
 from astra.universes import Chain, built, imports, pins
-from tests.conftest import SPEC, repository
+from tests.conftest import repository
+from tests.spec import SPEC
 
 OUTPUT = """\
 outputs:

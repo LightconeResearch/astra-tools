@@ -1,9 +1,5 @@
 name: CI
 
-# The tests read astra-spec's fixtures and examples from its source tree, so astra-spec is checked
-# out at the commit in astra-spec.pin, beside astra-tools, where [tool.uv.sources] expects it
-# (../astra-spec-pinned).
-
 on:
   push:
     branches: [main]
@@ -34,25 +30,6 @@ jobs:
         with:
           path: astra-tools
           fetch-depth: 0  # hatch-vcs reads the version from the tags
-          persist-credentials: false
-
-      - name: Read the astra-spec pin
-        id: pin
-        run: |
-          commit="$(tr -d '[:space:]' < astra-spec.pin)"
-          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error file=astra-spec.pin::astra-spec.pin must hold one full 40-character commit id"
-            exit 1
-          fi
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
-
-      - name: Check out astra-spec at the pin
-        uses: actions/checkout@v4
-        with:
-          repository: LightconeResearch/astra-spec
-          ref: ${{ steps.pin.outputs.commit }}
-          path: astra-spec-pinned
-          fetch-depth: 0  # its version comes from its tags
           persist-credentials: false
 
       - name: Set up uv and Python ${{ matrix.python-version }}
